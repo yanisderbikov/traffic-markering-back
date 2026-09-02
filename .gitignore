@@ -1,0 +1,9 @@
+target/
+.env
+.env-test
+.env.prod
+.env.prod-test
+.idea/
+.DS_Store
+
+*.dump

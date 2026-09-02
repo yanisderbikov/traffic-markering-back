@@ -1,0 +1,78 @@
+package ru.trafficmarkering.service.auth.impl;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.service.auth.JwtTokenService;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+
+@Service
+class JwtTokenServiceImpl implements JwtTokenService {
+
+    private final SecretKey key;
+    private final long expirationMs;
+    private final String serviceToken;
+
+    JwtTokenServiceImpl(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration.seconds}") long expirationSeconds,
+            @Value("${service.jwt.token}") String serviceToken) {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.expirationMs = expirationSeconds * 1000L;
+        this.serviceToken = serviceToken;
+    }
+
+    @Override
+    public boolean isServiceToken(String token) {
+        // Секрет не настроен — значит, межсервисного доступа нет ни у кого
+        return serviceToken != null && !serviceToken.isBlank() && serviceToken.equals(token);
+    }
+
+    @Override
+    public String createToken(String username, Role role, String name) {
+        var now = new Date();
+        var expiry = new Date(now.getTime() + expirationMs);
+        var builder = Jwts.builder()
+                .subject(username)
+                .claim("role", role.name())
+                .issuedAt(now)
+                .expiration(expiry);
+        // Имя кладём в токен, чтобы фронт рисовал шапку сразу, не дожидаясь /api/auth/me
+        if (name != null && !name.isBlank()) {
+            builder.claim("name", name.trim());
+        }
+        return builder.signWith(key).compact();
+    }
+
+    @Override
+    public boolean isValid(String token) {
+        try {
+            Jwts.parser().verifyWith(key).build().parse(token);
+            return true;
+        } catch (JwtException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public String getUsername(String token) {
+        return parseClaims(token).getSubject();
+    }
+
+    @Override
+    public Role getRole(String token) {
+        String roleStr = parseClaims(token).get("role", String.class);
+        return roleStr != null ? Role.valueOf(roleStr) : null;
+    }
+
+    private Claims parseClaims(String token) {
+        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+    }
+}

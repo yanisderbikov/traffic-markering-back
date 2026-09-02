@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  traffic-markering-back:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: traffic-markering-back
+    ports:
+      - "8090:8090"
+    env_file:
+      - .env
+    environment:
+      # В .env адрес базы указан для запуска с хоста (localhost), а внутри сети compose
+      # это уже сам контейнер бэка — поэтому здесь перебиваем хост на имя сервиса
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/traffic_markering
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - traffic-markering-network
+
+  # База поднимается тем же compose: без неё приложение не стартует (Flyway + ddl-auto=validate).
+  postgres:
+    image: postgres:16-alpine
+    container_name: traffic-markering-postgres
+    environment:
+      POSTGRES_DB: traffic_markering
+      POSTGRES_USER: traffic
+      POSTGRES_PASSWORD: traffic
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Приложение стартует только после того, как база реально отвечает,
+      # иначе первая же миграция Flyway падает на connection refused.
+      test: ["CMD-SHELL", "pg_isready -U traffic -d traffic_markering"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - traffic-markering-network
+
+volumes:
+  postgres_data:
+
+networks:
+  traffic-markering-network:
+    driver: bridge
