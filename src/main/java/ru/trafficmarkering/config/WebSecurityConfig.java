@@ -48,11 +48,13 @@ public class WebSecurityConfig {
                     // ── Межсервисные ручки: общий секрет SERVICE_JWT_TOKEN ──
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
+                    .requestMatchers("/api/social/callback/**").permitAll()
                     // ── Пользовательские роли ──
                     .requestMatchers("/api/campaigns/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/files/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/applications/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
                     .requestMatchers("/api/profile/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
+                    .requestMatchers("/api/social/**").hasAnyRole("CREATOR", "ADMIN")
                     .requestMatchers("/api/auth/me").authenticated()
                     .anyRequest().permitAll()
             )
