@@ -32,6 +32,12 @@ public interface GetterApplication {
      */
     List<Application> getApproved();
 
+    /**
+     * Уже поданный ролик: один и тот же видос нельзя подать дважды.
+     * Отклонённые не в счёт — их ролик снова свободен.
+     */
+    Optional<Application> getActiveByVideoKey(String videoKey);
+
     /** Проверка занятости публичного номера для {@link ru.trafficmarkering.util.PublicIdGenerator}. */
     boolean existsByPublicId(String publicId);
 }

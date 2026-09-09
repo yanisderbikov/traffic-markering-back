@@ -15,6 +15,7 @@ import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
@@ -29,7 +30,9 @@ import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.application.ApplicationService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.http.ShortLinkResolver;
 import ru.trafficmarkering.util.PublicIdGenerator;
+import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
 import java.util.EnumSet;
@@ -64,6 +67,7 @@ class ApplicationServiceImpl implements ApplicationService {
     private final CampaignAccrualService campaignAccrualService;
     private final GetterViewSnapshot getterViewSnapshot;
     private final SaverViewSnapshot saverViewSnapshot;
+    private final ShortLinkResolver shortLinkResolver;
 
     @Override
     @Transactional
@@ -87,12 +91,17 @@ class ApplicationServiceImpl implements ApplicationService {
                     "Вы уже откликались на это объявление");
         }
 
+        String videoUrl = resolveVideoUrl(request.getPlatform(), request.getVideoUrl().trim());
+        String videoKey = VideoUrls.videoKey(request.getPlatform(), videoUrl);
+        requireVideoNotSubmitted(videoKey, creator);
+
         Application application = Application.builder()
                 .publicId(PublicIdGenerator.generateUnique(getterApplication::existsByPublicId))
                 .campaign(campaign)
                 .creator(creator)
                 .platform(request.getPlatform())
-                .videoUrl(request.getVideoUrl().trim())
+                .videoUrl(videoUrl)
+                .videoKey(videoKey)
                 .comment(trimToNull(request.getComment()))
                 .status(ApplicationStatus.PENDING)
                 .build();
@@ -192,6 +201,31 @@ class ApplicationServiceImpl implements ApplicationService {
         return getterViewSnapshot.getByApplicationId(id).stream()
                 .map(ViewSnapshotDTO::from)
                 .toList();
+    }
+
+    /**
+     * Короткие ссылки (vm.tiktok.com, youtu.be в редиректе) разворачиваем до полной:
+     * иначе один и тот же ролик под двумя ссылками пройдёт как два разных.
+     * Площадка недоступна — работаем с тем, что прислали.
+     */
+    private String resolveVideoUrl(Platform platform, String videoUrl) {
+        boolean identified = switch (platform) {
+            case TIKTOK -> VideoUrls.tiktokVideoId(videoUrl) != null;
+            case YOUTUBE_SHORTS -> VideoUrls.youtubeVideoId(videoUrl) != null;
+            default -> true;
+        };
+        return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
+    }
+
+    private void requireVideoNotSubmitted(String videoKey, User creator) {
+        getterApplication.getActiveByVideoKey(videoKey).ifPresent(existing -> {
+            if (Objects.equals(existing.getCreator().getId(), creator.getId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Этот ролик уже подан по объявлению «" + existing.getCampaign().getTitle() + "»");
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Этот ролик уже подан на площадке другим криатором");
+        });
     }
 
     private Application requireApplication(UUID id) {

@@ -33,5 +33,10 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
 
     long countByCampaignId(UUID campaignId);
 
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.videoKey = :videoKey and a.status <> :excluded")
+    List<Application> findByVideoKey(@Param("videoKey") String videoKey,
+                                     @Param("excluded") ApplicationStatus excluded);
+
     boolean existsByPublicId(String publicId);
 }

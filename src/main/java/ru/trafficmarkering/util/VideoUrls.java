@@ -1,5 +1,7 @@
 package ru.trafficmarkering.util;
 
+import ru.trafficmarkering.model.application.Platform;
+
 import java.net.URI;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,6 +18,24 @@ public final class VideoUrls {
             "/video/(\\d{6,32})");
 
     private VideoUrls() {
+    }
+
+    public static String videoKey(Platform platform, String url) {
+        if (platform == null || url == null || url.isBlank()) {
+            return null;
+        }
+        String identifier = switch (platform) {
+            case YOUTUBE_SHORTS -> youtubeVideoId(url);
+            case TIKTOK -> tiktokVideoId(url);
+            default -> null;
+        };
+        if (identifier == null) {
+            identifier = canonical(url);
+        }
+        if (identifier == null) {
+            identifier = url.trim().toLowerCase();
+        }
+        return platform.name() + ":" + identifier;
     }
 
     public static String youtubeVideoId(String url) {

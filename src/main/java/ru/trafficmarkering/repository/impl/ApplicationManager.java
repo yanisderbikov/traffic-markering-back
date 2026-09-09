@@ -81,6 +81,19 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
+    public Optional<Application> getActiveByVideoKey(String videoKey) {
+        if (videoKey == null) {
+            return Optional.empty();
+        }
+        try {
+            return applicationRepo.findByVideoKey(videoKey, ApplicationStatus.REJECTED).stream().findFirst();
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public boolean existsByPublicId(String publicId) {
         try {
             return applicationRepo.existsByPublicId(publicId);

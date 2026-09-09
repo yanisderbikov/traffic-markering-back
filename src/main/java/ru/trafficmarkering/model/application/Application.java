@@ -57,6 +57,9 @@ public class Application {
     @Column(name = "video_url", nullable = false, length = 1024)
     private String videoUrl;
 
+    @Column(name = "video_key", nullable = false, length = 512)
+    private String videoKey;
+
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
