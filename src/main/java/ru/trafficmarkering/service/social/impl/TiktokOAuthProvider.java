@@ -10,6 +10,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.service.http.JsonHttpClient;
+import ru.trafficmarkering.service.http.JsonNode;
+import ru.trafficmarkering.service.social.RefreshedToken;
 import ru.trafficmarkering.service.social.SocialAccountData;
 import ru.trafficmarkering.service.social.SocialOAuthProvider;
 
@@ -17,6 +20,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -29,7 +33,7 @@ class TiktokOAuthProvider implements SocialOAuthProvider {
             + "?fields=open_id,union_id,avatar_url,display_name,follower_count";
     private static final String SCOPE = "user.info.basic,user.info.profile,user.info.stats,video.list";
 
-    private final SocialHttpClient httpClient;
+    private final JsonHttpClient httpClient;
 
     @Value("${social.tiktok.client-key}")
     private String clientKey;
@@ -74,33 +78,57 @@ class TiktokOAuthProvider implements SocialOAuthProvider {
         form.add("redirect_uri", redirectUri);
 
         Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
-        String accessToken = SocialJson.text(token, "access_token");
+        String accessToken = JsonNode.text(token, "access_token");
         if (accessToken == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не выдал токен доступа");
         }
 
         Map<String, Object> response = httpClient.getJson(USER_URL, accessToken, NAME);
-        Map<String, Object> user = SocialJson.object(SocialJson.object(response, "data"), "user");
-        String openId = SocialJson.text(user, "open_id");
+        Map<String, Object> user = JsonNode.object(JsonNode.object(response, "data"), "user");
+        String openId = JsonNode.text(user, "open_id");
         if (openId == null) {
-            openId = SocialJson.text(token, "open_id");
+            openId = JsonNode.text(token, "open_id");
         }
         if (openId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не отдал идентификатор аккаунта");
         }
 
-        Long expiresIn = SocialJson.number(token, "expires_in");
-        String displayName = SocialJson.text(user, "display_name");
+        Long expiresIn = JsonNode.number(token, "expires_in");
+        String displayName = JsonNode.text(user, "display_name");
 
         return new SocialAccountData(
                 openId,
                 displayName,
                 displayName,
-                SocialJson.text(user, "avatar_url"),
-                SocialJson.number(user, "follower_count"),
+                JsonNode.text(user, "avatar_url"),
+                JsonNode.number(user, "follower_count"),
                 accessToken,
-                SocialJson.text(token, "refresh_token"),
+                JsonNode.text(token, "refresh_token"),
                 expiresIn == null ? null : Instant.now().plusSeconds(expiresIn),
-                SocialJson.text(token, "scope"));
+                JsonNode.text(token, "scope"));
+    }
+
+    @Override
+    public Optional<RefreshedToken> refresh(String accessToken, String refreshToken) {
+        if (!StringUtils.hasText(refreshToken) || !isConfigured()) {
+            return Optional.empty();
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("client_key", clientKey);
+        form.add("client_secret", clientSecret);
+        form.add("grant_type", "refresh_token");
+        form.add("refresh_token", refreshToken);
+
+        Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
+        String fresh = JsonNode.text(token, "access_token");
+        if (fresh == null) {
+            return Optional.empty();
+        }
+        Long expiresIn = JsonNode.number(token, "expires_in");
+        String rotated = JsonNode.text(token, "refresh_token");
+        return Optional.of(new RefreshedToken(
+                fresh,
+                rotated != null ? rotated : refreshToken,
+                expiresIn == null ? null : Instant.now().plusSeconds(expiresIn)));
     }
 }

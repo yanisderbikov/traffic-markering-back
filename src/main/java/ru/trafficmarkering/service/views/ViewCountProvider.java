@@ -1,16 +1,18 @@
 package ru.trafficmarkering.service.views;
 
 import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.model.application.ViewSource;
 
-import java.util.Optional;
+import java.util.Collection;
+import java.util.Map;
 
-/**
- * Источник просмотров ролика. Отделён интерфейсом, потому что у каждой площадки
- * счётчик достаётся по-своему: сегодня их проставляет внешний анализатор через
- * техническую ручку, завтра здесь может появиться реализация с походом в API площадки.
- */
 public interface ViewCountProvider {
 
-    /** Просмотры ролика по ссылке; Optional.empty() — площадка пока не поддерживается. */
-    Optional<Long> fetchViews(Platform platform, String videoUrl);
+    Platform platform();
+
+    ViewSource source();
+
+    boolean isConfigured();
+
+    Map<String, Long> fetchViews(Long creatorId, Collection<String> videoUrls);
 }

@@ -10,11 +10,15 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.service.http.JsonHttpClient;
+import ru.trafficmarkering.service.http.JsonNode;
+import ru.trafficmarkering.service.social.RefreshedToken;
 import ru.trafficmarkering.service.social.SocialAccountData;
 import ru.trafficmarkering.service.social.SocialOAuthProvider;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -27,7 +31,7 @@ class YoutubeOAuthProvider implements SocialOAuthProvider {
             "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true";
     private static final String SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
 
-    private final SocialHttpClient httpClient;
+    private final JsonHttpClient httpClient;
 
     @Value("${social.youtube.client-id}")
     private String clientId;
@@ -75,33 +79,56 @@ class YoutubeOAuthProvider implements SocialOAuthProvider {
         form.add("grant_type", "authorization_code");
 
         Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
-        String accessToken = SocialJson.text(token, "access_token");
+        String accessToken = JsonNode.text(token, "access_token");
         if (accessToken == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не выдал токен доступа");
         }
 
         Map<String, Object> channels = httpClient.getJson(CHANNEL_URL, accessToken, NAME);
-        Map<String, Object> channel = SocialJson.firstObject(SocialJson.array(channels, "items"));
-        String channelId = SocialJson.text(channel, "id");
+        Map<String, Object> channel = JsonNode.firstObject(JsonNode.array(channels, "items"));
+        String channelId = JsonNode.text(channel, "id");
         if (channelId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "У этого аккаунта Google нет канала YouTube — создайте канал и повторите привязку");
         }
 
-        Map<String, Object> snippet = SocialJson.object(channel, "snippet");
-        Map<String, Object> statistics = SocialJson.object(channel, "statistics");
-        Map<String, Object> thumbnail = SocialJson.object(SocialJson.object(snippet, "thumbnails"), "default");
-        Long expiresIn = SocialJson.number(token, "expires_in");
+        Map<String, Object> snippet = JsonNode.object(channel, "snippet");
+        Map<String, Object> statistics = JsonNode.object(channel, "statistics");
+        Map<String, Object> thumbnail = JsonNode.object(JsonNode.object(snippet, "thumbnails"), "default");
+        Long expiresIn = JsonNode.number(token, "expires_in");
 
         return new SocialAccountData(
                 channelId,
-                SocialJson.text(snippet, "customUrl"),
-                SocialJson.text(snippet, "title"),
-                SocialJson.text(thumbnail, "url"),
-                SocialJson.number(statistics, "subscriberCount"),
+                JsonNode.text(snippet, "customUrl"),
+                JsonNode.text(snippet, "title"),
+                JsonNode.text(thumbnail, "url"),
+                JsonNode.number(statistics, "subscriberCount"),
                 accessToken,
-                SocialJson.text(token, "refresh_token"),
+                JsonNode.text(token, "refresh_token"),
                 expiresIn == null ? null : Instant.now().plusSeconds(expiresIn),
-                SocialJson.text(token, "scope"));
+                JsonNode.text(token, "scope"));
+    }
+
+    @Override
+    public Optional<RefreshedToken> refresh(String accessToken, String refreshToken) {
+        if (!StringUtils.hasText(refreshToken) || !isConfigured()) {
+            return Optional.empty();
+        }
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("client_id", clientId);
+        form.add("client_secret", clientSecret);
+        form.add("refresh_token", refreshToken);
+        form.add("grant_type", "refresh_token");
+
+        Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
+        String fresh = JsonNode.text(token, "access_token");
+        if (fresh == null) {
+            return Optional.empty();
+        }
+        Long expiresIn = JsonNode.number(token, "expires_in");
+        return Optional.of(new RefreshedToken(
+                fresh,
+                refreshToken,
+                expiresIn == null ? null : Instant.now().plusSeconds(expiresIn)));
     }
 }

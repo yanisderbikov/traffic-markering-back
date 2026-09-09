@@ -14,4 +14,6 @@ public interface GetterSocialAccount {
     Optional<SocialAccount> getById(UUID id);
 
     Optional<SocialAccount> getByPlatformAndExternalId(Platform platform, String externalId);
+
+    Optional<SocialAccount> getActiveByUserIdAndPlatform(Long userId, Platform platform);
 }

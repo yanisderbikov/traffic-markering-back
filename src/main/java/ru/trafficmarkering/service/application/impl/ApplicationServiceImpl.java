@@ -8,11 +8,14 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.dto.application.ViewsUpdateRequestDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.model.profile.CreatorProfile;
@@ -20,7 +23,9 @@ import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.GetterCreatorProfile;
+import ru.trafficmarkering.repository.GetterViewSnapshot;
 import ru.trafficmarkering.repository.SaverApplication;
+import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.application.ApplicationService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
@@ -57,6 +62,8 @@ class ApplicationServiceImpl implements ApplicationService {
     private final GetterCreatorProfile getterCreatorProfile;
     private final CurrentUserService currentUserService;
     private final CampaignAccrualService campaignAccrualService;
+    private final GetterViewSnapshot getterViewSnapshot;
+    private final SaverViewSnapshot saverViewSnapshot;
 
     @Override
     @Transactional
@@ -155,12 +162,36 @@ class ApplicationServiceImpl implements ApplicationService {
     @Transactional
     public ApplicationDTO updateViews(UUID id, ViewsUpdateRequestDTO request) {
         Application application = requireApplication(id);
+        Instant capturedAt = Instant.now();
         application.setViews(request.getViews());
-        application.setViewsSyncedAt(Instant.now());
+        application.setViewsSyncedAt(capturedAt);
         saverApplication.save(application);
+        saverViewSnapshot.save(ApplicationViewSnapshot.builder()
+                .application(application)
+                .capturedAt(capturedAt)
+                .views(request.getViews())
+                .source(ViewSource.MANUAL)
+                .build());
         campaignAccrualService.recalculate(application.getCampaign());
 
         return toDto(requireApplication(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ViewSnapshotDTO> viewHistory(UUID id) {
+        User user = currentUserService.require();
+        Application application = requireApplication(id);
+        Campaign campaign = application.getCampaign();
+        boolean ownCreator = Objects.equals(application.getCreator().getId(), user.getId());
+        boolean ownCustomer = campaign.getCustomer() != null
+                && Objects.equals(campaign.getCustomer().getId(), user.getId());
+        if (user.getRole() != Role.ADMIN && !ownCreator && !ownCustomer) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой отклик");
+        }
+        return getterViewSnapshot.getByApplicationId(id).stream()
+                .map(ViewSnapshotDTO::from)
+                .toList();
     }
 
     private Application requireApplication(UUID id) {

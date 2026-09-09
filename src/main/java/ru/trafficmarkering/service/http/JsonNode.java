@@ -1,15 +1,15 @@
-package ru.trafficmarkering.service.social.impl;
+package ru.trafficmarkering.service.http;
 
 import java.util.List;
 import java.util.Map;
 
-final class SocialJson {
+public final class JsonNode {
 
-    private SocialJson() {
+    private JsonNode() {
     }
 
     @SuppressWarnings("unchecked")
-    static Map<String, Object> object(Map<String, Object> source, String key) {
+    public static Map<String, Object> object(Map<String, Object> source, String key) {
         if (source == null) {
             return Map.of();
         }
@@ -18,7 +18,7 @@ final class SocialJson {
     }
 
     @SuppressWarnings("unchecked")
-    static List<Object> array(Map<String, Object> source, String key) {
+    public static List<Object> array(Map<String, Object> source, String key) {
         if (source == null) {
             return List.of();
         }
@@ -27,7 +27,7 @@ final class SocialJson {
     }
 
     @SuppressWarnings("unchecked")
-    static Map<String, Object> firstObject(List<Object> source) {
+    public static Map<String, Object> firstObject(List<Object> source) {
         if (source == null || source.isEmpty()) {
             return Map.of();
         }
@@ -35,7 +35,7 @@ final class SocialJson {
         return value instanceof Map ? (Map<String, Object>) value : Map.of();
     }
 
-    static String text(Map<String, Object> source, String key) {
+    public static String text(Map<String, Object> source, String key) {
         if (source == null) {
             return null;
         }
@@ -47,7 +47,7 @@ final class SocialJson {
         return text.isEmpty() ? null : text;
     }
 
-    static Long number(Map<String, Object> source, String key) {
+    public static Long number(Map<String, Object> source, String key) {
         if (source == null) {
             return null;
         }

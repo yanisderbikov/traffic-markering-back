@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.service.application.ApplicationService;
 
 import java.util.List;
@@ -70,6 +71,15 @@ public class ApplicationController {
     public ResponseEntity<Void> deleteApplication(@PathVariable("id") UUID id) {
         applicationService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "История просмотров ролика",
+            description = "Замеры просмотров с таймстемпами, свежие сверху — по ним видно динамику ролика. "
+                    + "Доступна криатору отклика, заказчику объявления и админу",
+            security = @SecurityRequirement(name = "Bearer"))
+    @GetMapping("/{id}/views/history")
+    public ResponseEntity<List<ViewSnapshotDTO>> viewHistory(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(applicationService.viewHistory(id));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

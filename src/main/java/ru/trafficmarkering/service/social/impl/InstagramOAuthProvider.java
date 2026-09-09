@@ -10,11 +10,15 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.service.http.JsonHttpClient;
+import ru.trafficmarkering.service.http.JsonNode;
+import ru.trafficmarkering.service.social.RefreshedToken;
 import ru.trafficmarkering.service.social.SocialAccountData;
 import ru.trafficmarkering.service.social.SocialOAuthProvider;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -25,9 +29,10 @@ class InstagramOAuthProvider implements SocialOAuthProvider {
     private static final String TOKEN_URL = "https://api.instagram.com/oauth/access_token";
     private static final String LONG_LIVED_URL = "https://graph.instagram.com/access_token";
     private static final String ME_URL = "https://graph.instagram.com/v21.0/me";
+    private static final String REFRESH_URL = "https://graph.instagram.com/refresh_access_token";
     private static final String SCOPE = "instagram_business_basic,instagram_business_manage_insights";
 
-    private final SocialHttpClient httpClient;
+    private final JsonHttpClient httpClient;
 
     @Value("${social.instagram.client-id}")
     private String clientId;
@@ -72,7 +77,7 @@ class InstagramOAuthProvider implements SocialOAuthProvider {
         form.add("code", stripFragment(code));
 
         Map<String, Object> shortLived = httpClient.postForm(TOKEN_URL, form, NAME);
-        String shortLivedToken = SocialJson.text(shortLived, "access_token");
+        String shortLivedToken = JsonNode.text(shortLived, "access_token");
         if (shortLivedToken == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не выдал токен доступа");
         }
@@ -84,7 +89,7 @@ class InstagramOAuthProvider implements SocialOAuthProvider {
                 .encode()
                 .toUriString();
         Map<String, Object> longLived = httpClient.getJson(longLivedUrl, null, NAME);
-        String accessToken = SocialJson.text(longLived, "access_token");
+        String accessToken = JsonNode.text(longLived, "access_token");
         if (accessToken == null) {
             accessToken = shortLivedToken;
         }
@@ -96,23 +101,23 @@ class InstagramOAuthProvider implements SocialOAuthProvider {
                 .toUriString();
         Map<String, Object> me = httpClient.getJson(meUrl, null, NAME);
 
-        String externalId = SocialJson.text(me, "user_id");
+        String externalId = JsonNode.text(me, "user_id");
         if (externalId == null) {
-            externalId = SocialJson.text(shortLived, "user_id");
+            externalId = JsonNode.text(shortLived, "user_id");
         }
         if (externalId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не отдал идентификатор аккаунта");
         }
 
-        Long expiresIn = SocialJson.number(longLived, "expires_in");
-        String username = SocialJson.text(me, "username");
+        Long expiresIn = JsonNode.number(longLived, "expires_in");
+        String username = JsonNode.text(me, "username");
 
         return new SocialAccountData(
                 externalId,
                 username,
                 username,
                 null,
-                SocialJson.number(me, "followers_count"),
+                JsonNode.number(me, "followers_count"),
                 accessToken,
                 null,
                 expiresIn == null ? null : Instant.now().plusSeconds(expiresIn),
@@ -122,5 +127,28 @@ class InstagramOAuthProvider implements SocialOAuthProvider {
     private String stripFragment(String code) {
         int hash = code.indexOf('#');
         return hash < 0 ? code : code.substring(0, hash);
+    }
+
+    @Override
+    public Optional<RefreshedToken> refresh(String accessToken, String refreshToken) {
+        if (!StringUtils.hasText(accessToken) || !isConfigured()) {
+            return Optional.empty();
+        }
+        String url = UriComponentsBuilder.fromUriString(REFRESH_URL)
+                .queryParam("grant_type", "ig_refresh_token")
+                .queryParam("access_token", accessToken)
+                .encode()
+                .toUriString();
+
+        Map<String, Object> token = httpClient.getJson(url, null, NAME);
+        String fresh = JsonNode.text(token, "access_token");
+        if (fresh == null) {
+            return Optional.empty();
+        }
+        Long expiresIn = JsonNode.number(token, "expires_in");
+        return Optional.of(new RefreshedToken(
+                fresh,
+                null,
+                expiresIn == null ? null : Instant.now().plusSeconds(expiresIn)));
     }
 }
