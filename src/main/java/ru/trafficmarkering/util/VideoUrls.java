@@ -20,6 +20,31 @@ public final class VideoUrls {
     private VideoUrls() {
     }
 
+    public static Platform detectPlatform(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        URI uri = parse(url.trim());
+        if (uri == null || uri.getHost() == null) {
+            return null;
+        }
+        String host = uri.getHost().toLowerCase();
+        if (hostMatches(host, "youtube.com") || hostMatches(host, "youtu.be")) {
+            return Platform.YOUTUBE_SHORTS;
+        }
+        if (hostMatches(host, "tiktok.com")) {
+            return Platform.TIKTOK;
+        }
+        if (hostMatches(host, "instagram.com") || hostMatches(host, "instagr.am")) {
+            return Platform.INSTAGRAM;
+        }
+        return null;
+    }
+
+    private static boolean hostMatches(String host, String domain) {
+        return host.equals(domain) || host.endsWith("." + domain);
+    }
+
     public static String videoKey(Platform platform, String url) {
         if (platform == null || url == null || url.isBlank()) {
             return null;

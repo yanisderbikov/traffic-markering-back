@@ -24,6 +24,7 @@ import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.GetterCreatorProfile;
+import ru.trafficmarkering.repository.GetterSocialAccount;
 import ru.trafficmarkering.repository.GetterViewSnapshot;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
@@ -63,6 +64,7 @@ class ApplicationServiceImpl implements ApplicationService {
     private final ApplicationDeleter applicationDeleter;
     private final GetterCampaign getterCampaign;
     private final GetterCreatorProfile getterCreatorProfile;
+    private final GetterSocialAccount getterSocialAccount;
     private final CurrentUserService currentUserService;
     private final CampaignAccrualService campaignAccrualService;
     private final GetterViewSnapshot getterViewSnapshot;
@@ -91,15 +93,17 @@ class ApplicationServiceImpl implements ApplicationService {
                     "Вы уже откликались на это объявление");
         }
 
-        String videoUrl = resolveVideoUrl(request.getPlatform(), request.getVideoUrl().trim());
-        String videoKey = VideoUrls.videoKey(request.getPlatform(), videoUrl);
+        Platform platform = requirePlatform(request.getVideoUrl().trim());
+        requireConnectedAccount(creator, platform);
+        String videoUrl = resolveVideoUrl(platform, request.getVideoUrl().trim());
+        String videoKey = VideoUrls.videoKey(platform, videoUrl);
         requireVideoNotSubmitted(videoKey, creator);
 
         Application application = Application.builder()
                 .publicId(PublicIdGenerator.generateUnique(getterApplication::existsByPublicId))
                 .campaign(campaign)
                 .creator(creator)
-                .platform(request.getPlatform())
+                .platform(platform)
                 .videoUrl(videoUrl)
                 .videoKey(videoKey)
                 .comment(trimToNull(request.getComment()))
@@ -215,6 +219,23 @@ class ApplicationServiceImpl implements ApplicationService {
             default -> true;
         };
         return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
+    }
+
+    private Platform requirePlatform(String videoUrl) {
+        Platform platform = VideoUrls.detectPlatform(videoUrl);
+        if (platform == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Не удалось определить площадку по ссылке: принимаются ролики YouTube, TikTok и Instagram");
+        }
+        return platform;
+    }
+
+    private void requireConnectedAccount(User creator, Platform platform) {
+        if (getterSocialAccount.getActiveByUserIdAndPlatform(creator.getId(), platform).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Привяжите аккаунт " + platform.getDescription()
+                            + " в профиле: ролик должен быть выложен с подключённого аккаунта");
+        }
     }
 
     private void requireVideoNotSubmitted(String videoKey, User creator) {

@@ -38,8 +38,9 @@ public class ApplicationController {
     private final ApplicationService applicationService;
 
     @Operation(summary = "Взять объявление в работу",
-            description = "Криатор прикладывает ссылку на ролик. Откликнуться можно только на активное "
-                    + "объявление, один раз и не на своё; повторный отклик — 409",
+            description = "Криатор прикладывает ссылку на ролик; площадка определяется по ссылке, "
+                    + "а аккаунт этой площадки должен быть привязан в профиле. Откликнуться можно только "
+                    + "на активное объявление, один раз и не на своё; повторный отклик — 409",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping
     public ResponseEntity<ApplicationDTO> apply(@Valid @RequestBody ApplicationCreateRequestDTO request) {

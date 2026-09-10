@@ -10,6 +10,24 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class VideoUrlsTest {
 
     @Test
+    void detectPlatform_byHost() {
+        assertEquals(Platform.YOUTUBE_SHORTS, VideoUrls.detectPlatform("https://www.youtube.com/shorts/dQw4w9WgXcQ"));
+        assertEquals(Platform.YOUTUBE_SHORTS, VideoUrls.detectPlatform("https://youtu.be/dQw4w9WgXcQ"));
+        assertEquals(Platform.YOUTUBE_SHORTS, VideoUrls.detectPlatform("m.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assertEquals(Platform.TIKTOK, VideoUrls.detectPlatform("https://www.tiktok.com/@creator/video/7300000000000000000"));
+        assertEquals(Platform.TIKTOK, VideoUrls.detectPlatform("https://vm.tiktok.com/ZMabcdefg/"));
+        assertEquals(Platform.INSTAGRAM, VideoUrls.detectPlatform("https://www.instagram.com/reel/ABC123/"));
+    }
+
+    @Test
+    void detectPlatform_unknownOrLookalikeHost() {
+        assertNull(VideoUrls.detectPlatform("https://t.me/channel/123"));
+        assertNull(VideoUrls.detectPlatform("https://notyoutube.com/shorts/dQw4w9WgXcQ"));
+        assertNull(VideoUrls.detectPlatform("just text"));
+        assertNull(VideoUrls.detectPlatform(null));
+    }
+
+    @Test
     void youtubeVideoId_shorts() {
         assertEquals("dQw4w9WgXcQ", VideoUrls.youtubeVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ"));
     }

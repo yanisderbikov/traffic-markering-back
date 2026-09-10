@@ -147,7 +147,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
 
     @Override
     public String frontRedirect(String platformSlug, String status, String message) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontUrl + "/app/profile")
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontUrl + "/app/profile/socials")
                 .queryParam("social", platformSlug)
                 .queryParam("status", status);
         if (StringUtils.hasText(message)) {
