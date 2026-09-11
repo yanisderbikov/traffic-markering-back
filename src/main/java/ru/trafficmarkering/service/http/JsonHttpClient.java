@@ -13,7 +13,10 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 @Log4j2
@@ -42,7 +45,7 @@ public class JsonHttpClient {
                     .uri(url)
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .accept(MediaType.APPLICATION_JSON)
-                    .body(form)
+                    .body(encodeForm(form))
                     .retrieve()
                     .body(JSON_MAP), platformName);
         } catch (ResponseStatusException e) {
@@ -89,6 +92,15 @@ public class JsonHttpClient {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     platformName + " не отдал данные, попробуйте позже");
         }
+    }
+
+    private static byte[] encodeForm(MultiValueMap<String, String> form) {
+        return form.entrySet().stream()
+                .flatMap(entry -> entry.getValue().stream()
+                        .map(value -> URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
+                                + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)))
+                .collect(Collectors.joining("&"))
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private Map<String, Object> requireBody(Map<String, Object> body, String platformName) {
