@@ -88,11 +88,6 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Нельзя откликнуться на собственное объявление");
         }
-        if (getterApplication.existsByCampaignIdAndCreatorId(campaign.getId(), creator.getId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Вы уже откликались на это объявление");
-        }
-
         Platform platform = requirePlatform(request.getVideoUrl().trim());
         requireConnectedAccount(creator, platform);
         String videoUrl = resolveVideoUrl(platform, request.getVideoUrl().trim());

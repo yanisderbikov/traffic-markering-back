@@ -51,16 +51,6 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
-    public boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId) {
-        try {
-            return applicationRepo.existsByCampaignIdAndCreatorId(campaignId, creatorId);
-        } catch (Exception e) {
-            log.error(e);
-            throw new RuntimeException("Database exception", e);
-        }
-    }
-
-    @Override
     public long countByCampaignId(UUID campaignId) {
         try {
             return applicationRepo.countByCampaignId(campaignId);

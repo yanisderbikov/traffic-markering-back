@@ -1,6 +1,7 @@
 package ru.trafficmarkering.service.social.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -16,14 +17,13 @@ import ru.trafficmarkering.service.social.RefreshedToken;
 import ru.trafficmarkering.service.social.SocialAccountData;
 import ru.trafficmarkering.service.social.SocialOAuthProvider;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
+@Log4j2
 class TiktokOAuthProvider implements SocialOAuthProvider {
 
     private static final String NAME = "TikTok";
@@ -73,14 +73,19 @@ class TiktokOAuthProvider implements SocialOAuthProvider {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_key", clientKey);
         form.add("client_secret", clientSecret);
-        form.add("code", URLDecoder.decode(code, StandardCharsets.UTF_8));
+        form.add("code", code);
         form.add("grant_type", "authorization_code");
         form.add("redirect_uri", redirectUri);
 
         Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
         String accessToken = JsonNode.text(token, "access_token");
         if (accessToken == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, NAME + " не выдал токен доступа");
+            String error = JsonNode.text(token, "error");
+            String description = JsonNode.text(token, "error_description");
+            log.error("TikTok не выдал токен: error={}, description={}, log_id={}",
+                    error, description, JsonNode.text(token, "log_id"));
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    NAME + " не выдал токен доступа" + (description != null ? ": " + description : ""));
         }
 
         Map<String, Object> response = httpClient.getJson(USER_URL, accessToken, NAME);
@@ -122,6 +127,8 @@ class TiktokOAuthProvider implements SocialOAuthProvider {
         Map<String, Object> token = httpClient.postForm(TOKEN_URL, form, NAME);
         String fresh = JsonNode.text(token, "access_token");
         if (fresh == null) {
+            log.warn("TikTok не обновил токен: error={}, description={}",
+                    JsonNode.text(token, "error"), JsonNode.text(token, "error_description"));
             return Optional.empty();
         }
         Long expiresIn = JsonNode.number(token, "expires_in");

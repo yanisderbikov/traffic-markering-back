@@ -20,9 +20,6 @@ public interface GetterApplication {
     /** Отклики криатора, новые сверху. */
     List<Application> getByCreatorId(Long creatorId);
 
-    /** Один криатор — один отклик на объявление; на этом стоит проверка повторного отклика. */
-    boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
-
     /** Сколько откликов у объявления: по нему заказчику запрещают удалять объявление. */
     long countByCampaignId(UUID campaignId);
 

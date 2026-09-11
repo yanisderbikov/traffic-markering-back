@@ -29,8 +29,6 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
             + "where a.status = :status order by a.createdAt asc")
     List<Application> findByStatus(@Param("status") ApplicationStatus status);
 
-    boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
-
     long countByCampaignId(UUID campaignId);
 
     @Query("select a from Application a join fetch a.campaign join fetch a.creator "
