@@ -49,6 +49,9 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
                     .requestMatchers("/api/social/callback/**").permitAll()
+                    // ── Финансы: пользователь только читает свой кошелёк, изменяет только ADMIN ──
+                    .requestMatchers("/api/admin/wallets/**").hasRole("ADMIN")
+                    .requestMatchers("/api/wallet/**").hasAnyRole("CUSTOMER", "CREATOR")
                     // ── Пользовательские роли ──
                     .requestMatchers("/api/campaigns/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/files/**").hasAnyRole("CUSTOMER", "ADMIN")
