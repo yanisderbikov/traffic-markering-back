@@ -19,6 +19,7 @@ import ru.trafficmarkering.repository.CampaignDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.GetterCustomerProfile;
+import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.application.ApplicationService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
@@ -39,6 +40,7 @@ class CampaignServiceImpl implements CampaignService {
     private final SaverCampaign saverCampaign;
     private final CampaignDeleter campaignDeleter;
     private final GetterApplication getterApplication;
+    private final SaverApplication saverApplication;
     private final GetterCustomerProfile getterCustomerProfile;
     private final CurrentUserService currentUserService;
     private final CampaignAccrualService campaignAccrualService;
@@ -68,6 +70,7 @@ class CampaignServiceImpl implements CampaignService {
                 .photoKey(requireValidPhotoKey(request.getPhotoKey()))
                 .ratePerThousandKopecks(request.getRatePerThousandKopecks())
                 .budgetKopecks(request.getBudgetKopecks())
+                .region(request.getRegion())
                 .spentKopecks(0L)
                 // null в запросе — объявление создаётся черновиком и на доску не попадает
                 .status(request.getStatus() != null ? request.getStatus() : CampaignStatus.DRAFT)
@@ -92,11 +95,17 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setPhotoKey(requireValidPhotoKey(request.getPhotoKey()));
         campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
         campaign.setBudgetKopecks(request.getBudgetKopecks());
+        if (campaign.getRegion() != request.getRegion()) {
+            // Старая гео-разбивка посчитана под другой набор стран — доверять ей больше нельзя,
+            // иначе после смены региона можно доплатить по чужому региону до следующей синхронизации
+            resetRegionViews(campaign.getId());
+        }
+        campaign.setRegion(request.getRegion());
         if (request.getStatus() != null) {
             campaign.setStatus(request.getStatus());
         }
         Campaign saved = saverCampaign.save(campaign);
-        // Ставка и бюджет только что могли поменяться — старые начисления им уже не соответствуют
+        // Ставка, бюджет или регион только что могли поменяться — старые начисления им уже не соответствуют
         campaignAccrualService.recalculate(saved);
         return toDTO(saved, customerProfile(saved.getCustomer()));
     }
@@ -167,6 +176,15 @@ class CampaignServiceImpl implements CampaignService {
                 .sum();
         return CampaignDTO.from(campaign, campaign.getCustomer(), customerProfile,
                 fileStorage.presignedUrl(campaign.getPhotoKey()), applications.size(), totalViews);
+    }
+
+    private void resetRegionViews(UUID campaignId) {
+        for (Application application : getterApplication.getByCampaignIdOrderByCreatedAt(campaignId)) {
+            if (application.getRegionViews() != null) {
+                application.setRegionViews(null);
+                saverApplication.save(application);
+            }
+        }
     }
 
     private String requireValidPhotoKey(String photoKey) {

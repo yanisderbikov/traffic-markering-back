@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
@@ -36,7 +37,7 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
         for (Application application : getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())) {
             long accrued = 0L;
             if (application.isAccruable()) {
-                long views = application.getViews() != null ? application.getViews() : 0L;
+                long views = eligibleViews(campaign, application);
                 accrued = PayoutCalculator.accrual(views, rate, budget - spent);
                 spent += accrued;
             }
@@ -50,5 +51,19 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
 
         campaign.setSpentKopecks(spent);
         saverCampaign.save(campaign);
+    }
+
+    /**
+     * WORLDWIDE платит за все просмотры ролика. Региональный оффер (RUSSIA/CIS) платит
+     * только за просмотры, прошедшие проверку гео (application.regionViews) — пока она не
+     * прошла (null), начисление по нему явно 0, а не по общему счётчику просмотров: платформа
+     * не может заплатить за трафик, чью страну не знает.
+     */
+    private long eligibleViews(Campaign campaign, Application application) {
+        Region region = campaign.getRegion();
+        if (region == null || region == Region.WORLDWIDE) {
+            return application.getViews() != null ? application.getViews() : 0L;
+        }
+        return application.getRegionViews() != null ? application.getRegionViews() : 0L;
     }
 }

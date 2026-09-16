@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
@@ -92,12 +93,60 @@ class CampaignAccrualServiceImplTest {
         verify(saverCampaign).save(campaign);
     }
 
+    @Test
+    void recalculate_regionalCampaignUsesRegionViewsNotRawViews() {
+        // Оффер «Только РФ»: платим за 2 000 подтверждённых РФ-просмотров, а не за 10 000 общих
+        Campaign campaign = campaign(350_00, 1_000_00, Region.RUSSIA);
+        Application application = application(ApplicationStatus.APPROVED, 10_000, 0);
+        application.setRegionViews(2_000L);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(application));
+
+        service.recalculate(campaign);
+
+        assertEquals(700_00L, application.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_regionalCampaignWithoutConfirmedGeoAccruesNothing() {
+        // Гео ролика ещё не подтверждено (regionViews == null) — начисление явно 0,
+        // а не по общему счётчику просмотров
+        Campaign campaign = campaign(350_00, 1_000_00, Region.CIS);
+        Application application = application(ApplicationStatus.APPROVED, 5_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(application));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, application.getAccruedKopecks().longValue());
+        assertEquals(0L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_worldwideCampaignIgnoresRegionViews() {
+        // WORLDWIDE платит за все просмотры — regionViews тут не участвует, даже если он меньше
+        Campaign campaign = campaign(350_00, 1_000_00, Region.WORLDWIDE);
+        Application application = application(ApplicationStatus.APPROVED, 1_000, 0);
+        application.setRegionViews(0L);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(application));
+
+        service.recalculate(campaign);
+
+        assertEquals(350_00L, application.getAccruedKopecks().longValue());
+    }
+
     private Campaign campaign(long ratePerThousandKopecks, long budgetKopecks) {
+        return campaign(ratePerThousandKopecks, budgetKopecks, Region.WORLDWIDE);
+    }
+
+    private Campaign campaign(long ratePerThousandKopecks, long budgetKopecks, Region region) {
         return Campaign.builder()
                 .id(UUID.randomUUID())
                 .ratePerThousandKopecks(ratePerThousandKopecks)
                 .budgetKopecks(budgetKopecks)
                 .spentKopecks(0L)
+                .region(region)
                 .build();
     }
 

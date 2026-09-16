@@ -82,6 +82,15 @@ public class Application {
     @Column(name = "views_synced_at")
     private Instant viewsSyncedAt;
 
+    /**
+     * Просмотры, прошедшие проверку региона оффера кампании (см. Region, GeoAnalyticsProvider).
+     * null — гео ролика ещё не подтверждено: для регионального оффера (RUSSIA/CIS) это значит
+     * «начисления по нему пока нет», а не «ноль просмотров из региона навсегда».
+     * Для WORLDWIDE-офферов это поле не используется — там платят за все просмотры.
+     */
+    @Column(name = "region_views")
+    private Long regionViews;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

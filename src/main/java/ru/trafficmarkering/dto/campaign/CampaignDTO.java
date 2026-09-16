@@ -21,6 +21,9 @@ public record CampaignDTO(
         @Schema(description = "Остаток бюджета, в копейках") Long remainingKopecks,
         @Schema(description = "Статус: DRAFT, ACTIVE, PAUSED, COMPLETED") String status,
         @Schema(description = "Человекочитаемый статус", example = "Активно") String statusDescription,
+        @Schema(description = "Регион, по которому считаются оплачиваемые просмотры: RUSSIA, CIS, WORLDWIDE")
+        String region,
+        @Schema(description = "Человекочитаемый регион", example = "Только РФ") String regionDescription,
         Long customerId,
         String customerName,
         @Schema(description = "Компания заказчика; null — профиль не заполнен") String customerCompany,
@@ -56,6 +59,8 @@ public record CampaignDTO(
                 campaign.remainingKopecks(),
                 campaign.getStatus() != null ? campaign.getStatus().name() : null,
                 campaign.getStatus() != null ? campaign.getStatus().getDescription() : null,
+                campaign.getRegion() != null ? campaign.getRegion().name() : null,
+                campaign.getRegion() != null ? campaign.getRegion().getDescription() : null,
                 customer != null ? customer.getId() : null,
                 customer != null ? customer.getName() : null,
                 customerProfile != null ? customerProfile.getCompany() : null,

@@ -19,6 +19,7 @@ import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.model.profile.CreatorProfile;
 import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
@@ -33,6 +34,7 @@ import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.http.ShortLinkResolver;
 import ru.trafficmarkering.util.PublicIdGenerator;
+import ru.trafficmarkering.util.RegionViewsCalculator;
 import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
@@ -173,6 +175,11 @@ class ApplicationServiceImpl implements ApplicationService {
         Instant capturedAt = Instant.now();
         application.setViews(request.getViews());
         application.setViewsSyncedAt(capturedAt);
+        // Анализатор прислал гео этим же обновлением — сразу подтверждаем регион, не дожидаясь синка
+        if (request.getViewsByCountry() != null) {
+            Region region = application.getCampaign().getRegion();
+            application.setRegionViews(RegionViewsCalculator.viewsForRegion(region, request.getViewsByCountry()));
+        }
         saverApplication.save(application);
         saverViewSnapshot.save(ApplicationViewSnapshot.builder()
                 .application(application)
