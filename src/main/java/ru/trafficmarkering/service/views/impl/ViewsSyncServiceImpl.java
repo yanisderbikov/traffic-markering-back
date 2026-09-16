@@ -7,7 +7,7 @@ import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.Campaign;
-creaimport ru.trafficmarkering.model.campaign.Region;
+import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
