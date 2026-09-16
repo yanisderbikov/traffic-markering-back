@@ -13,7 +13,7 @@ CREATE TABLE wallet (
 
 CREATE TABLE wallet_transaction (
     id                     UUID PRIMARY KEY,
-    wallet_id              UUID NOT NULL REFERENCES wallet (id) ON DELETE CASCADE,
+    wallet_id              UUID NOT NULL REFERENCES wallet (id),
     actor_user_id          BIGINT REFERENCES users (id) ON DELETE SET NULL,
     type                   VARCHAR(32) NOT NULL CHECK (type IN ('ADMIN_ADJUSTMENT')),
     amount_kopecks         BIGINT NOT NULL CHECK (amount_kopecks <> 0),
