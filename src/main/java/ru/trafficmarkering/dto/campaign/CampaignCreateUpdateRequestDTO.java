@@ -11,6 +11,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.Region;
 
 @Data
 @Builder
@@ -42,6 +43,11 @@ public class CampaignCreateUpdateRequestDTO {
     @PositiveOrZero(message = "Бюджет не может быть отрицательным")
     @Schema(description = "Выделенный бюджет, в копейках", required = true, example = "5000000")
     private Long budgetKopecks;
+
+    @NotNull(message = "Регион обязателен")
+    @Schema(description = "Регион, по которому считаются оплачиваемые просмотры: "
+            + "RUSSIA, CIS или WORLDWIDE", required = true, example = "WORLDWIDE")
+    private Region region;
 
     /** null — при создании берётся DRAFT, при обновлении статус не трогаем. */
     @Schema(description = "Статус; null — не менять (при создании DRAFT)", example = "ACTIVE")

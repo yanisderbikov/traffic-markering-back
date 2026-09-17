@@ -17,6 +17,9 @@ public record CampaignBoardDTO(
         @Schema(description = "Выделенный бюджет, в копейках") Long budgetKopecks,
         @Schema(description = "Уже начислено криаторам, в копейках") Long spentKopecks,
         @Schema(description = "Остаток бюджета, в копейках") Long remainingKopecks,
+        @Schema(description = "Регион, по которому считаются оплачиваемые просмотры: RUSSIA, CIS, WORLDWIDE")
+        String region,
+        @Schema(description = "Человекочитаемый регион", example = "Только РФ") String regionDescription,
         String customerName,
         @Schema(description = "Компания заказчика; null — профиль не заполнен") String customerCompany,
         @Schema(description = "Всего откликов по объявлению") Integer applicationsCount,
@@ -42,6 +45,8 @@ public record CampaignBoardDTO(
                 campaign.getBudgetKopecks(),
                 campaign.getSpentKopecks(),
                 campaign.remainingKopecks(),
+                campaign.getRegion() != null ? campaign.getRegion().name() : null,
+                campaign.getRegion() != null ? campaign.getRegion().getDescription() : null,
                 customer != null ? customer.getName() : null,
                 customerProfile != null ? customerProfile.getCompany() : null,
                 applicationsCount,

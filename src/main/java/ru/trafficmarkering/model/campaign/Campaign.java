@@ -72,6 +72,12 @@ public class Campaign {
     @Column(nullable = false, length = 32)
     private CampaignStatus status = CampaignStatus.DRAFT;
 
+    /** По каким странам считаются оплачиваемые просмотры; выбирается заказчиком при создании. */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private Region region = Region.WORLDWIDE;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
