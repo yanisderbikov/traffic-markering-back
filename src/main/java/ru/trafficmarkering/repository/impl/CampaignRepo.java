@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.Region;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +21,10 @@ interface CampaignRepo extends JpaRepository<Campaign, UUID> {
 
     @Query("select c from Campaign c join fetch c.customer where c.id = :id")
     Optional<Campaign> findByIdWithCustomer(@Param("id") UUID id);
+
+    /** Скалярная проекция, не сущность — не задевает identity map, поэтому всегда бьёт в базу. */
+    @Query("select c.region from Campaign c where c.id = :id")
+    Optional<Region> findRegionById(@Param("id") UUID id);
 
     @Query("select c from Campaign c join fetch c.customer where c.publicId = :publicId")
     Optional<Campaign> findByPublicIdWithCustomer(@Param("publicId") String publicId);

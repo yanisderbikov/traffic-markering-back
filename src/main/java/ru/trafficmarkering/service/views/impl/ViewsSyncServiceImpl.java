@@ -9,6 +9,7 @@ import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.GetterApplication;
+import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
@@ -38,6 +39,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
     private final ViewCountProviders viewCountProviders;
     private final GeoAnalyticsProvider geoAnalyticsProvider;
     private final CampaignAccrualService campaignAccrualService;
+    private final GetterCampaign getterCampaign;
 
     @Override
     public int syncApproved() {
@@ -140,8 +142,19 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                 if (geoViews == null) {
                     continue;
                 }
+                // fetchGeoViews — внешний вызов, за время которого заказчик мог сменить регион
+                // (и applications выше загружены до него). Регион перепроверяем отдельным
+                // скалярным запросом прямо перед сохранением, а не доверяем той ссылке, что
+                // держит application.getCampaign(), — иначе можно применить разбивку, посчитанную
+                // под уже неактуальный регион, и воскресить значение, которое смена региона
+                // должна была обнулить.
+                Region freshRegion = getterCampaign.getRegionById(application.getCampaign().getId()).orElse(null);
+                if (freshRegion == null || freshRegion == Region.WORLDWIDE) {
+                    continue;
+                }
+                long rawViews = application.getViews() != null ? application.getViews() : 0L;
                 long regionViews = RegionViewsCalculator.viewsForRegion(
-                        application.getCampaign().getRegion(), geoViews.viewsByCountry());
+                        freshRegion, geoViews.viewsByCountry(), rawViews);
                 if (!Objects.equals(application.getRegionViews(), regionViews)) {
                     application.setRegionViews(regionViews);
                     saverApplication.save(application);

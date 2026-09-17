@@ -175,10 +175,16 @@ class ApplicationServiceImpl implements ApplicationService {
         Instant capturedAt = Instant.now();
         application.setViews(request.getViews());
         application.setViewsSyncedAt(capturedAt);
-        // Анализатор прислал гео этим же обновлением — сразу подтверждаем регион, не дожидаясь синка
+        // Анализатор прислал гео этим же обновлением — сразу подтверждаем регион, не дожидаясь синка.
+        // Регион берём отдельным скалярным запросом, а не через application.getCampaign().getRegion():
+        // та ссылка могла загрузиться в этой же сессии ещё до того, как заказчик сменил регион,
+        // и applyGeo применил бы разбивку, посчитанную под уже неактуальный регион.
         if (request.getViewsByCountry() != null) {
-            Region region = application.getCampaign().getRegion();
-            application.setRegionViews(RegionViewsCalculator.viewsForRegion(region, request.getViewsByCountry()));
+            Region region = getterCampaign.getRegionById(application.getCampaign().getId()).orElse(null);
+            if (region != null && region != Region.WORLDWIDE) {
+                application.setRegionViews(RegionViewsCalculator.viewsForRegion(
+                        region, request.getViewsByCountry(), request.getViews()));
+            }
         }
         saverApplication.save(application);
         saverViewSnapshot.save(ApplicationViewSnapshot.builder()

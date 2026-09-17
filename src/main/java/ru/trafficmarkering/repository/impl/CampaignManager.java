@@ -5,6 +5,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.CampaignDeleter;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverCampaign;
@@ -24,6 +25,16 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     public Optional<Campaign> getById(UUID id) {
         try {
             return campaignRepo.findByIdWithCustomer(id);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Region> getRegionById(UUID id) {
+        try {
+            return campaignRepo.findRegionById(id);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
