@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.model.social.SocialAccount;
 import ru.trafficmarkering.service.http.JsonHttpClient;
 import ru.trafficmarkering.service.http.JsonNode;
 import ru.trafficmarkering.service.social.RefreshedToken;
@@ -29,7 +30,8 @@ class YoutubeOAuthProvider implements SocialOAuthProvider {
     private static final String TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final String CHANNEL_URL =
             "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true";
-    private static final String SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
+    private static final String SCOPE = "https://www.googleapis.com/auth/youtube.readonly "
+            + SocialAccount.YOUTUBE_ANALYTICS_SCOPE;
 
     private final JsonHttpClient httpClient;
 

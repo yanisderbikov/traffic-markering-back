@@ -14,5 +14,5 @@ public interface ViewCountProvider {
 
     boolean isConfigured();
 
-    Map<String, Long> fetchViews(Long creatorId, Collection<String> videoUrls);
+    Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls);
 }

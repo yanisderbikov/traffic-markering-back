@@ -2,6 +2,7 @@ package ru.trafficmarkering.service.storage.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ContentDisposition;
 import org.springframework.stereotype.Service;
 import ru.trafficmarkering.service.storage.FileStorage;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -10,6 +11,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -49,10 +51,26 @@ class S3FileStorage implements FileStorage {
         if (key == null || key.isBlank()) {
             return null;
         }
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+        return presign(GetObjectRequest.builder().bucket(bucket).key(key).build());
+    }
+
+    @Override
+    public String presignedUrl(String key, String downloadName, boolean inline) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        ContentDisposition.Builder disposition = inline ? ContentDisposition.inline() : ContentDisposition.attachment();
+        if (downloadName != null && !downloadName.isBlank()) {
+            disposition.filename(downloadName, StandardCharsets.UTF_8);
+        }
+        return presign(GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
-                .build();
+                .responseContentDisposition(disposition.build().toString())
+                .build());
+    }
+
+    private String presign(GetObjectRequest getObjectRequest) {
         return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
                         .getObjectRequest(getObjectRequest)
                         .signatureDuration(GET_PRESIGN_DURATION)

@@ -15,6 +15,7 @@ import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.CountryViewsConverter;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
@@ -36,6 +37,8 @@ import ru.trafficmarkering.util.PublicIdGenerator;
 import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +74,9 @@ class ApplicationServiceImpl implements ApplicationService {
     private final SaverViewSnapshot saverViewSnapshot;
     private final ShortLinkResolver shortLinkResolver;
 
+    private static final DateTimeFormatter MOSCOW_DATE =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Moscow"));
+
     @Override
     @Transactional
     public ApplicationDTO apply(ApplicationCreateRequestDTO request) {
@@ -83,12 +89,15 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Объявление не принимает отклики: " + campaign.getStatus().getDescription().toLowerCase());
         }
+        requireWithinPeriod(campaign);
         // ADMIN проходит проверку роли выше, поэтому теоретически может оказаться и заказчиком
         if (Objects.equals(campaign.getCustomer().getId(), creator.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Нельзя откликнуться на собственное объявление");
         }
+        requireVideoLimitNotReached(campaign, creator);
         Platform platform = requirePlatform(request.getVideoUrl().trim());
+        requireAcceptedByCampaign(campaign, platform);
         requireConnectedAccount(creator, platform);
         String videoUrl = resolveVideoUrl(platform, request.getVideoUrl().trim());
         String videoKey = VideoUrls.videoKey(platform, videoUrl);
@@ -170,14 +179,17 @@ class ApplicationServiceImpl implements ApplicationService {
     @Transactional
     public ApplicationDTO updateViews(UUID id, ViewsUpdateRequestDTO request) {
         Application application = requireApplication(id);
+        Map<String, Long> countryViews = requireValidCountryViews(request);
         Instant capturedAt = Instant.now();
         application.setViews(request.getViews());
+        application.setCountryViews(countryViews);
         application.setViewsSyncedAt(capturedAt);
         saverApplication.save(application);
         saverViewSnapshot.save(ApplicationViewSnapshot.builder()
                 .application(application)
                 .capturedAt(capturedAt)
                 .views(request.getViews())
+                .countryViews(countryViews)
                 .source(ViewSource.MANUAL)
                 .build());
         campaignAccrualService.recalculate(application.getCampaign());
@@ -194,12 +206,35 @@ class ApplicationServiceImpl implements ApplicationService {
         boolean ownCreator = Objects.equals(application.getCreator().getId(), user.getId());
         boolean ownCustomer = campaign.getCustomer() != null
                 && Objects.equals(campaign.getCustomer().getId(), user.getId());
-        if (user.getRole() != Role.ADMIN && !ownCreator && !ownCustomer) {
+        if (!user.getRole().isAdmin() && !ownCreator && !ownCustomer) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой отклик");
         }
         return getterViewSnapshot.getByApplicationId(id).stream()
                 .map(ViewSnapshotDTO::from)
                 .toList();
+    }
+
+    private Map<String, Long> requireValidCountryViews(ViewsUpdateRequestDTO request) {
+        Map<String, Long> countryViews = request.getCountryViews();
+        if (countryViews == null) {
+            return null;
+        }
+        boolean malformed = countryViews.entrySet().stream().anyMatch(entry ->
+                entry.getKey() == null
+                        || !entry.getKey().trim().matches("[A-Za-z]{2}")
+                        || entry.getValue() == null
+                        || entry.getValue() < 0);
+        if (malformed) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Просмотры по странам: коды стран из двух букв, значения не меньше нуля");
+        }
+        Map<String, Long> normalized = CountryViewsConverter.normalize(countryViews);
+        long regional = normalized.values().stream().mapToLong(Long::longValue).sum();
+        if (regional > request.getViews()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Просмотры по странам не могут превышать общее число просмотров");
+        }
+        return normalized;
     }
 
     /**
@@ -216,6 +251,34 @@ class ApplicationServiceImpl implements ApplicationService {
         return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
     }
 
+    private void requireWithinPeriod(Campaign campaign) {
+        Instant now = Instant.now();
+        if (!campaign.startedBy(now)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Объявление начнёт принимать отклики " + MOSCOW_DATE.format(campaign.getStartsAt()));
+        }
+        if (campaign.endedBy(now)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Срок действия объявления истёк " + MOSCOW_DATE.format(campaign.getEndsAt()));
+        }
+    }
+
+    private void requireVideoLimitNotReached(Campaign campaign, User creator) {
+        if (!campaign.limitsVideosPerCreator()) {
+            return;
+        }
+        long submitted = getterApplication.countActiveByCampaignIdAndCreatorId(campaign.getId(), creator.getId());
+        if (submitted >= campaign.getMaxVideosPerCreator()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По этому объявлению от одного криатора принимается не больше "
+                            + campaign.getMaxVideosPerCreator() + " " + videosWord(campaign.getMaxVideosPerCreator()));
+        }
+    }
+
+    private static String videosWord(int count) {
+        return count % 10 == 1 && count % 100 != 11 ? "ролика" : "роликов";
+    }
+
     private Platform requirePlatform(String videoUrl) {
         Platform platform = VideoUrls.detectPlatform(videoUrl);
         if (platform == null) {
@@ -223,6 +286,19 @@ class ApplicationServiceImpl implements ApplicationService {
                     "Не удалось определить площадку по ссылке: принимаются ролики YouTube, TikTok и Instagram");
         }
         return platform;
+    }
+
+    private void requireAcceptedByCampaign(Campaign campaign, Platform platform) {
+        if (campaign.acceptsPlatform(platform)) {
+            return;
+        }
+        String accepted = campaign.getPlatforms().stream()
+                .sorted()
+                .map(Platform::getDescription)
+                .collect(Collectors.joining(", "));
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Объявление не принимает ролики с " + platform.getDescription()
+                        + (accepted.isEmpty() ? "" : ": подходят только " + accepted));
     }
 
     private void requireConnectedAccount(User creator, Platform platform) {
@@ -251,7 +327,7 @@ class ApplicationServiceImpl implements ApplicationService {
 
     /** ADMIN — служебная роль поддержки: чужие объявления и отклики ему открыты. */
     private boolean isForeign(Long ownerId, User user) {
-        return user.getRole() != Role.ADMIN && !Objects.equals(ownerId, user.getId());
+        return !user.getRole().isAdmin() && !Objects.equals(ownerId, user.getId());
     }
 
     private ApplicationDTO toDto(Application application) {

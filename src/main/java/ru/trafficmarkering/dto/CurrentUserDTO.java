@@ -8,7 +8,7 @@ public record CurrentUserDTO(
         Long id,
         @Schema(description = "Логин (e-mail)") String username,
         String name,
-        @Schema(description = "Роль: CUSTOMER, CREATOR или ADMIN") String role
+        @Schema(description = "Роль: CUSTOMER, CREATOR, FINANCE_MANAGER, ADMIN или SUPER_ADMIN") String role
 ) {
     public static CurrentUserDTO from(User user) {
         return new CurrentUserDTO(

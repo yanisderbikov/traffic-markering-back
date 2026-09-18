@@ -14,6 +14,7 @@ import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Platform;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.UUID;
 
 @Entity
@@ -25,6 +26,8 @@ import java.util.UUID;
 @Builder
 @ToString
 public class SocialAccount {
+
+    public static final String YOUTUBE_ANALYTICS_SCOPE = "https://www.googleapis.com/auth/yt-analytics.readonly";
 
     @Id
     @GeneratedValue(generator = "UUID")
@@ -82,4 +85,12 @@ public class SocialAccount {
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
+
+    public boolean grants(String scope) {
+        return scopes != null && Arrays.asList(scopes.trim().split("[\\s,]+")).contains(scope);
+    }
+
+    public boolean reportsViewGeography() {
+        return platform == Platform.YOUTUBE_SHORTS && grants(YOUTUBE_ANALYTICS_SCOPE);
+    }
 }

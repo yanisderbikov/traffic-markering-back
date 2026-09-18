@@ -9,6 +9,7 @@ import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.service.http.JsonHttpClient;
 import ru.trafficmarkering.service.http.JsonNode;
 import ru.trafficmarkering.service.social.SocialTokenService;
+import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.util.VideoUrls;
 
@@ -48,7 +49,7 @@ class InstagramViewCountProvider implements ViewCountProvider {
     }
 
     @Override
-    public Map<String, Long> fetchViews(Long creatorId, Collection<String> videoUrls) {
+    public Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls) {
         Optional<String> token = socialTokenService.accessToken(creatorId, Platform.INSTAGRAM);
         if (token.isEmpty()) {
             log.debug("У криатора {} нет живого токена Instagram, пропускаем {} роликов",
@@ -70,11 +71,11 @@ class InstagramViewCountProvider implements ViewCountProvider {
         }
 
         Map<String, String> mediaIdByUrl = resolveMediaIds(token.get(), wanted);
-        Map<String, Long> result = new LinkedHashMap<>();
+        Map<String, ViewCount> result = new LinkedHashMap<>();
         mediaIdByUrl.forEach((url, mediaId) -> {
             Long views = fetchMediaViews(token.get(), mediaId);
             if (views != null) {
-                result.put(url, views);
+                result.put(url, ViewCount.total(views));
             }
         });
         return result;

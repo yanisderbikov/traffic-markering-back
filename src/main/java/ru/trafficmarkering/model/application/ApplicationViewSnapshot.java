@@ -9,6 +9,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Entity
 @Table(name = "application_view_snapshot")
@@ -38,4 +39,8 @@ public class ApplicationViewSnapshot {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private ViewSource source;
+
+    @Convert(converter = CountryViewsConverter.class)
+    @Column(name = "country_views", columnDefinition = "TEXT")
+    private Map<String, Long> countryViews;
 }

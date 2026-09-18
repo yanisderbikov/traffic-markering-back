@@ -11,6 +11,7 @@ import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.service.views.ViewsSyncService;
 
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -60,7 +62,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                     .distinct()
                     .toList();
 
-            Map<String, Long> fetched;
+            Map<String, ViewCount> fetched;
             try {
                 fetched = provider.get().fetchViews(group.getKey().creatorId(), urls);
             } catch (Exception e) {
@@ -70,25 +72,31 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
             }
 
             for (Application application : group.getValue()) {
-                Long fresh = fetched.get(application.getVideoUrl());
-                if (fresh == null || fresh < 0) {
+                ViewCount fresh = fetched.get(application.getVideoUrl());
+                if (fresh == null || fresh.total() < 0) {
                     continue;
                 }
                 saverViewSnapshot.save(ApplicationViewSnapshot.builder()
                         .application(application)
                         .capturedAt(capturedAt)
-                        .views(fresh)
+                        .views(fresh.total())
+                        .countryViews(fresh.byCountry())
                         .source(provider.get().source())
                         .build());
                 captured++;
 
-                long current = application.getViews() != null ? application.getViews() : 0L;
-                long effective = Math.max(current, fresh);
+                long current = application.totalViews();
+                long effective = Math.max(current, fresh.total());
+                boolean geographyChanged = fresh.geographyKnown()
+                        && !Objects.equals(application.getCountryViews(), fresh.byCountry());
                 application.setViews(effective);
+                if (fresh.geographyKnown()) {
+                    application.setCountryViews(fresh.byCountry());
+                }
                 application.setViewsSyncedAt(capturedAt);
                 saverApplication.save(application);
 
-                if (effective != current) {
+                if (effective != current || geographyChanged) {
                     touched.put(application.getCampaign().getId(), application.getCampaign());
                 }
             }

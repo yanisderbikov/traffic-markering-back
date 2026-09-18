@@ -23,6 +23,8 @@ public interface GetterApplication {
     /** Сколько откликов у объявления: по нему заказчику запрещают удалять объявление. */
     long countByCampaignId(UUID campaignId);
 
+    long countActiveByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
+
     /**
      * Отклики в работе (статус APPROVED) — их обходит синхронизация просмотров.
      * COMPLETED сюда не попадает: по завершённому отклику просмотры уже не догоняем.
@@ -37,4 +39,6 @@ public interface GetterApplication {
 
     /** Проверка занятости публичного номера для {@link ru.trafficmarkering.util.PublicIdGenerator}. */
     boolean existsByPublicId(String publicId);
+
+    List<Application> getCreditable();
 }

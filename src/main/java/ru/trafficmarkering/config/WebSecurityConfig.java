@@ -9,8 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -44,11 +42,16 @@ public class WebSecurityConfig {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // ── Доска объявлений и карточки: видны всем, даже неавторизованным ──
                     .requestMatchers("/api/public/**").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/request-code", "/api/auth/verify").permitAll()
                     // ── Межсервисные ручки: общий секрет SERVICE_JWT_TOKEN ──
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
                     .requestMatchers("/api/social/callback/**").permitAll()
+                    .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
+                    .requestMatchers("/api/finance/**").hasRole("FINANCE_MANAGER")
+                    .requestMatchers("/api/files/transfer-proof/**").hasRole("FINANCE_MANAGER")
+                    .requestMatchers("/api/wallet/**").hasRole("CUSTOMER")
+                    .requestMatchers("/api/earnings/**").hasRole("CREATOR")
                     // ── Пользовательские роли ──
                     .requestMatchers("/api/campaigns/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/files/**").hasAnyRole("CUSTOMER", "ADMIN")
@@ -76,11 +79,6 @@ public class WebSecurityConfig {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"error\":\"invalid auth token\"}");
         };
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean

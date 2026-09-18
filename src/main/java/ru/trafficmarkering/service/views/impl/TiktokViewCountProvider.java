@@ -8,6 +8,7 @@ import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.service.http.JsonHttpClient;
 import ru.trafficmarkering.service.http.JsonNode;
 import ru.trafficmarkering.service.social.SocialTokenService;
+import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.util.VideoUrls;
 
@@ -48,7 +49,7 @@ class TiktokViewCountProvider implements ViewCountProvider {
     }
 
     @Override
-    public Map<String, Long> fetchViews(Long creatorId, Collection<String> videoUrls) {
+    public Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls) {
         Optional<String> token = socialTokenService.accessToken(creatorId, Platform.TIKTOK);
         if (token.isEmpty()) {
             log.debug("У криатора {} нет живого токена TikTok, пропускаем {} роликов",
@@ -89,11 +90,11 @@ class TiktokViewCountProvider implements ViewCountProvider {
             }
         }
 
-        Map<String, Long> result = new LinkedHashMap<>();
+        Map<String, ViewCount> result = new LinkedHashMap<>();
         urlToId.forEach((url, videoId) -> {
             Long views = viewsById.get(videoId);
             if (views != null) {
-                result.put(url, views);
+                result.put(url, ViewCount.total(views));
             }
         });
         return result;

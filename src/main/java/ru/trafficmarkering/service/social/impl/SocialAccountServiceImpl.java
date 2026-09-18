@@ -99,7 +99,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                         "Учётная запись не найдена, войдите заново"));
-        if (user.getRole() != Role.CREATOR && user.getRole() != Role.ADMIN) {
+        if (!user.getRole().implies(Role.CREATOR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Привязывать соцсети может только криатор");
         }
 
@@ -139,7 +139,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
         User user = currentUserService.require(Role.CREATOR);
         SocialAccount account = getterSocialAccount.getById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Аккаунт не найден"));
-        if (!account.getUser().getId().equals(user.getId()) && user.getRole() != Role.ADMIN) {
+        if (!account.getUser().getId().equals(user.getId()) && !user.getRole().isAdmin()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой аккаунт");
         }
         socialAccountDeleter.deleteById(id);

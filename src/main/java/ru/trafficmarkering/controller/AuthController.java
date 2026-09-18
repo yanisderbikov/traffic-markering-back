@@ -17,9 +17,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.CurrentUserDTO;
-import ru.trafficmarkering.dto.LoginRequestDTO;
-import ru.trafficmarkering.dto.LoginResponseDTO;
-import ru.trafficmarkering.dto.RegisterRequestDTO;
+import ru.trafficmarkering.dto.auth.AuthResponseDTO;
+import ru.trafficmarkering.dto.auth.RegisterRequestDTO;
+import ru.trafficmarkering.dto.auth.RequestCodeDTO;
+import ru.trafficmarkering.dto.auth.VerifyCodeDTO;
 import ru.trafficmarkering.service.auth.AuthService;
 
 import java.util.Map;
@@ -28,25 +29,37 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Регистрация, вход и текущий пользователь")
+@Tag(name = "Auth", description = "Вход по коду с почты: register или request-code → письмо → verify → JWT")
 public class AuthController {
+
+    private static final Map<String, String> CODE_SENT = Map.of("message", "Код отправлен на почту");
 
     private final AuthService authService;
 
     @Operation(summary = "Регистрация",
-            description = "Роль — CUSTOMER (заказчик) или CREATOR (криатор). "
-                    + "Сразу заводится пустой профиль нужного типа, в ответе — токен: логиниться повторно не нужно. "
-                    + "409, если логин уже занят")
+            description = "Роль — CUSTOMER (заказчик) или CREATOR (криатор). Заводится учётка с пустым профилем "
+                    + "нужного типа и на почту уходит код входа; токен выдаёт verify. "
+                    + "409, если почта уже занята подтверждённой учёткой")
     @PostMapping("/register")
-    public ResponseEntity<LoginResponseDTO> register(@Valid @RequestBody RegisterRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequestDTO request) {
+        authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(CODE_SENT);
     }
 
-    @Operation(summary = "Вход, получение токена",
-            description = "401 и одинаковый текст на неверный логин и на неверный пароль")
-    @PostMapping("/login")
-    public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO request) {
-        return ResponseEntity.ok(authService.login(request));
+    @Operation(summary = "Отправить код входа на почту",
+            description = "404, если учётки с такой почтой нет; 429, если код уже уходил меньше 30 секунд назад")
+    @PostMapping("/request-code")
+    public ResponseEntity<Map<String, String>> requestCode(@Valid @RequestBody RequestCodeDTO request) {
+        authService.requestCode(request.getEmail());
+        return ResponseEntity.ok(CODE_SENT);
+    }
+
+    @Operation(summary = "Обменять код на JWT",
+            description = "Код живёт 10 минут, не больше 5 попыток ввода. "
+                    + "Ответ: token (Bearer), role, email, name")
+    @PostMapping("/verify")
+    public ResponseEntity<AuthResponseDTO> verify(@Valid @RequestBody VerifyCodeDTO request) {
+        return ResponseEntity.ok(authService.verify(request.getEmail(), request.getCode()));
     }
 
     @Operation(summary = "Текущий пользователь",
@@ -73,7 +86,6 @@ public class AuthController {
                 .body(Map.of("message", message.isBlank() ? "Некорректный запрос" : message));
     }
 
-    /** Неизвестное значение роли Jackson роняет ещё до валидации — объясняем это по-человечески. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleUnreadable(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest()

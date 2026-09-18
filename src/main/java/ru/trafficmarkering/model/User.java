@@ -1,6 +1,13 @@
 package ru.trafficmarkering.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -10,11 +17,8 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
+import java.util.Locale;
 
-/**
- * Учётная запись: и заказчик, и криатор живут в одной таблице —
- * различаются только ролью и типом профиля.
- */
 @Entity
 @Table(name = "users")
 @Getter
@@ -29,14 +33,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** E-mail, он же логин */
     @Column(nullable = false, unique = true)
     private String username;
-
-    /** bcrypt-хеш; открытый пароль нигде не хранится */
-    @ToString.Exclude
-    @Column(nullable = false)
-    private String password;
 
     @Column(nullable = false)
     private String name;
@@ -45,7 +43,14 @@ public class User {
     @Column(nullable = false, length = 32)
     private Role role;
 
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public static String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
 }
