@@ -1,89 +1,124 @@
 package ru.trafficmarkering.service.auth.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.CurrentUserDTO;
-import ru.trafficmarkering.dto.LoginRequestDTO;
-import ru.trafficmarkering.dto.LoginResponseDTO;
-import ru.trafficmarkering.dto.RegisterRequestDTO;
+import ru.trafficmarkering.dto.auth.AuthResponseDTO;
+import ru.trafficmarkering.dto.auth.RegisterRequestDTO;
+import ru.trafficmarkering.model.LoginCode;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
-import ru.trafficmarkering.model.profile.CreatorProfile;
-import ru.trafficmarkering.model.profile.CustomerProfile;
-import ru.trafficmarkering.repository.SaverCreatorProfile;
-import ru.trafficmarkering.repository.SaverCustomerProfile;
+import ru.trafficmarkering.repository.LoginCodeStore;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.AuthService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.auth.JwtTokenService;
+import ru.trafficmarkering.service.email.EmailService;
+import ru.trafficmarkering.service.email.EmailTemplate;
+import ru.trafficmarkering.service.user.AccountProvisioningService;
 
-import java.util.EnumSet;
-import java.util.Locale;
-import java.util.Set;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 class AuthServiceImpl implements AuthService {
 
-    /** Снаружи можно завести только эти роли: ADMIN раздаётся руками, SERVICE в базе не живёт */
-    private static final Set<Role> SELF_REGISTRABLE = EnumSet.of(Role.CUSTOMER, Role.CREATOR);
-    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final Duration CODE_TTL = Duration.ofMinutes(10);
+    private static final Duration RESEND_COOLDOWN = Duration.ofSeconds(30);
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final LoginCodeStore loginCodeStore;
+    private final EmailService emailService;
     private final JwtTokenService jwtTokenService;
     private final CurrentUserService currentUserService;
-    private final SaverCreatorProfile saverCreatorProfile;
-    private final SaverCustomerProfile saverCustomerProfile;
+    private final AccountProvisioningService accountProvisioningService;
 
     @Override
     @Transactional
-    public LoginResponseDTO register(RegisterRequestDTO request) {
+    public void register(RegisterRequestDTO request) {
         Role role = request.getRole();
-        if (role == null || !SELF_REGISTRABLE.contains(role)) {
+        if (role == null || !Role.selfRegistrable().contains(role)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Роль должна быть CUSTOMER (заказчик) или CREATOR (криатор)");
         }
-        String password = request.getPassword();
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Пароль должен быть не короче " + MIN_PASSWORD_LENGTH + " символов");
-        }
-        String username = normalizeUsername(request.getUsername());
-        if (username.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Логин обязателен");
-        }
-        if (userRepository.existsByUsername(username)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Пользователь с таким логином уже зарегистрирован");
-        }
+        String email = User.normalizeEmail(request.getEmail());
+        String name = request.getName().trim();
 
-        User user = new User();
-        user.setUsername(username);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setName(request.getName().trim());
+        User user = userRepository.findByUsername(email).orElse(null);
+        if (user != null && user.getVerifiedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Пользователь с такой почтой уже зарегистрирован. Войдите по коду.");
+        }
+        if (user != null && !Role.selfRegistrable().contains(user.getRole())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Эта почта закреплена за служебной учётной записью. Войдите по коду.");
+        }
+        if (user == null) {
+            user = User.builder().username(email).build();
+        }
+        user.setName(name);
         user.setRole(role);
         User saved = userRepository.save(user);
+        accountProvisioningService.provision(saved);
 
-        createEmptyProfile(saved);
-
-        return new LoginResponseDTO(jwtTokenService.createToken(saved.getUsername(), saved.getRole(), saved.getName()));
+        sendCode(email);
     }
 
     @Override
-    public LoginResponseDTO login(LoginRequestDTO request) {
-        // Ответ одинаковый и на неизвестный логин, и на неверный пароль:
-        // иначе форма входа превращается в проверялку «есть ли такой пользователь»
-        User user = userRepository.findByUsername(normalizeUsername(request.getUsername()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неверный логин или пароль"));
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неверный логин или пароль");
+    @Transactional
+    public void requestCode(String rawEmail) {
+        String email = User.normalizeEmail(rawEmail);
+        if (!userRepository.existsByUsername(email)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Аккаунт с этой почтой не найден. Зарегистрируйтесь.");
         }
-        return new LoginResponseDTO(jwtTokenService.createToken(user.getUsername(), user.getRole(), user.getName()));
+        sendCode(email);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponseDTO verify(String rawEmail, String rawCode) {
+        String email = User.normalizeEmail(rawEmail);
+        String code = rawCode == null ? "" : rawCode.trim();
+
+        LoginCode loginCode = loginCodeStore.getLatestActive(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Код не найден. Запросите новый."));
+
+        if (loginCode.isExpired()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Код истёк. Запросите новый.");
+        }
+        if (loginCode.getAttempts() >= LoginCode.MAX_ATTEMPTS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Слишком много попыток. Запросите новый код.");
+        }
+        if (!loginCode.getCode().equals(code)) {
+            loginCode.setAttempts(loginCode.getAttempts() + 1);
+            loginCodeStore.save(loginCode);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неверный код. Проверьте письмо.");
+        }
+
+        loginCode.setUsed(true);
+        loginCodeStore.save(loginCode);
+
+        User user = userRepository.findByUsername(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Аккаунт с этой почтой не найден. Зарегистрируйтесь."));
+        if (user.getVerifiedAt() == null) {
+            user.setVerifiedAt(Instant.now());
+            user = userRepository.save(user);
+        }
+
+        String token = jwtTokenService.createToken(user.getUsername(), user.getRole(), user.getName());
+        return new AuthResponseDTO(token, user.getRole().name(), user.getUsername(), user.getName());
     }
 
     @Override
@@ -92,20 +127,24 @@ class AuthServiceImpl implements AuthService {
         return CurrentUserDTO.from(currentUserService.require());
     }
 
-    /**
-     * Профиль заводится пустым прямо при регистрации: так все остальные сервисы
-     * работают с существующей строкой, а не с «профиля ещё нет».
-     */
-    private void createEmptyProfile(User user) {
-        if (user.getRole() == Role.CREATOR) {
-            saverCreatorProfile.save(CreatorProfile.builder().user(user).build());
-        } else if (user.getRole() == Role.CUSTOMER) {
-            saverCustomerProfile.save(CustomerProfile.builder().user(user).build());
+    private void sendCode(String email) {
+        var existing = loginCodeStore.getLatestActive(email);
+        if (existing.isPresent() && !existing.get().isExpired()
+                && existing.get().getCreatedAt() != null
+                && existing.get().getCreatedAt().isAfter(Instant.now().minus(RESEND_COOLDOWN))) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Код уже отправлен. Проверьте почту или запросите новый через 30 секунд.");
         }
-    }
 
-    /** Логин — это e-mail: регистр и случайные пробелы не должны мешать войти. */
-    private String normalizeUsername(String username) {
-        return username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        loginCodeStore.invalidateAll(email);
+        loginCodeStore.save(LoginCode.builder()
+                .email(email)
+                .code(code)
+                .expiresAt(Instant.now().plus(CODE_TTL))
+                .build());
+
+        emailService.sendEmail(email, "Код для входа: " + code, EmailTemplate.getLoginCodeEmail(code));
+        log.info("Код входа отправлен на {}", email);
     }
 }

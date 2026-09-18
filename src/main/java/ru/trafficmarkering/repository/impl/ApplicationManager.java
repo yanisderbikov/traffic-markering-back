@@ -51,9 +51,9 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
-    public boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId) {
+    public long countByCampaignId(UUID campaignId) {
         try {
-            return applicationRepo.existsByCampaignIdAndCreatorId(campaignId, creatorId);
+            return applicationRepo.countByCampaignId(campaignId);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
@@ -61,9 +61,9 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
-    public long countByCampaignId(UUID campaignId) {
+    public long countActiveByCampaignIdAndCreatorId(UUID campaignId, Long creatorId) {
         try {
-            return applicationRepo.countByCampaignId(campaignId);
+            return applicationRepo.countByCampaignIdAndCreatorId(campaignId, creatorId, ApplicationStatus.REJECTED);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
@@ -81,9 +81,32 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
+    public Optional<Application> getActiveByVideoKey(String videoKey) {
+        if (videoKey == null) {
+            return Optional.empty();
+        }
+        try {
+            return applicationRepo.findByVideoKey(videoKey, ApplicationStatus.REJECTED).stream().findFirst();
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public boolean existsByPublicId(String publicId) {
         try {
             return applicationRepo.existsByPublicId(publicId);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Application> getCreditable() {
+        try {
+            return applicationRepo.findCreditable();
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

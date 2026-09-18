@@ -16,9 +16,11 @@ public interface GetterCampaign {
     /** Объявления заказчика, новые сверху. */
     List<Campaign> getByCustomerId(Long customerId);
 
-    /** Объявления для публичной доски: только ACTIVE, новые сверху. */
+    /** Объявления для публичной доски: только ACTIVE и в пределах периода действия, новые сверху. */
     List<Campaign> getActive();
 
     /** Нужна генератору публичных номеров, чтобы не выдать занятый. */
     boolean existsByPublicId(String publicId);
+
+    List<CampaignTotals> getTotalsByCustomer();
 }

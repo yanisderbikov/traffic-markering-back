@@ -12,8 +12,10 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.UpdateTimestamp;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.ViewRegion;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -57,6 +59,9 @@ public class Application {
     @Column(name = "video_url", nullable = false, length = 1024)
     private String videoUrl;
 
+    @Column(name = "video_key", nullable = false, length = 512)
+    private String videoKey;
+
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
@@ -75,6 +80,14 @@ public class Application {
     @Column(name = "accrued_kopecks", nullable = false)
     private Long accruedKopecks = 0L;
 
+    @Builder.Default
+    @Column(name = "credited_kopecks", nullable = false)
+    private Long creditedKopecks = 0L;
+
+    @Convert(converter = CountryViewsConverter.class)
+    @Column(name = "country_views", columnDefinition = "TEXT")
+    private Map<String, Long> countryViews;
+
     /** Когда просмотры обновлялись в последний раз; null — ещё ни разу */
     @Column(name = "views_synced_at")
     private Instant viewsSyncedAt;
@@ -87,8 +100,35 @@ public class Application {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    public long accrued() {
+        return accruedKopecks != null ? accruedKopecks : 0L;
+    }
+
+    public long uncreditedKopecks() {
+        long credited = creditedKopecks != null ? creditedKopecks : 0L;
+        return accrued() - credited;
+    }
+
     /** Начисления идут только по одобренным откликам — на них завязан пересчёт бюджета. */
     public boolean isAccruable() {
         return status == ApplicationStatus.APPROVED || status == ApplicationStatus.COMPLETED;
+    }
+
+    public long totalViews() {
+        return views != null ? views : 0L;
+    }
+
+    public boolean geographyKnown() {
+        return countryViews != null;
+    }
+
+    public PayableViews payableViews(ViewRegion region) {
+        if (region == null || region.isWorld()) {
+            return PayableViews.of(totalViews());
+        }
+        if (!geographyKnown()) {
+            return PayableViews.withoutGeography();
+        }
+        return PayableViews.of(Math.min(totalViews(), region.viewsWithin(countryViews)));
     }
 }

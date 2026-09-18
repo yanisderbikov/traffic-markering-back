@@ -29,9 +29,22 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
             + "where a.status = :status order by a.createdAt asc")
     List<Application> findByStatus(@Param("status") ApplicationStatus status);
 
-    boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
-
     long countByCampaignId(UUID campaignId);
 
+    @Query("select count(a) from Application a "
+            + "where a.campaign.id = :campaignId and a.creator.id = :creatorId and a.status <> :excluded")
+    long countByCampaignIdAndCreatorId(@Param("campaignId") UUID campaignId,
+                                       @Param("creatorId") Long creatorId,
+                                       @Param("excluded") ApplicationStatus excluded);
+
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.videoKey = :videoKey and a.status <> :excluded")
+    List<Application> findByVideoKey(@Param("videoKey") String videoKey,
+                                     @Param("excluded") ApplicationStatus excluded);
+
     boolean existsByPublicId(String publicId);
+
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.accruedKopecks > a.creditedKopecks order by a.creator.id asc, a.createdAt asc")
+    List<Application> findCreditable();
 }

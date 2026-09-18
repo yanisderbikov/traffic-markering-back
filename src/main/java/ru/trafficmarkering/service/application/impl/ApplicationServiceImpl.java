@@ -8,11 +8,16 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.dto.application.ViewsUpdateRequestDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.CountryViewsConverter;
+import ru.trafficmarkering.model.application.Platform;
+import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.model.profile.CreatorProfile;
@@ -20,13 +25,20 @@ import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.GetterCreatorProfile;
+import ru.trafficmarkering.repository.GetterSocialAccount;
+import ru.trafficmarkering.repository.GetterViewSnapshot;
 import ru.trafficmarkering.repository.SaverApplication;
+import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.application.ApplicationService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.http.ShortLinkResolver;
 import ru.trafficmarkering.util.PublicIdGenerator;
+import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -55,8 +67,15 @@ class ApplicationServiceImpl implements ApplicationService {
     private final ApplicationDeleter applicationDeleter;
     private final GetterCampaign getterCampaign;
     private final GetterCreatorProfile getterCreatorProfile;
+    private final GetterSocialAccount getterSocialAccount;
     private final CurrentUserService currentUserService;
     private final CampaignAccrualService campaignAccrualService;
+    private final GetterViewSnapshot getterViewSnapshot;
+    private final SaverViewSnapshot saverViewSnapshot;
+    private final ShortLinkResolver shortLinkResolver;
+
+    private static final DateTimeFormatter MOSCOW_DATE =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Moscow"));
 
     @Override
     @Transactional
@@ -70,22 +89,27 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Объявление не принимает отклики: " + campaign.getStatus().getDescription().toLowerCase());
         }
+        requireWithinPeriod(campaign);
         // ADMIN проходит проверку роли выше, поэтому теоретически может оказаться и заказчиком
         if (Objects.equals(campaign.getCustomer().getId(), creator.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Нельзя откликнуться на собственное объявление");
         }
-        if (getterApplication.existsByCampaignIdAndCreatorId(campaign.getId(), creator.getId())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Вы уже откликались на это объявление");
-        }
+        requireVideoLimitNotReached(campaign, creator);
+        Platform platform = requirePlatform(request.getVideoUrl().trim());
+        requireAcceptedByCampaign(campaign, platform);
+        requireConnectedAccount(creator, platform);
+        String videoUrl = resolveVideoUrl(platform, request.getVideoUrl().trim());
+        String videoKey = VideoUrls.videoKey(platform, videoUrl);
+        requireVideoNotSubmitted(videoKey, creator);
 
         Application application = Application.builder()
                 .publicId(PublicIdGenerator.generateUnique(getterApplication::existsByPublicId))
                 .campaign(campaign)
                 .creator(creator)
-                .platform(request.getPlatform())
-                .videoUrl(request.getVideoUrl().trim())
+                .platform(platform)
+                .videoUrl(videoUrl)
+                .videoKey(videoKey)
                 .comment(trimToNull(request.getComment()))
                 .status(ApplicationStatus.PENDING)
                 .build();
@@ -155,12 +179,145 @@ class ApplicationServiceImpl implements ApplicationService {
     @Transactional
     public ApplicationDTO updateViews(UUID id, ViewsUpdateRequestDTO request) {
         Application application = requireApplication(id);
+        Map<String, Long> countryViews = requireValidCountryViews(request);
+        Instant capturedAt = Instant.now();
         application.setViews(request.getViews());
-        application.setViewsSyncedAt(Instant.now());
+        application.setCountryViews(countryViews);
+        application.setViewsSyncedAt(capturedAt);
         saverApplication.save(application);
+        saverViewSnapshot.save(ApplicationViewSnapshot.builder()
+                .application(application)
+                .capturedAt(capturedAt)
+                .views(request.getViews())
+                .countryViews(countryViews)
+                .source(ViewSource.MANUAL)
+                .build());
         campaignAccrualService.recalculate(application.getCampaign());
 
         return toDto(requireApplication(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ViewSnapshotDTO> viewHistory(UUID id) {
+        User user = currentUserService.require();
+        Application application = requireApplication(id);
+        Campaign campaign = application.getCampaign();
+        boolean ownCreator = Objects.equals(application.getCreator().getId(), user.getId());
+        boolean ownCustomer = campaign.getCustomer() != null
+                && Objects.equals(campaign.getCustomer().getId(), user.getId());
+        if (!user.getRole().isAdmin() && !ownCreator && !ownCustomer) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой отклик");
+        }
+        return getterViewSnapshot.getByApplicationId(id).stream()
+                .map(ViewSnapshotDTO::from)
+                .toList();
+    }
+
+    private Map<String, Long> requireValidCountryViews(ViewsUpdateRequestDTO request) {
+        Map<String, Long> countryViews = request.getCountryViews();
+        if (countryViews == null) {
+            return null;
+        }
+        boolean malformed = countryViews.entrySet().stream().anyMatch(entry ->
+                entry.getKey() == null
+                        || !entry.getKey().trim().matches("[A-Za-z]{2}")
+                        || entry.getValue() == null
+                        || entry.getValue() < 0);
+        if (malformed) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Просмотры по странам: коды стран из двух букв, значения не меньше нуля");
+        }
+        Map<String, Long> normalized = CountryViewsConverter.normalize(countryViews);
+        long regional = normalized.values().stream().mapToLong(Long::longValue).sum();
+        if (regional > request.getViews()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Просмотры по странам не могут превышать общее число просмотров");
+        }
+        return normalized;
+    }
+
+    /**
+     * Короткие ссылки (vm.tiktok.com, youtu.be в редиректе) разворачиваем до полной:
+     * иначе один и тот же ролик под двумя ссылками пройдёт как два разных.
+     * Площадка недоступна — работаем с тем, что прислали.
+     */
+    private String resolveVideoUrl(Platform platform, String videoUrl) {
+        boolean identified = switch (platform) {
+            case TIKTOK -> VideoUrls.tiktokVideoId(videoUrl) != null;
+            case YOUTUBE_SHORTS -> VideoUrls.youtubeVideoId(videoUrl) != null;
+            default -> true;
+        };
+        return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
+    }
+
+    private void requireWithinPeriod(Campaign campaign) {
+        Instant now = Instant.now();
+        if (!campaign.startedBy(now)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Объявление начнёт принимать отклики " + MOSCOW_DATE.format(campaign.getStartsAt()));
+        }
+        if (campaign.endedBy(now)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Срок действия объявления истёк " + MOSCOW_DATE.format(campaign.getEndsAt()));
+        }
+    }
+
+    private void requireVideoLimitNotReached(Campaign campaign, User creator) {
+        if (!campaign.limitsVideosPerCreator()) {
+            return;
+        }
+        long submitted = getterApplication.countActiveByCampaignIdAndCreatorId(campaign.getId(), creator.getId());
+        if (submitted >= campaign.getMaxVideosPerCreator()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По этому объявлению от одного криатора принимается не больше "
+                            + campaign.getMaxVideosPerCreator() + " " + videosWord(campaign.getMaxVideosPerCreator()));
+        }
+    }
+
+    private static String videosWord(int count) {
+        return count % 10 == 1 && count % 100 != 11 ? "ролика" : "роликов";
+    }
+
+    private Platform requirePlatform(String videoUrl) {
+        Platform platform = VideoUrls.detectPlatform(videoUrl);
+        if (platform == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Не удалось определить площадку по ссылке: принимаются ролики YouTube, TikTok и Instagram");
+        }
+        return platform;
+    }
+
+    private void requireAcceptedByCampaign(Campaign campaign, Platform platform) {
+        if (campaign.acceptsPlatform(platform)) {
+            return;
+        }
+        String accepted = campaign.getPlatforms().stream()
+                .sorted()
+                .map(Platform::getDescription)
+                .collect(Collectors.joining(", "));
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Объявление не принимает ролики с " + platform.getDescription()
+                        + (accepted.isEmpty() ? "" : ": подходят только " + accepted));
+    }
+
+    private void requireConnectedAccount(User creator, Platform platform) {
+        if (getterSocialAccount.getActiveByUserIdAndPlatform(creator.getId(), platform).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Привяжите аккаунт " + platform.getDescription()
+                            + " в профиле: ролик должен быть выложен с подключённого аккаунта");
+        }
+    }
+
+    private void requireVideoNotSubmitted(String videoKey, User creator) {
+        getterApplication.getActiveByVideoKey(videoKey).ifPresent(existing -> {
+            if (Objects.equals(existing.getCreator().getId(), creator.getId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Этот ролик уже подан по объявлению «" + existing.getCampaign().getTitle() + "»");
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Этот ролик уже подан на площадке другим криатором");
+        });
     }
 
     private Application requireApplication(UUID id) {
@@ -170,7 +327,7 @@ class ApplicationServiceImpl implements ApplicationService {
 
     /** ADMIN — служебная роль поддержки: чужие объявления и отклики ему открыты. */
     private boolean isForeign(Long ownerId, User user) {
-        return user.getRole() != Role.ADMIN && !Objects.equals(ownerId, user.getId());
+        return !user.getRole().isAdmin() && !Objects.equals(ownerId, user.getId());
     }
 
     private ApplicationDTO toDto(Application application) {

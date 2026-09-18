@@ -4,12 +4,14 @@ import org.junit.jupiter.api.Test;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -90,6 +92,67 @@ class CampaignAccrualServiceImplTest {
 
         assertEquals(0L, campaign.getSpentKopecks().longValue());
         verify(saverCampaign).save(campaign);
+    }
+
+    @Test
+    void recalculate_skipsVideosBelowPaidViewsThreshold() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setMinPaidViews(1_000L);
+        Application belowThreshold = application(ApplicationStatus.APPROVED, 999, 300_00);
+        Application atThreshold = application(ApplicationStatus.APPROVED, 1_000, 0);
+        Application aboveThreshold = application(ApplicationStatus.APPROVED, 4_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(belowThreshold, atThreshold, aboveThreshold));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, belowThreshold.getAccruedKopecks().longValue());
+        assertEquals(350_00L, atThreshold.getAccruedKopecks().longValue());
+        assertEquals(1_400_00L, aboveThreshold.getAccruedKopecks().longValue());
+        assertEquals(1_750_00L, campaign.getSpentKopecks().longValue());
+        verify(saverApplication).save(belowThreshold);
+    }
+
+    @Test
+    void recalculate_withoutThresholdPaysEveryView() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        Application tiny = application(ApplicationStatus.APPROVED, 10, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(tiny));
+
+        service.recalculate(campaign);
+
+        assertEquals(3_50L, tiny.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_paysOnlyRegionViews() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setViewRegion(ViewRegion.RUSSIA);
+        Application mixed = application(ApplicationStatus.APPROVED, 2_000, 0);
+        mixed.setCountryViews(Map.of("RU", 1_000L, "US", 1_000L));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(mixed));
+
+        service.recalculate(campaign);
+
+        assertEquals(350_00L, mixed.getAccruedKopecks().longValue());
+        assertEquals(350_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_doesNotPayViewsWithoutGeography() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setViewRegion(ViewRegion.CIS);
+        Application withoutGeography = application(ApplicationStatus.APPROVED, 5_000, 0);
+        Application withGeography = application(ApplicationStatus.APPROVED, 1_000, 0);
+        withGeography.setCountryViews(Map.of("KZ", 1_000L));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(withoutGeography, withGeography));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, withoutGeography.getAccruedKopecks().longValue());
+        assertEquals(350_00L, withGeography.getAccruedKopecks().longValue());
+        assertEquals(350_00L, campaign.getSpentKopecks().longValue());
     }
 
     private Campaign campaign(long ratePerThousandKopecks, long budgetKopecks) {

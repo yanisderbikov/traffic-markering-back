@@ -20,11 +20,10 @@ public interface GetterApplication {
     /** Отклики криатора, новые сверху. */
     List<Application> getByCreatorId(Long creatorId);
 
-    /** Один криатор — один отклик на объявление; на этом стоит проверка повторного отклика. */
-    boolean existsByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
-
     /** Сколько откликов у объявления: по нему заказчику запрещают удалять объявление. */
     long countByCampaignId(UUID campaignId);
+
+    long countActiveByCampaignIdAndCreatorId(UUID campaignId, Long creatorId);
 
     /**
      * Отклики в работе (статус APPROVED) — их обходит синхронизация просмотров.
@@ -32,6 +31,14 @@ public interface GetterApplication {
      */
     List<Application> getApproved();
 
+    /**
+     * Уже поданный ролик: один и тот же видос нельзя подать дважды.
+     * Отклонённые не в счёт — их ролик снова свободен.
+     */
+    Optional<Application> getActiveByVideoKey(String videoKey);
+
     /** Проверка занятости публичного номера для {@link ru.trafficmarkering.util.PublicIdGenerator}. */
     boolean existsByPublicId(String publicId);
+
+    List<Application> getCreditable();
 }

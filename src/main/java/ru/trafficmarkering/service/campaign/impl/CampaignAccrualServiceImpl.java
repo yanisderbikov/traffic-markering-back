@@ -35,8 +35,8 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
         // Порядок важен: бюджет достаётся тем, кто откликнулся раньше
         for (Application application : getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())) {
             long accrued = 0L;
-            if (application.isAccruable()) {
-                long views = application.getViews() != null ? application.getViews() : 0L;
+            long views = application.payableViews(campaign.viewRegion()).views();
+            if (application.isAccruable() && campaign.paysViews(views)) {
                 accrued = PayoutCalculator.accrual(views, rate, budget - spent);
                 spent += accrued;
             }

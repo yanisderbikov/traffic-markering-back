@@ -6,9 +6,11 @@ import org.springframework.stereotype.Component;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.repository.CampaignDeleter;
+import ru.trafficmarkering.repository.CampaignTotals;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverCampaign;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,7 +58,7 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     @Override
     public List<Campaign> getActive() {
         try {
-            return campaignRepo.findByStatus(CampaignStatus.ACTIVE);
+            return campaignRepo.findByStatusWithinPeriod(CampaignStatus.ACTIVE, Instant.now());
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
@@ -67,6 +69,16 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     public boolean existsByPublicId(String publicId) {
         try {
             return campaignRepo.existsByPublicId(publicId);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<CampaignTotals> getTotalsByCustomer() {
+        try {
+            return campaignRepo.totalsByCustomer();
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

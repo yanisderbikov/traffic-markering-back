@@ -29,9 +29,14 @@ import java.util.stream.Collectors;
 public class FileController {
 
     public static final String CAMPAIGN_PHOTO_PREFIX = "campaign-photos";
+    public static final String CAMPAIGN_MATERIAL_PREFIX = "campaign-materials";
+    public static final String TRANSFER_PROOF_PREFIX = "transfer-proofs";
 
     private static final Set<String> ALLOWED_IMAGE_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
+    private static final Set<String> SCRIPTABLE_MATERIAL_TYPES = Set.of(
+            "text/html", "application/xhtml+xml", "image/svg+xml",
+            "text/javascript", "application/javascript", "application/x-javascript");
 
     private final FileStorage fileStorage;
 
@@ -48,6 +53,38 @@ public class FileController {
         }
         FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
                 request.getFilename(), request.getContentType(), CAMPAIGN_PHOTO_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку скриншота перевода",
+            description = "Для менеджера финансов: presigned PUT-ссылка на скриншот перевода USDT. "
+                    + "Полученный key передаётся в пополнение, вывод заказчику или отправку выплаты криатору",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/transfer-proof/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignTransferProof(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (!ALLOWED_IMAGE_TYPES.contains(request.getContentType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Можно загрузить только изображение: JPEG, PNG, WebP или GIF");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), TRANSFER_PROOF_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку материала объявления",
+            description = "Presigned PUT-ссылка на файл для криатора: бриф, баннер, референсы. "
+                    + "Полученный key передаётся в materials при сохранении объявления вместе с именем, типом и размером файла",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/campaign-material/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignCampaignMaterial(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (SCRIPTABLE_MATERIAL_TYPES.contains(request.getContentType().toLowerCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Страницы, скрипты и SVG в материалы не принимаются — заархивируйте их");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), CAMPAIGN_MATERIAL_PREFIX);
         return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
     }
 

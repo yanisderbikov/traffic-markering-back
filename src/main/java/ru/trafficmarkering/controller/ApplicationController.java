@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.service.application.ApplicationService;
 
 import java.util.List;
@@ -37,8 +38,10 @@ public class ApplicationController {
     private final ApplicationService applicationService;
 
     @Operation(summary = "Взять объявление в работу",
-            description = "Криатор прикладывает ссылку на ролик. Откликнуться можно только на активное "
-                    + "объявление, один раз и не на своё; повторный отклик — 409",
+            description = "Криатор прикладывает ссылку на ролик; площадка определяется по ссылке, "
+                    + "должна быть среди площадок объявления, а аккаунт этой площадки должен быть привязан в профиле. "
+                    + "Откликнуться можно только "
+                    + "на активное объявление и не на своё, роликов на одно объявление можно подать сколько угодно; тот же ролик повторно — 409",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping
     public ResponseEntity<ApplicationDTO> apply(@Valid @RequestBody ApplicationCreateRequestDTO request) {
@@ -70,6 +73,15 @@ public class ApplicationController {
     public ResponseEntity<Void> deleteApplication(@PathVariable("id") UUID id) {
         applicationService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "История просмотров ролика",
+            description = "Замеры просмотров с таймстемпами, свежие сверху — по ним видно динамику ролика. "
+                    + "Доступна криатору отклика, заказчику объявления и админу",
+            security = @SecurityRequirement(name = "Bearer"))
+    @GetMapping("/{id}/views/history")
+    public ResponseEntity<List<ViewSnapshotDTO>> viewHistory(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(applicationService.viewHistory(id));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

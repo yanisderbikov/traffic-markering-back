@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.application;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.dto.application.ViewsUpdateRequestDTO;
 
 import java.util.List;
@@ -41,4 +42,7 @@ public interface ApplicationService {
      * отметку времени синхронизации и пересчитывает начисления по объявлению.
      */
     ApplicationDTO updateViews(UUID id, ViewsUpdateRequestDTO request);
+
+    /** История замеров просмотров ролика, свежие сверху: по ней видно динамику. */
+    List<ViewSnapshotDTO> viewHistory(UUID id);
 }

@@ -47,7 +47,8 @@ public class CampaignController {
     }
 
     @Operation(summary = "Создать объявление",
-            description = "Ставка и бюджет в копейках; статус можно не передавать — тогда объявление создаётся черновиком",
+            description = "Ставка и бюджет в копейках; platforms — с каких площадок принимаются ролики; "
+                    + "статус можно не передавать — тогда объявление создаётся черновиком",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping
     public ResponseEntity<CampaignDTO> createCampaign(@Valid @RequestBody CampaignCreateUpdateRequestDTO request) {

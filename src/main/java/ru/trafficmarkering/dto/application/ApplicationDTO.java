@@ -3,7 +3,9 @@ package ru.trafficmarkering.dto.application;
 import io.swagger.v3.oas.annotations.media.Schema;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
+import ru.trafficmarkering.model.application.PayableViews;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.model.profile.CreatorProfile;
 
 import java.util.UUID;
@@ -15,6 +17,9 @@ public record ApplicationDTO(
         UUID campaignId,
         String campaignTitle,
         @Schema(description = "Ставка объявления за 1000 просмотров, в копейках") Long ratePerThousandKopecks,
+        @Schema(description = "Порог вывода объявления: с какой накопленной по нему суммы криатор может выводить, в копейках") Long minPayoutKopecks,
+        @Schema(description = "Регион просмотров объявления: RUSSIA, CIS, WORLD") String campaignViewRegion,
+        @Schema(description = "Человекочитаемый регион", example = "Только РФ") String campaignViewRegionDescription,
         Long creatorId,
         String creatorName,
         @Schema(description = "Telegram криатора из профиля; null — не заполнен") String creatorTelegram,
@@ -25,6 +30,8 @@ public record ApplicationDTO(
         @Schema(description = "Статус: PENDING, APPROVED, REJECTED, COMPLETED") String status,
         @Schema(description = "Человекочитаемый статус", example = "Одобрен") String statusDescription,
         @Schema(description = "Набранные просмотры") Long views,
+        @Schema(description = "Просмотры, которые идут в расчёт выплаты: для «весь мир» — все, иначе только из региона; 0, если география неизвестна") Long payableViews,
+        @Schema(description = "Известна ли география просмотров (для «весь мир» всегда true)") Boolean viewsGeographyKnown,
         @Schema(description = "Начислено криатору, в копейках") Long accruedKopecks,
         @Schema(description = "Когда просмотры обновлялись в последний раз, ISO-8601") String viewsSyncedAt,
         String createdAt,
@@ -42,12 +49,17 @@ public record ApplicationDTO(
                                       Campaign campaign,
                                       User creator,
                                       CreatorProfile creatorProfile) {
+        ViewRegion viewRegion = campaign != null ? campaign.viewRegion() : ViewRegion.WORLD;
+        PayableViews payableViews = application.payableViews(viewRegion);
         return new ApplicationDTO(
                 application.getId(),
                 application.getPublicId(),
                 campaign != null ? campaign.getId() : null,
                 campaign != null ? campaign.getTitle() : null,
                 campaign != null ? campaign.getRatePerThousandKopecks() : null,
+                campaign != null ? campaign.getMinPayoutKopecks() : null,
+                campaign != null ? viewRegion.name() : null,
+                campaign != null ? viewRegion.getDescription() : null,
                 creator != null ? creator.getId() : null,
                 creator != null ? creator.getName() : null,
                 creatorProfile != null ? creatorProfile.getTelegram() : null,
@@ -58,6 +70,8 @@ public record ApplicationDTO(
                 application.getStatus() != null ? application.getStatus().name() : null,
                 application.getStatus() != null ? application.getStatus().getDescription() : null,
                 application.getViews(),
+                payableViews.views(),
+                payableViews.geographyKnown(),
                 application.getAccruedKopecks(),
                 application.getViewsSyncedAt() != null ? application.getViewsSyncedAt().toString() : null,
                 application.getCreatedAt() != null ? application.getCreatedAt().toString() : null,
