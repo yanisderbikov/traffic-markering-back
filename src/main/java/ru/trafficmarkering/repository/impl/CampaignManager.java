@@ -22,6 +22,11 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     private final CampaignRepo campaignRepo;
 
     @Override
+    public Optional<Campaign> getByIdForUpdate(UUID id) {
+        return campaignRepo.findByIdForUpdate(id);
+    }
+
+    @Override
     public Optional<Campaign> getById(UUID id) {
         try {
             return campaignRepo.findByIdWithCustomer(id);

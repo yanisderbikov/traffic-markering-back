@@ -11,6 +11,9 @@ public interface GetterCampaign {
 
     Optional<Campaign> getById(UUID id);
 
+    /** Must be called in a transaction; serializes sync results with campaign edits. */
+    Optional<Campaign> getByIdForUpdate(UUID id);
+
     /**
      * Только регион, отдельным скалярным запросом мимо identity map — в отличие от
      * {@link #getById}, гарантированно видит уже закоммиченное значение, даже если объявление

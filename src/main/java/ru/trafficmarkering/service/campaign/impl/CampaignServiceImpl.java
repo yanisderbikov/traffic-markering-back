@@ -89,6 +89,7 @@ class CampaignServiceImpl implements CampaignService {
     @Override
     @Transactional
     public CampaignDTO update(UUID id, CampaignCreateUpdateRequestDTO request) {
+        getterCampaign.getByIdForUpdate(id);
         Campaign campaign = requireAccessible(id);
         campaign.setTitle(request.getTitle().trim());
         campaign.setDescription(request.getDescription().trim());

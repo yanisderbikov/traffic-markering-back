@@ -19,6 +19,10 @@ import java.util.UUID;
 @Repository
 interface CampaignRepo extends JpaRepository<Campaign, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Campaign c where c.id = :id")
+    Optional<Campaign> findByIdForUpdate(@Param("id") UUID id);
+
     @Query("select c from Campaign c join fetch c.customer where c.id = :id")
     Optional<Campaign> findByIdWithCustomer(@Param("id") UUID id);
 

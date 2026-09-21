@@ -6,24 +6,19 @@ import org.springframework.stereotype.Service;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
 import ru.trafficmarkering.model.application.Platform;
-import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.Region;
 import ru.trafficmarkering.repository.GetterApplication;
-import ru.trafficmarkering.repository.GetterCampaign;
-import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
-import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.geo.GeoAnalyticsProvider;
 import ru.trafficmarkering.service.geo.VideoGeoViews;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.service.views.ViewsSyncService;
-import ru.trafficmarkering.util.RegionViewsCalculator;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,12 +29,10 @@ import java.util.stream.Collectors;
 class ViewsSyncServiceImpl implements ViewsSyncService {
 
     private final GetterApplication getterApplication;
-    private final SaverApplication saverApplication;
     private final SaverViewSnapshot saverViewSnapshot;
     private final ViewCountProviders viewCountProviders;
     private final GeoAnalyticsProvider geoAnalyticsProvider;
-    private final CampaignAccrualService campaignAccrualService;
-    private final GetterCampaign getterCampaign;
+    private final ViewsSyncResultWriter resultWriter;
 
     @Override
     public int syncApproved() {
@@ -54,7 +47,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                         application -> new GroupKey(application.getPlatform(), application.getCreator().getId())));
 
         Instant capturedAt = Instant.now();
-        Map<UUID, Campaign> touched = new LinkedHashMap<>();
+        Set<UUID> touched = new LinkedHashSet<>();
         int captured = 0;
 
         for (Map.Entry<GroupKey, List<Application>> group : groups.entrySet()) {
@@ -90,14 +83,8 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                         .build());
                 captured++;
 
-                long current = application.getViews() != null ? application.getViews() : 0L;
-                long effective = Math.max(current, fresh);
-                application.setViews(effective);
-                application.setViewsSyncedAt(capturedAt);
-                saverApplication.save(application);
-
-                if (effective != current) {
-                    touched.put(application.getCampaign().getId(), application.getCampaign());
+                if (resultWriter.applyViews(application, fresh, capturedAt)) {
+                    touched.add(application.getCampaign().getId());
                 }
             }
         }
@@ -106,7 +93,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
             syncRegionViews(groups, touched);
         }
 
-        touched.values().forEach(campaignAccrualService::recalculate);
+        touched.forEach(resultWriter::recalculate);
         log.info("Синхронизация просмотров: откликов {}, снимков {}, пересчитано объявлений {}",
                 applications.size(), captured, touched.size());
         return captured;
@@ -118,7 +105,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
      * Пока провайдер не настроен, syncApproved его вообще не вызывает — начисление по
      * региону остаётся явно «на паузе», а не рискует тихо разъехаться на пустых ответах.
      */
-    private void syncRegionViews(Map<GroupKey, List<Application>> groups, Map<UUID, Campaign> touched) {
+    private void syncRegionViews(Map<GroupKey, List<Application>> groups, Set<UUID> touched) {
         for (Map.Entry<GroupKey, List<Application>> group : groups.entrySet()) {
             List<Application> regional = group.getValue().stream()
                     .filter(application -> application.getCampaign().getRegion() != Region.WORLDWIDE)
@@ -142,23 +129,8 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                 if (geoViews == null) {
                     continue;
                 }
-                // fetchGeoViews — внешний вызов, за время которого заказчик мог сменить регион
-                // (и applications выше загружены до него). Регион перепроверяем отдельным
-                // скалярным запросом прямо перед сохранением, а не доверяем той ссылке, что
-                // держит application.getCampaign(), — иначе можно применить разбивку, посчитанную
-                // под уже неактуальный регион, и воскресить значение, которое смена региона
-                // должна была обнулить.
-                Region freshRegion = getterCampaign.getRegionById(application.getCampaign().getId()).orElse(null);
-                if (freshRegion == null || freshRegion == Region.WORLDWIDE) {
-                    continue;
-                }
-                long rawViews = application.getViews() != null ? application.getViews() : 0L;
-                long regionViews = RegionViewsCalculator.viewsForRegion(
-                        freshRegion, geoViews.viewsByCountry(), rawViews);
-                if (!Objects.equals(application.getRegionViews(), regionViews)) {
-                    application.setRegionViews(regionViews);
-                    saverApplication.save(application);
-                    touched.put(application.getCampaign().getId(), application.getCampaign());
+                if (resultWriter.applyGeoViews(application, geoViews)) {
+                    touched.add(application.getCampaign().getId());
                 }
             }
         }
