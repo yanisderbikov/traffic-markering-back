@@ -32,6 +32,8 @@ import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.application.ApplicationService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import ru.trafficmarkering.service.fraud.FraudCheckService;
 import ru.trafficmarkering.service.http.ShortLinkResolver;
 import ru.trafficmarkering.util.PublicIdGenerator;
 import ru.trafficmarkering.util.VideoUrls;
@@ -73,6 +75,8 @@ class ApplicationServiceImpl implements ApplicationService {
     private final GetterViewSnapshot getterViewSnapshot;
     private final SaverViewSnapshot saverViewSnapshot;
     private final ShortLinkResolver shortLinkResolver;
+    private final CreatorTrustService creatorTrustService;
+    private final FraudCheckService fraudCheckService;
 
     private static final DateTimeFormatter MOSCOW_DATE =
             DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Moscow"));
@@ -95,6 +99,7 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Нельзя откликнуться на собственное объявление");
         }
+        requireNotBlocked(creator);
         requireVideoLimitNotReached(campaign, creator);
         Platform platform = requirePlatform(request.getVideoUrl().trim());
         requireAcceptedByCampaign(campaign, platform);
@@ -122,7 +127,10 @@ class ApplicationServiceImpl implements ApplicationService {
     @Transactional(readOnly = true)
     public List<ApplicationDTO> getMyApplications() {
         User creator = currentUserService.require(Role.CREATOR);
-        return toDtoList(getterApplication.getByCreatorId(creator.getId()));
+        // Криатору показываем только вердикт: детали правил антифрода — подсказка, как их обходить
+        return toDtoList(getterApplication.getByCreatorId(creator.getId())).stream()
+                .map(ApplicationDTO::forCreator)
+                .toList();
     }
 
     @Override
@@ -192,6 +200,7 @@ class ApplicationServiceImpl implements ApplicationService {
                 .countryViews(countryViews)
                 .source(ViewSource.MANUAL)
                 .build());
+        fraudCheckService.check(application);
         campaignAccrualService.recalculate(application.getCampaign());
 
         return toDto(requireApplication(id));
@@ -260,6 +269,13 @@ class ApplicationServiceImpl implements ApplicationService {
         if (campaign.endedBy(now)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Срок действия объявления истёк " + MOSCOW_DATE.format(campaign.getEndsAt()));
+        }
+    }
+
+    private void requireNotBlocked(User creator) {
+        if (creatorTrustService.levelOf(creator.getId()).blocksApplications()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Аккаунт заблокирован за накрутку просмотров: откликаться на объявления нельзя");
         }
     }
 

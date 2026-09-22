@@ -7,6 +7,9 @@ import org.springframework.stereotype.Repository;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 
+import ru.trafficmarkering.model.fraud.FraudStatus;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,4 +50,12 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
     @Query("select a from Application a join fetch a.campaign join fetch a.creator "
             + "where a.accruedKopecks > a.creditedKopecks order by a.creator.id asc, a.createdAt asc")
     List<Application> findCreditable();
+
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.status in :statuses order by a.createdAt asc")
+    List<Application> findByStatusIn(@Param("statuses") Collection<ApplicationStatus> statuses);
+
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.fraudStatus in :statuses order by a.fraudScore desc, a.updatedAt desc")
+    List<Application> findByFraudStatusIn(@Param("statuses") Collection<FraudStatus> statuses);
 }

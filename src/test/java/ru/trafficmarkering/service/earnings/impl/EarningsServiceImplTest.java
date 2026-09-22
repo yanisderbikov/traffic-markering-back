@@ -10,7 +10,15 @@ import ru.trafficmarkering.dto.earnings.PayoutCreateRequestDTO;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.config.FraudProperties;
 import ru.trafficmarkering.model.application.Application;
+import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.ViewSource;
+import ru.trafficmarkering.model.fraud.FraudStatus;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+import ru.trafficmarkering.repository.GetterViewSnapshot;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import org.springframework.test.util.ReflectionTestUtils;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.wallet.Transfer;
@@ -31,6 +39,7 @@ import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.service.wallet.impl.WalletLedgerTestSupport;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -58,11 +67,15 @@ class EarningsServiceImplTest {
     private final SaverApplication saverApplication = mock(SaverApplication.class);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final FileStorage fileStorage = mock(FileStorage.class);
+    private final GetterViewSnapshot getterViewSnapshot = mock(GetterViewSnapshot.class);
+    private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
+    private final FraudProperties fraudProperties = new FraudProperties();
 
     private final WalletLedger ledger = WalletLedgerTestSupport.ledger(getterWallet, saverWallet, saverWalletTransaction);
     private final EarningsServiceImpl service = new EarningsServiceImpl(ledger,
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage), getterWalletTransaction,
-            getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService);
+            getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService,
+            getterViewSnapshot, creatorTrustService, fraudProperties);
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final Wallet wallet = Wallet.builder().id(10L).user(creator).balanceKopecks(7_000_00L).build();
@@ -83,6 +96,9 @@ class EarningsServiceImplTest {
         when(getterWallet.getByUserIdForUpdate(1L)).thenReturn(Optional.of(wallet));
         when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
         when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
+        // Базовые тесты — без окна удержания и с проверенным криатором; антифрод проверяется отдельно
+        when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.TRUSTED);
+        ReflectionTestUtils.setField(service, "holdDays", 0);
     }
 
     private WalletTransaction payout(long amount, WalletTransactionStatus status) {
@@ -301,6 +317,133 @@ class EarningsServiceImplTest {
         assertThat(wallet.balance()).isEqualTo(7_000_00L);
         verify(getterWallet, never()).getByUserIdForUpdate(any());
         verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedFreezesSuspiciousAndFraudApplications() {
+        Campaign campaign = campaign(100_00L);
+        Application suspicious = application(campaign, 1_000_00L, 0L);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        Application fraud = application(campaign, 1_000_00L, 0L);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application verified = application(campaign, 500_00L, 0L);
+        verified.setFraudStatus(FraudStatus.VERIFIED);
+        when(getterApplication.getCreditable()).thenReturn(List.of(suspicious, fraud, verified));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(suspicious, fraud, verified));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+        assertThat(suspicious.getCreditedKopecks()).isZero();
+        assertThat(fraud.getCreditedKopecks()).isZero();
+    }
+
+    @Test
+    void creditAccruedSkipsBlockedCreatorEntirely() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+        Campaign campaign = campaign(100_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(clean));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+        verify(getterWallet, never()).getByUserIdForUpdate(any());
+    }
+
+    @Test
+    void creditAccruedRequiresManualVerificationForRestrictedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.RESTRICTED);
+        Campaign campaign = campaign(100_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        Application verified = application(campaign, 300_00L, 0L);
+        verified.setFraudStatus(FraudStatus.VERIFIED);
+        when(getterApplication.getCreditable()).thenReturn(List.of(clean, verified));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(clean, verified));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 300_00L);
+        assertThat(clean.getCreditedKopecks()).isZero();
+    }
+
+    @Test
+    void creditAccruedPaysOnlyViewsOlderThanHoldWindow() {
+        // Ставка 100 ₽ за тысячу: неделю назад было 10 000 просмотров, сейчас 30 000 —
+        // созрело только 1 000 ₽, остальное подождёт
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 3_000_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 30_000L),
+                snapshot(application, now.minus(Duration.ofDays(3)), 20_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 10_000L),
+                snapshot(application, now.minus(Duration.ofDays(9)), 4_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 1_000_00L);
+        assertThat(application.getCreditedKopecks()).isEqualTo(1_000_00L);
+
+        // Следующей ночью замер трёхдневной давности ещё не созрел — нового зачисления нет
+        assertThat(service.creditAccrued()).isZero();
+    }
+
+    @Test
+    void creditAccruedHoldsEverythingWithoutMaturedSnapshot() {
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 3_000_00L, 0L);
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, Instant.now().minus(Duration.ofDays(2)), 30_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+    }
+
+    @Test
+    void creditAccruedUsesCurrentCountWhenPlatformRemovedViews() {
+        // Неделю назад было 10 000, площадка списала ботов до 6 000 — платим по 6 000
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 1_000_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 6_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 10_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 600_00L);
+    }
+
+    @Test
+    void creditAccruedCapsMaturedViewsForNewCreator() {
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        fraudProperties.setNewCreatorMaxPayableViews(5_000L);
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.NEW);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 500_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 40_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 20_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+    }
+
+    private ApplicationViewSnapshot snapshot(Application application, Instant capturedAt, long views) {
+        return ApplicationViewSnapshot.builder().application(application).capturedAt(capturedAt).views(views)
+                .source(ViewSource.YOUTUBE_API).build();
     }
 
     private Campaign campaign(long minPayoutKopecks) {

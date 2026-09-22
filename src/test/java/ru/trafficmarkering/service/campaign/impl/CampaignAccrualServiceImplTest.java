@@ -1,6 +1,13 @@
 package ru.trafficmarkering.service.campaign.impl;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ru.trafficmarkering.config.FraudProperties;
+import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.fraud.FraudStatus;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
@@ -15,6 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -25,9 +33,68 @@ class CampaignAccrualServiceImplTest {
     private final GetterApplication getterApplication = mock(GetterApplication.class);
     private final SaverApplication saverApplication = mock(SaverApplication.class);
     private final SaverCampaign saverCampaign = mock(SaverCampaign.class);
+    private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
+    private final FraudProperties fraudProperties = new FraudProperties();
 
     private final CampaignAccrualService service =
-            new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign);
+            new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign,
+                    creatorTrustService, fraudProperties);
+
+    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+
+    @BeforeEach
+    void setUp() {
+        // По умолчанию криатор проверенный: потолок новичка проверяется отдельными тестами
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
+    }
+
+    @Test
+    void recalculate_zeroesConfirmedFraud() {
+        // Накрутка распознана: заказчик за ботов не платит, бюджет освобождается для следующих
+        Campaign campaign = campaign(350_00, 1_000_00);
+        Application fraud = application(ApplicationStatus.APPROVED, 2_000, 700_00);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application honest = application(ApplicationStatus.APPROVED, 2_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(fraud, honest));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, fraud.getAccruedKopecks().longValue());
+        assertEquals(700_00L, honest.getAccruedKopecks().longValue());
+        assertEquals(700_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_suspiciousStillAccruesButFrozenLater() {
+        // Подозрение — не приговор: начисление считается, замораживается только зачисление в кошелёк
+        Campaign campaign = campaign(350_00, 100_000_00);
+        Application suspicious = application(ApplicationStatus.APPROVED, 2_000, 0);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(suspicious));
+
+        service.recalculate(campaign);
+
+        assertEquals(700_00L, suspicious.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_capsNewCreatorPayableViews() {
+        // Новичку платят не больше потолка из настроек, проверенному — за всё
+        fraudProperties.setNewCreatorMaxPayableViews(10_000L);
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.NEW));
+        Campaign campaign = campaign(100_00, 100_000_00);
+        Application viral = application(ApplicationStatus.APPROVED, 250_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(viral));
+
+        service.recalculate(campaign);
+
+        assertEquals(1_000_00L, viral.getAccruedKopecks().longValue());
+
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
+        service.recalculate(campaign);
+
+        assertEquals(25_000_00L, viral.getAccruedKopecks().longValue());
+    }
 
     @Test
     void recalculate_cutsLastAccrualByRemainingBudget() {
@@ -167,6 +234,7 @@ class CampaignAccrualServiceImplTest {
     private Application application(ApplicationStatus status, long views, long accruedKopecks) {
         return Application.builder()
                 .id(UUID.randomUUID())
+                .creator(creator)
                 .status(status)
                 .views(views)
                 .accruedKopecks(accruedKopecks)

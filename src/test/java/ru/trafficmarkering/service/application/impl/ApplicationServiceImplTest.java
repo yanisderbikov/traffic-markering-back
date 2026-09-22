@@ -21,6 +21,9 @@ import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import ru.trafficmarkering.service.fraud.FraudCheckService;
 import ru.trafficmarkering.service.http.ShortLinkResolver;
 
 import java.time.Instant;
@@ -55,11 +58,31 @@ class ApplicationServiceImplTest {
     private final GetterViewSnapshot getterViewSnapshot = mock(GetterViewSnapshot.class);
     private final SaverViewSnapshot saverViewSnapshot = mock(SaverViewSnapshot.class);
     private final ShortLinkResolver shortLinkResolver = new ShortLinkResolver();
+    private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
+    private final FraudCheckService fraudCheckService = mock(FraudCheckService.class);
 
     private final ApplicationServiceImpl service = new ApplicationServiceImpl(
             getterApplication, saverApplication, applicationDeleter, getterCampaign, getterCreatorProfile,
             getterSocialAccount, currentUserService, campaignAccrualService, getterViewSnapshot,
-            saverViewSnapshot, shortLinkResolver);
+            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService);
+
+    {
+        when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.NEW);
+    }
+
+    @Test
+    void apply_rejectsBlockedCreator() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterCampaign.getById(campaign.getId())).thenReturn(Optional.of(campaign));
+        when(creatorTrustService.levelOf(creator.getId())).thenReturn(TrustLevel.BLOCKED);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.apply(request(campaign, YOUTUBE_URL)));
+
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        verify(saverApplication, never()).save(any());
+    }
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
     private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();

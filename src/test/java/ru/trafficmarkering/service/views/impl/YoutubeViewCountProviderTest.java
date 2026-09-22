@@ -13,6 +13,7 @@ import ru.trafficmarkering.service.http.JsonHttpClient;
 import ru.trafficmarkering.service.social.SocialTokenService;
 import ru.trafficmarkering.service.views.ViewCount;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.startsWith;
@@ -52,7 +54,9 @@ class YoutubeViewCountProviderTest {
     void setUp() {
         ReflectionTestUtils.setField(provider, "apiKey", "data-api-key");
         Map<String, Object> dataApiResponse = Map.of("items", List.of(
-                Map.of("id", VIDEO_ID, "statistics", Map.of("viewCount", "1000"))));
+                Map.of("id", VIDEO_ID,
+                        "statistics", Map.of("viewCount", "1000", "likeCount", "80", "commentCount", "5"),
+                        "snippet", Map.of("publishedAt", "2026-09-01T10:00:00Z"))));
         when(httpClient.getJson(startsWith(DATA_API), isNull(), eq("YouTube"))).thenReturn(dataApiResponse);
     }
 
@@ -66,8 +70,54 @@ class YoutubeViewCountProviderTest {
         ViewCount count = result.get(VIDEO_URL);
         assertEquals(1000L, count.total());
         assertFalse(count.geographyKnown());
+        assertEquals(80L, count.metrics().likes());
+        assertEquals(5L, count.metrics().comments());
+        assertEquals(Instant.parse("2026-09-01T10:00:00Z"), count.metrics().publishedAt());
         verify(httpClient, times(1)).getJson(any(), any(), any());
         verify(socialTokenService, never()).accessToken(any(), any());
+    }
+
+    @Test
+    void fetchViews_withAnalyticsScope_attachesRetentionAndTrafficSources() {
+        linkAccountWithAnalytics();
+        when(httpClient.getJson(contains("dimensions=country"), eq(TOKEN), eq("YouTube")))
+                .thenReturn(Map.of("rows", List.of(List.of("RU", 900))));
+        when(httpClient.getJson(contains("engagedViews"), eq(TOKEN), eq("YouTube")))
+                .thenReturn(Map.of(
+                        "columnHeaders", List.of(Map.of("name", "views"), Map.of("name", "engagedViews"),
+                                Map.of("name", "averageViewDuration"), Map.of("name", "averageViewPercentage"),
+                                Map.of("name", "shares")),
+                        "rows", List.of(List.of(1000, 250, 4.5, 31.2, 12))));
+        when(httpClient.getJson(contains("insightTrafficSourceType"), eq(TOKEN), eq("YouTube")))
+                .thenReturn(Map.of("rows", List.of(List.of("SHORTS", 100), List.of("EXT_URL", 800))));
+
+        ViewCount count = provider.fetchViews(CREATOR_ID, List.of(VIDEO_URL)).get(VIDEO_URL);
+
+        assertEquals(Map.of("RU", 900L), count.byCountry());
+        assertEquals(250L, count.metrics().engagedViews());
+        assertEquals(4.5, count.metrics().avgWatchSeconds());
+        assertEquals(31.2, count.metrics().avgViewPercentage());
+        assertEquals(12L, count.metrics().shares());
+        assertEquals(Map.of("SHORTS", 100L, "EXT_URL", 800L), count.metrics().trafficSources());
+        verify(httpClient, times(4)).getJson(any(), any(), any());
+    }
+
+    @Test
+    void fetchViews_whenEngagedViewsUnsupported_fallsBackToOtherRetentionMetrics() {
+        linkAccountWithAnalytics();
+        when(httpClient.getJson(contains("dimensions="), eq(TOKEN), eq("YouTube"))).thenReturn(Map.of());
+        when(httpClient.getJson(contains("engagedViews"), eq(TOKEN), eq("YouTube")))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "unknown metric"));
+        when(httpClient.getJson(contains("metrics=views,averageViewDuration"), eq(TOKEN), eq("YouTube")))
+                .thenReturn(Map.of(
+                        "columnHeaders", List.of(Map.of("name", "views"), Map.of("name", "averageViewDuration"),
+                                Map.of("name", "averageViewPercentage"), Map.of("name", "shares")),
+                        "rows", List.of(List.of(1000, 3.0, 20.0, 1))));
+
+        ViewCount count = provider.fetchViews(CREATOR_ID, List.of(VIDEO_URL)).get(VIDEO_URL);
+
+        assertEquals(null, count.metrics().engagedViews());
+        assertEquals(20.0, count.metrics().avgViewPercentage());
     }
 
     @Test
@@ -101,7 +151,7 @@ class YoutubeViewCountProviderTest {
         assertEquals(Map.of("RU", 700L, "ZZ", 5L), count.byCountry());
 
         ArgumentCaptor<String> urls = ArgumentCaptor.forClass(String.class);
-        verify(httpClient, times(2)).getJson(urls.capture(), any(), any());
+        verify(httpClient, times(4)).getJson(urls.capture(), any(), any());
         String analyticsUrl = urls.getAllValues().get(1);
         assertTrue(analyticsUrl.contains("youtubeanalytics.googleapis.com"));
         assertTrue(analyticsUrl.contains("ids=channel%3D%3DMINE"));

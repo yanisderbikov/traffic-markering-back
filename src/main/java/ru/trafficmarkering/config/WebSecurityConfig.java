@@ -48,6 +48,7 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
                     .requestMatchers("/api/social/callback/**").permitAll()
                     .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     .requestMatchers("/api/finance/**").hasRole("FINANCE_MANAGER")
                     .requestMatchers("/api/files/transfer-proof/**").hasRole("FINANCE_MANAGER")
                     .requestMatchers("/api/wallet/**").hasRole("CUSTOMER")

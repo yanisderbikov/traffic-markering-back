@@ -11,6 +11,8 @@ import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.fraud.FraudCheckService;
+import ru.trafficmarkering.service.views.VideoMetrics;
 import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.service.views.ViewsSyncService;
@@ -34,6 +36,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
     private final SaverViewSnapshot saverViewSnapshot;
     private final ViewCountProviders viewCountProviders;
     private final CampaignAccrualService campaignAccrualService;
+    private final FraudCheckService fraudCheckService;
 
     @Override
     public int syncApproved() {
@@ -76,14 +79,27 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                 if (fresh == null || fresh.total() < 0) {
                     continue;
                 }
+                VideoMetrics metrics = fresh.metrics();
                 saverViewSnapshot.save(ApplicationViewSnapshot.builder()
                         .application(application)
                         .capturedAt(capturedAt)
                         .views(fresh.total())
                         .countryViews(fresh.byCountry())
                         .source(provider.get().source())
+                        .likes(metrics.likes())
+                        .comments(metrics.comments())
+                        .shares(metrics.shares())
+                        .saves(metrics.saves())
+                        .reach(metrics.reach())
+                        .engagedViews(metrics.engagedViews())
+                        .avgWatchSeconds(metrics.avgWatchSeconds())
+                        .avgViewPercentage(metrics.avgViewPercentage())
+                        .trafficSources(metrics.trafficSources())
                         .build());
                 captured++;
+                if (metrics.publishedAt() != null && application.getVideoPublishedAt() == null) {
+                    application.setVideoPublishedAt(metrics.publishedAt());
+                }
 
                 long current = application.totalViews();
                 long effective = Math.max(current, fresh.total());
@@ -96,7 +112,9 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                 application.setViewsSyncedAt(capturedAt);
                 saverApplication.save(application);
 
-                if (effective != current || geographyChanged) {
+                // Скоринг после каждого замера: свежий снимок уже в базе, история полная
+                boolean fraudChanged = fraudCheckService.check(application);
+                if (effective != current || geographyChanged || fraudChanged) {
                     touched.put(application.getCampaign().getId(), application.getCampaign());
                 }
             }

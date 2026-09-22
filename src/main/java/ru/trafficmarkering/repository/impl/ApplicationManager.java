@@ -9,6 +9,9 @@ import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 
+import ru.trafficmarkering.model.fraud.FraudStatus;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -107,6 +110,29 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     public List<Application> getCreditable() {
         try {
             return applicationRepo.findCreditable();
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Application> getAccruable() {
+        try {
+            return applicationRepo.findByStatusIn(List.of(ApplicationStatus.APPROVED, ApplicationStatus.COMPLETED));
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Application> getByFraudStatusIn(Collection<FraudStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return List.of();
+        }
+        try {
+            return applicationRepo.findByFraudStatusIn(statuses);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

@@ -2,6 +2,9 @@ package ru.trafficmarkering.repository;
 
 import ru.trafficmarkering.model.application.Application;
 
+import ru.trafficmarkering.model.fraud.FraudStatus;
+
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,4 +44,10 @@ public interface GetterApplication {
     boolean existsByPublicId(String publicId);
 
     List<Application> getCreditable();
+
+    /** Отклики, по которым идут деньги (APPROVED и COMPLETED): их перепроверяет антифрод. */
+    List<Application> getAccruable();
+
+    /** Отклики с вердиктом антифрода из набора — очередь подозрительных роликов. */
+    List<Application> getByFraudStatusIn(Collection<FraudStatus> statuses);
 }

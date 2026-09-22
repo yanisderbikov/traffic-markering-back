@@ -1,6 +1,10 @@
 package ru.trafficmarkering.dto.application;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import ru.trafficmarkering.dto.fraud.FraudFlagDTO;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+
+import java.util.List;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.PayableViews;
@@ -34,6 +38,14 @@ public record ApplicationDTO(
         @Schema(description = "Известна ли география просмотров (для «весь мир» всегда true)") Boolean viewsGeographyKnown,
         @Schema(description = "Начислено криатору, в копейках") Long accruedKopecks,
         @Schema(description = "Когда просмотры обновлялись в последний раз, ISO-8601") String viewsSyncedAt,
+        @Schema(description = "Уже зачислено в кошелёк криатора, в копейках") Long creditedKopecks,
+        @Schema(description = "Когда ролик опубликован на площадке, ISO-8601; null — неизвестно") String videoPublishedAt,
+        @Schema(description = "Вердикт антифрода: CLEAN, SUSPICIOUS, FRAUD, VERIFIED") String fraudStatus,
+        @Schema(description = "Человекочитаемый вердикт", example = "Чисто") String fraudStatusDescription,
+        @Schema(description = "Баллы скоринга 0–100; криатору не показываются") Integer fraudScore,
+        @Schema(description = "Сработавшие правила; криатору не показываются") List<FraudFlagDTO> fraudFlags,
+        @Schema(description = "Репутация криатора: NEW, TRUSTED, RESTRICTED, BLOCKED") String creatorTrustLevel,
+        @Schema(description = "Человекочитаемая репутация", example = "Новичок") String creatorTrustLevelDescription,
         String createdAt,
         String updatedAt
 ) {
@@ -51,6 +63,7 @@ public record ApplicationDTO(
                                       CreatorProfile creatorProfile) {
         ViewRegion viewRegion = campaign != null ? campaign.viewRegion() : ViewRegion.WORLD;
         PayableViews payableViews = application.payableViews(viewRegion);
+        TrustLevel trustLevel = creatorProfile != null ? creatorProfile.trustLevel() : TrustLevel.NEW;
         return new ApplicationDTO(
                 application.getId(),
                 application.getPublicId(),
@@ -74,8 +87,26 @@ public record ApplicationDTO(
                 payableViews.geographyKnown(),
                 application.getAccruedKopecks(),
                 application.getViewsSyncedAt() != null ? application.getViewsSyncedAt().toString() : null,
+                application.getCreditedKopecks(),
+                application.getVideoPublishedAt() != null ? application.getVideoPublishedAt().toString() : null,
+                application.fraudStatus().name(),
+                application.fraudStatus().getDescription(),
+                application.fraudScoreValue(),
+                application.fraudFlags().stream().map(FraudFlagDTO::from).toList(),
+                trustLevel.name(),
+                trustLevel.getDescription(),
                 application.getCreatedAt() != null ? application.getCreatedAt().toString() : null,
                 application.getUpdatedAt() != null ? application.getUpdatedAt().toString() : null);
+    }
+
+    /** Копия для кабинета криатора: вердикт остаётся, баллы и правила скрываются. */
+    public ApplicationDTO forCreator() {
+        return new ApplicationDTO(id, publicId, campaignId, campaignTitle, ratePerThousandKopecks, minPayoutKopecks,
+                campaignViewRegion, campaignViewRegionDescription, creatorId, creatorName, creatorTelegram, platform,
+                platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
+                viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
+                fraudStatusDescription, null, List.of(), creatorTrustLevel, creatorTrustLevelDescription,
+                createdAt, updatedAt);
     }
 
     /** Короткая форма: объявление и криатор берутся из отклика (нужна открытая транзакция). */

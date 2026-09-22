@@ -11,6 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.UpdateTimestamp;
 import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.fraud.TrustLevel;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -57,6 +58,28 @@ public class CreatorProfile {
     @Column(name = "youtube_shorts")
     private String youtubeShorts;
 
+    /** Репутация: новичок, проверенный, ограничен, заблокирован */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "trust_level", nullable = false, length = 16)
+    private TrustLevel trustLevel = TrustLevel.NEW;
+
+    /** Уровень выставил админ руками — автоматика его не пересчитывает */
+    @Builder.Default
+    @Column(name = "trust_manual", nullable = false)
+    private Boolean trustManual = Boolean.FALSE;
+
+    @Column(name = "trust_note", columnDefinition = "TEXT")
+    private String trustNote;
+
+    @Column(name = "trust_updated_at")
+    private Instant trustUpdatedAt;
+
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "trust_updated_by")
+    private User trustUpdatedBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -64,4 +87,12 @@ public class CreatorProfile {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public TrustLevel trustLevel() {
+        return trustLevel != null ? trustLevel : TrustLevel.NEW;
+    }
+
+    public boolean isTrustManual() {
+        return Boolean.TRUE.equals(trustManual);
+    }
 }

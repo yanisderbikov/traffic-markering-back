@@ -8,10 +8,12 @@ import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.service.http.JsonHttpClient;
 import ru.trafficmarkering.service.http.JsonNode;
 import ru.trafficmarkering.service.social.SocialTokenService;
+import ru.trafficmarkering.service.views.VideoMetrics;
 import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.util.VideoUrls;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -20,6 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Просмотры TikTok через Display API по токену криатора. Площадка отдаёт только счётчики
+ * (просмотры, лайки, комментарии, репосты) и дату публикации: ни географии, ни удержания —
+ * антифрод по TikTok держится на лайках, скорости прироста и окне удержания.
+ */
 @Component
 @RequiredArgsConstructor
 @Log4j2
@@ -27,7 +34,7 @@ class TiktokViewCountProvider implements ViewCountProvider {
 
     private static final String NAME = "TikTok";
     private static final String QUERY_URL =
-            "https://open.tiktokapis.com/v2/video/query/?fields=id,view_count";
+            "https://open.tiktokapis.com/v2/video/query/?fields=id,view_count,like_count,comment_count,share_count,create_time";
     private static final int BATCH_SIZE = 20;
 
     private final JsonHttpClient httpClient;
@@ -70,7 +77,7 @@ class TiktokViewCountProvider implements ViewCountProvider {
             return Map.of();
         }
 
-        Map<String, Long> viewsById = new HashMap<>();
+        Map<String, ViewCount> countsById = new HashMap<>();
         List<String> ids = new ArrayList<>(urlToId.values());
         for (int from = 0; from < ids.size(); from += BATCH_SIZE) {
             List<String> chunk = ids.subList(from, Math.min(from + BATCH_SIZE, ids.size()));
@@ -85,16 +92,22 @@ class TiktokViewCountProvider implements ViewCountProvider {
                 String videoId = JsonNode.text(video, "id");
                 Long views = JsonNode.number(video, "view_count");
                 if (videoId != null && views != null) {
-                    viewsById.put(videoId, views);
+                    Long createTime = JsonNode.number(video, "create_time");
+                    VideoMetrics metrics = VideoMetrics.empty()
+                            .withPublishedAt(createTime != null && createTime > 0 ? Instant.ofEpochSecond(createTime) : null)
+                            .withEngagement(JsonNode.number(video, "like_count"),
+                                    JsonNode.number(video, "comment_count"),
+                                    JsonNode.number(video, "share_count"));
+                    countsById.put(videoId, ViewCount.total(views).withMetrics(metrics));
                 }
             }
         }
 
         Map<String, ViewCount> result = new LinkedHashMap<>();
         urlToId.forEach((url, videoId) -> {
-            Long views = viewsById.get(videoId);
-            if (views != null) {
-                result.put(url, ViewCount.total(views));
+            ViewCount count = countsById.get(videoId);
+            if (count != null) {
+                result.put(url, count);
             }
         });
         return result;
