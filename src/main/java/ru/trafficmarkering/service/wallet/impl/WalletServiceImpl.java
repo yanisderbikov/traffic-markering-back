@@ -184,7 +184,7 @@ class WalletServiceImpl implements WalletService {
         User actor = currentUserService.require();
         Wallet wallet = ledger.lockWallet(campaign.getCustomer());
         WalletTransactionType type = delta > 0 ? WalletTransactionType.ALLOCATION : WalletTransactionType.RELEASE;
-        ledger.post(wallet, type, -delta, WalletTransactionStatus.DONE, campaign, actor, campaign.getTitle());
+        ledger.post(wallet, type, -delta, WalletTransactionStatus.DONE, campaign, actor, campaign.displayTitle());
     }
 
     @Override
@@ -197,7 +197,7 @@ class WalletServiceImpl implements WalletService {
         User actor = currentUserService.require();
         Wallet wallet = ledger.lockWallet(campaign.getCustomer());
         ledger.post(wallet, WalletTransactionType.RELEASE, budget, WalletTransactionStatus.DONE, null, actor,
-                "Удалено объявление «" + campaign.getTitle() + "»");
+                "Удалено объявление «" + campaign.displayTitle() + "»");
     }
 
     private WalletTransaction requireTransaction(Long id) {

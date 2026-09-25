@@ -17,8 +17,10 @@ import ru.trafficmarkering.model.application.Platform;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,24 +54,24 @@ public class Campaign {
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
 
-    @Column(nullable = false)
+    @Column
     private String title;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "photo_key", length = 512)
     private String photoKey;
 
     /** Ставка за 1000 просмотров, в копейках */
-    @Column(name = "rate_per_thousand_kopecks", nullable = false)
+    @Column(name = "rate_per_thousand_kopecks")
     private Long ratePerThousandKopecks;
 
     /** Выделенный бюджет, в копейках */
-    @Column(name = "budget_kopecks", nullable = false)
+    @Column(name = "budget_kopecks")
     private Long budgetKopecks;
 
-    @Column(name = "min_payout_kopecks", nullable = false)
+    @Column(name = "min_payout_kopecks")
     private Long minPayoutKopecks;
 
     @Column(name = "min_video_seconds")
@@ -126,6 +128,25 @@ public class Campaign {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    public List<String> missingForLaunch() {
+        Map<String, Boolean> filled = new LinkedHashMap<>();
+        filled.put("название", title != null && !title.isBlank());
+        filled.put("описание", description != null && !description.isBlank());
+        filled.put("обложка", photoKey != null && !photoKey.isBlank());
+        filled.put("площадки", platforms != null && !platforms.isEmpty());
+        filled.put("ставка", ratePerThousandKopecks != null && ratePerThousandKopecks > 0);
+        filled.put("бюджет", budgetKopecks != null && budgetKopecks >= 0);
+        filled.put("порог вывода", minPayoutKopecks != null && minPayoutKopecks > 0);
+        return filled.entrySet().stream()
+                .filter(entry -> !entry.getValue())
+                .map(Map.Entry::getKey)
+                .toList();
+    }
+
+    public String displayTitle() {
+        return title != null && !title.isBlank() ? title : "Без названия";
+    }
 
     public boolean acceptsPlatform(Platform platform) {
         return platforms != null && platforms.contains(platform);

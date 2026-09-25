@@ -2,9 +2,6 @@ package ru.trafficmarkering.dto.campaign;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -24,47 +21,41 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Создание/обновление объявления")
+@Schema(description = "Создание/обновление объявления. Черновик можно сохранять частично: "
+        + "пустые поля остаются незаполненными. Запустить объявление можно, только когда заполнены "
+        + "заголовок, описание, фотография, площадки, ставка, бюджет и порог вывода")
 public class CampaignCreateUpdateRequestDTO {
 
-    @NotBlank(message = "Заголовок обязателен")
     @Size(max = 255, message = "Заголовок не длиннее 255 символов")
-    @Schema(description = "Заголовок объявления", required = true, example = "Обзор приложения для доставки еды")
+    @Schema(description = "Заголовок объявления; обязателен для запуска", example = "Обзор приложения для доставки еды")
     private String title;
 
-    @NotBlank(message = "Описание обязательно")
-    @Schema(description = "Что нужно снять: формат, хронометраж, требования", required = true)
+    @Schema(description = "Что нужно снять: формат, хронометраж, требования; обязательно для запуска")
     private String description;
 
-    @NotBlank(message = "Фотография обязательна")
     @Size(max = 512, message = "Ключ фотографии не длиннее 512 символов")
-    @Schema(description = "Ключ загруженной фотографии из /api/files/campaign-photo/presign", required = true)
+    @Schema(description = "Ключ загруженной фотографии из /api/files/campaign-photo/presign; обязателен для запуска")
     private String photoKey;
 
-    @NotNull(message = "Ставка обязательна")
     @Positive(message = "Ставка должна быть больше нуля")
-    @Schema(description = "Ставка за 1000 просмотров, в копейках", required = true, example = "35000")
+    @Schema(description = "Ставка за 1000 просмотров, в копейках; обязательна для запуска", example = "35000")
     private Long ratePerThousandKopecks;
 
-    @NotNull(message = "Бюджет обязателен")
     @PositiveOrZero(message = "Бюджет не может быть отрицательным")
-    @Schema(description = "Выделенный бюджет, в копейках", required = true, example = "5000000")
+    @Schema(description = "Выделенный бюджет, в копейках; обязателен для запуска", example = "5000000")
     private Long budgetKopecks;
 
-    @NotNull(message = "Порог вывода обязателен")
     @Positive(message = "Порог вывода должен быть больше нуля")
-    @Schema(description = "С какой накопленной по объявлению суммы криатор может выводить заработанное, в копейках",
-            required = true, example = "300000")
+    @Schema(description = "С какой накопленной по объявлению суммы криатор может выводить заработанное, в копейках; "
+            + "обязателен для запуска", example = "300000")
     private Long minPayoutKopecks;
 
-    @NotEmpty(message = "Выберите хотя бы одну площадку")
-    @Schema(description = "Площадки, с которых заказчик принимает ролики: INSTAGRAM, TIKTOK, YOUTUBE_SHORTS",
-            required = true, example = "[\"TIKTOK\", \"YOUTUBE_SHORTS\"]")
+    @Schema(description = "Площадки, с которых заказчик принимает ролики: INSTAGRAM, TIKTOK, YOUTUBE_SHORTS; "
+            + "для запуска нужна хотя бы одна", example = "[\"TIKTOK\", \"YOUTUBE_SHORTS\"]")
     private Set<Platform> platforms;
 
-    @NotNull(message = "Укажите регион просмотров")
-    @Schema(description = "Регион, просмотры из которого оплачиваются: RUSSIA (только РФ), CIS (СНГ), WORLD (весь мир)",
-            required = true, example = "RUSSIA")
+    @Schema(description = "Регион, просмотры из которого оплачиваются: RUSSIA (только РФ), CIS (СНГ), WORLD (весь мир); "
+            + "null — весь мир", example = "RUSSIA")
     private ViewRegion viewRegion;
 
     @Positive(message = "Минимальная длина ролика должна быть больше нуля")

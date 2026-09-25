@@ -23,4 +23,8 @@ public interface GetterCampaign {
     boolean existsByPublicId(String publicId);
 
     List<CampaignTotals> getTotalsByCustomer();
+
+    Optional<Long> getMedianRatePerThousandKopecks();
+
+    Optional<Long> getMedianBudgetKopecks();
 }

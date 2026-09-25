@@ -18,6 +18,7 @@ import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignMaterial;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.model.campaign.MaterialKind;
+import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.model.profile.CustomerProfile;
 import ru.trafficmarkering.repository.CampaignDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
@@ -36,6 +37,7 @@ import ru.trafficmarkering.util.PublicIdGenerator;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -70,31 +72,42 @@ class CampaignServiceImpl implements CampaignService {
 
     @Override
     @Transactional
+    public CampaignDTO startDraft(boolean restart) {
+        User customer = currentUserService.require();
+        List<Campaign> drafts = unfinishedDrafts(customer);
+        if (!restart && !drafts.isEmpty()) {
+            return toDTO(drafts.get(0), customerProfile(customer));
+        }
+        drafts.forEach(this::deleteReleasingBudget);
+        Campaign draft = saverCampaign.save(Campaign.builder()
+                .publicId(PublicIdGenerator.generateUnique(getterCampaign::existsByPublicId))
+                .customer(customer)
+                .platforms(EnumSet.copyOf(Platform.acceptingVideos()))
+                .viewRegion(ViewRegion.WORLD)
+                .spentKopecks(0L)
+                .status(CampaignStatus.DRAFT)
+                .build());
+        return toDTO(draft, customerProfile(customer));
+    }
+
+    @Override
+    @Transactional
     public CampaignDTO create(CampaignCreateUpdateRequestDTO request) {
         User customer = currentUserService.require();
         Campaign campaign = Campaign.builder()
                 .publicId(PublicIdGenerator.generateUnique(getterCampaign::existsByPublicId))
                 .customer(customer)
-                .title(request.getTitle().trim())
-                .description(request.getDescription().trim())
-                .photoKey(requireValidPhotoKey(request.getPhotoKey()))
-                .ratePerThousandKopecks(request.getRatePerThousandKopecks())
-                .budgetKopecks(request.getBudgetKopecks())
-                .minPayoutKopecks(request.getMinPayoutKopecks())
-                .platforms(requireAcceptingVideos(request.getPlatforms()))
-                .viewRegion(request.getViewRegion())
-                .minVideoSeconds(request.getMinVideoSeconds())
-                .minPaidViews(request.getMinPaidViews())
-                .maxVideosPerCreator(request.getMaxVideosPerCreator())
-                .startsAt(request.getStartsAt())
-                .endsAt(requireEndAfterStart(request.getStartsAt(), request.getEndsAt()))
-                .materials(toMaterials(request.getMaterials()))
                 .spentKopecks(0L)
-                // null в запросе — объявление создаётся черновиком и на доску не попадает
                 .status(request.getStatus() != null ? request.getStatus() : CampaignStatus.DRAFT)
                 .build();
+        if (campaign.getStatus() == CampaignStatus.DRAFT && !unfinishedDrafts(customer).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "У вас уже есть незаконченный черновик — дозаполните его или начните заново");
+        }
+        apply(campaign, request);
+        requireFilledOutsideDraft(campaign);
         Campaign saved = saverCampaign.save(campaign);
-        walletService.reallocate(saved, 0L, saved.getBudgetKopecks());
+        walletService.reallocate(saved, 0L, budgetOf(saved));
         return toDTO(saved, customerProfile(customer));
     }
 
@@ -109,30 +122,16 @@ class CampaignServiceImpl implements CampaignService {
     @Transactional
     public CampaignDTO update(UUID id, CampaignCreateUpdateRequestDTO request) {
         Campaign campaign = requireAccessible(id);
-        long previousBudget = campaign.getBudgetKopecks() != null ? campaign.getBudgetKopecks() : 0L;
-        long nextBudget = requireBudgetCoversSpent(campaign, request.getBudgetKopecks());
-        campaign.setTitle(request.getTitle().trim());
-        campaign.setDescription(request.getDescription().trim());
-        campaign.setPhotoKey(requireValidPhotoKey(request.getPhotoKey()));
-        campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
-        campaign.setBudgetKopecks(nextBudget);
-        campaign.setMinPayoutKopecks(request.getMinPayoutKopecks());
-        campaign.getPlatforms().clear();
-        campaign.getPlatforms().addAll(requireAcceptingVideos(request.getPlatforms()));
-        campaign.setViewRegion(request.getViewRegion());
-        campaign.setMinVideoSeconds(request.getMinVideoSeconds());
-        campaign.setMinPaidViews(request.getMinPaidViews());
-        campaign.setMaxVideosPerCreator(request.getMaxVideosPerCreator());
-        campaign.setStartsAt(request.getStartsAt());
-        campaign.setEndsAt(requireEndAfterStart(request.getStartsAt(), request.getEndsAt()));
-        campaign.getMaterials().clear();
-        campaign.getMaterials().addAll(toMaterials(request.getMaterials()));
+        long previousBudget = budgetOf(campaign);
+        requireBudgetCoversSpent(campaign, request.getBudgetKopecks());
+        apply(campaign, request);
         if (request.getStatus() != null) {
+            requireNotBackToDraft(campaign, request.getStatus());
             campaign.setStatus(request.getStatus());
         }
+        requireFilledOutsideDraft(campaign);
         Campaign saved = saverCampaign.save(campaign);
-        walletService.reallocate(saved, previousBudget, nextBudget);
-        // Ставка и бюджет только что могли поменяться — старые начисления им уже не соответствуют
+        walletService.reallocate(saved, previousBudget, budgetOf(saved));
         campaignAccrualService.recalculate(saved);
         return toDTO(saved, customerProfile(saved.getCustomer()));
     }
@@ -141,7 +140,13 @@ class CampaignServiceImpl implements CampaignService {
     @Transactional
     public CampaignDTO updateStatus(UUID id, CampaignStatusUpdateRequestDTO request) {
         Campaign campaign = requireAccessible(id);
+        requireNotBackToDraft(campaign, request.getStatus());
+        boolean leavesDraft = campaign.getStatus() == CampaignStatus.DRAFT
+                && request.getStatus() != CampaignStatus.DRAFT;
         campaign.setStatus(request.getStatus());
+        if (leavesDraft) {
+            requireFilledOutsideDraft(campaign);
+        }
         Campaign saved = saverCampaign.save(campaign);
         return toDTO(saved, customerProfile(saved.getCustomer()));
     }
@@ -154,8 +159,7 @@ class CampaignServiceImpl implements CampaignService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "По объявлению уже есть отклики — его нельзя удалить. Переведите его в статус «завершено».");
         }
-        walletService.releaseBeforeDelete(campaign);
-        campaignDeleter.deleteById(campaign.getId());
+        deleteReleasingBudget(campaign);
     }
 
     @Override
@@ -205,6 +209,62 @@ class CampaignServiceImpl implements CampaignService {
         return CampaignDTO.from(campaign, campaign.getCustomer(), customerProfile,
                 fileStorage.presignedUrl(campaign.getPhotoKey()),
                 CampaignMaterials.toDTO(campaign, fileStorage), applications.size(), totalViews);
+    }
+
+    private void apply(Campaign campaign, CampaignCreateUpdateRequestDTO request) {
+        campaign.setTitle(trimToNull(request.getTitle()));
+        campaign.setDescription(trimToNull(request.getDescription()));
+        campaign.setPhotoKey(validPhotoKey(request.getPhotoKey()));
+        campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
+        campaign.setBudgetKopecks(request.getBudgetKopecks());
+        campaign.setMinPayoutKopecks(request.getMinPayoutKopecks());
+        campaign.getPlatforms().clear();
+        campaign.getPlatforms().addAll(requireAcceptingVideos(request.getPlatforms()));
+        campaign.setViewRegion(request.getViewRegion() != null ? request.getViewRegion() : ViewRegion.WORLD);
+        campaign.setMinVideoSeconds(request.getMinVideoSeconds());
+        campaign.setMinPaidViews(request.getMinPaidViews());
+        campaign.setMaxVideosPerCreator(request.getMaxVideosPerCreator());
+        campaign.setStartsAt(request.getStartsAt());
+        campaign.setEndsAt(requireEndAfterStart(request.getStartsAt(), request.getEndsAt()));
+        campaign.getMaterials().clear();
+        campaign.getMaterials().addAll(toMaterials(request.getMaterials()));
+    }
+
+    private List<Campaign> unfinishedDrafts(User customer) {
+        return getterCampaign.getByCustomerId(customer.getId()).stream()
+                .filter(campaign -> campaign.getStatus() == CampaignStatus.DRAFT)
+                .filter(campaign -> getterApplication.countByCampaignId(campaign.getId()) == 0)
+                .sorted(Comparator.comparing(Campaign::getUpdatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    private void deleteReleasingBudget(Campaign campaign) {
+        walletService.releaseBeforeDelete(campaign);
+        campaignDeleter.deleteById(campaign.getId());
+    }
+
+    private void requireNotBackToDraft(Campaign campaign, CampaignStatus next) {
+        if (next == CampaignStatus.DRAFT && campaign.getStatus() != CampaignStatus.DRAFT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Запущенное объявление нельзя вернуть в черновик — поставьте его на паузу");
+        }
+    }
+
+    private void requireFilledOutsideDraft(Campaign campaign) {
+        if (campaign.getStatus() == CampaignStatus.DRAFT) {
+            return;
+        }
+        List<String> missing = campaign.missingForLaunch();
+        if (!missing.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Не заполнено: " + String.join(", ", missing)
+                            + ". Без этого объявление можно сохранить только черновиком");
+        }
+    }
+
+    private long budgetOf(Campaign campaign) {
+        return campaign.getBudgetKopecks() != null ? campaign.getBudgetKopecks() : 0L;
     }
 
     private Instant requireEndAfterStart(Instant startsAt, Instant endsAt) {
@@ -261,6 +321,9 @@ class CampaignServiceImpl implements CampaignService {
     }
 
     private Set<Platform> requireAcceptingVideos(Set<Platform> platforms) {
+        if (platforms == null || platforms.isEmpty()) {
+            return EnumSet.noneOf(Platform.class);
+        }
         Set<Platform> accepting = Platform.acceptingVideos();
         String unsupported = platforms.stream()
                 .filter(platform -> !accepting.contains(platform))
@@ -273,17 +336,20 @@ class CampaignServiceImpl implements CampaignService {
         return EnumSet.copyOf(platforms);
     }
 
-    private long requireBudgetCoversSpent(Campaign campaign, Long budgetKopecks) {
+    private void requireBudgetCoversSpent(Campaign campaign, Long budgetKopecks) {
         long spent = campaign.getSpentKopecks() != null ? campaign.getSpentKopecks() : 0L;
-        if (budgetKopecks < spent) {
+        long budget = budgetKopecks != null ? budgetKopecks : 0L;
+        if (budget < spent) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Бюджет нельзя опустить ниже уже начисленного криаторам: " + MoneyUtil.formatRubles(spent));
         }
-        return budgetKopecks;
     }
 
-    private String requireValidPhotoKey(String photoKey) {
-        String key = photoKey.trim();
+    private String validPhotoKey(String photoKey) {
+        String key = trimToNull(photoKey);
+        if (key == null) {
+            return null;
+        }
         if (!key.startsWith(FileController.CAMPAIGN_PHOTO_PREFIX + "/") || key.contains("..")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Ключ фотографии не из загрузки объявлений: " + key);

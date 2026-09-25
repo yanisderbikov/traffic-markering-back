@@ -86,6 +86,26 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     }
 
     @Override
+    public Optional<Long> getMedianRatePerThousandKopecks() {
+        try {
+            return Optional.ofNullable(campaignRepo.medianRatePerThousandKopecks()).map(Math::round);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Long> getMedianBudgetKopecks() {
+        try {
+            return Optional.ofNullable(campaignRepo.medianBudgetKopecks()).map(Math::round);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public Campaign save(Campaign campaign) {
         try {
             // saveAndFlush, а не save: сервис тут же собирает DTO из возвращённой сущности,

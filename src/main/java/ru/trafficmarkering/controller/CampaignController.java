@@ -17,12 +17,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
+import ru.trafficmarkering.dto.campaign.CampaignBenchmarkDTO;
 import ru.trafficmarkering.dto.campaign.CampaignCreateUpdateRequestDTO;
 import ru.trafficmarkering.dto.campaign.CampaignDTO;
 import ru.trafficmarkering.dto.campaign.CampaignStatusUpdateRequestDTO;
+import ru.trafficmarkering.service.campaign.CampaignBenchmarkService;
 import ru.trafficmarkering.service.campaign.CampaignService;
 
 import java.util.List;
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 public class CampaignController {
 
     private final CampaignService campaignService;
+    private final CampaignBenchmarkService campaignBenchmarkService;
 
     @Operation(summary = "Мои объявления",
             description = "Объявления текущего заказчика, новые сверху; суммы в копейках",
@@ -48,11 +52,32 @@ public class CampaignController {
 
     @Operation(summary = "Создать объявление",
             description = "Ставка и бюджет в копейках; platforms — с каких площадок принимаются ролики; "
-                    + "статус можно не передавать — тогда объявление создаётся черновиком",
+                    + "статус можно не передавать — тогда объявление создаётся черновиком; "
+                    + "второй незаконченный черновик создать нельзя — 409",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping
     public ResponseEntity<CampaignDTO> createCampaign(@Valid @RequestBody CampaignCreateUpdateRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(campaignService.create(request));
+    }
+
+    @Operation(summary = "Начать новое объявление",
+            description = "У заказчика не больше одного незаконченного черновика. Без restart возвращает его, "
+                    + "если он есть, иначе создаёт пустой; с restart=true удаляет незаконченный черновик, "
+                    + "возвращая его бюджет в кошелёк, и создаёт пустой. Черновик заполняется по шагам через PUT",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/drafts")
+    public ResponseEntity<CampaignDTO> startCampaignDraft(
+            @RequestParam(name = "restart", defaultValue = "false") boolean restart) {
+        return ResponseEntity.ok(campaignService.startDraft(restart));
+    }
+
+    @Operation(summary = "Медианы ставки и бюджета",
+            description = "Медианная ставка за 1000 просмотров и медианный бюджет по всем запущенным объявлениям, "
+                    + "в копейках; пока таких объявлений нет — 150 ₽ и 100 000 ₽",
+            security = @SecurityRequirement(name = "Bearer"))
+    @GetMapping("/benchmarks")
+    public ResponseEntity<CampaignBenchmarkDTO> campaignBenchmarks() {
+        return ResponseEntity.ok(campaignBenchmarkService.getBenchmarks());
     }
 
     @Operation(summary = "Объявление по id",
@@ -64,7 +89,9 @@ public class CampaignController {
     }
 
     @Operation(summary = "Обновить объявление",
-            description = "Полное обновление полей; смена ставки или бюджета пересчитывает начисления по откликам",
+            description = "Полное обновление полей: пустое поле в запросе очищает его. Черновик можно сохранять "
+                    + "частично, остальные статусы требуют заполненного объявления, а запущенное нельзя вернуть в черновик; "
+                    + "смена ставки или бюджета пересчитывает начисления по откликам",
             security = @SecurityRequirement(name = "Bearer"))
     @PutMapping("/{id}")
     public ResponseEntity<CampaignDTO> updateCampaign(@PathVariable("id") UUID id,
@@ -73,7 +100,8 @@ public class CampaignController {
     }
 
     @Operation(summary = "Сменить статус объявления",
-            description = "На публичной доске показываются только объявления в статусе ACTIVE",
+            description = "На публичной доске показываются только объявления в статусе ACTIVE; "
+                    + "из черновика можно выйти, только когда объявление заполнено, а вернуться в него нельзя",
             security = @SecurityRequirement(name = "Bearer"))
     @PatchMapping("/{id}/status")
     public ResponseEntity<CampaignDTO> updateCampaignStatus(@PathVariable("id") UUID id,

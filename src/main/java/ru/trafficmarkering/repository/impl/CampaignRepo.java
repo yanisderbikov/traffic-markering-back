@@ -39,4 +39,12 @@ interface CampaignRepo extends JpaRepository<Campaign, UUID> {
     @Query("select new ru.trafficmarkering.repository.CampaignTotals(c.customer.id, sum(c.budgetKopecks), sum(c.spentKopecks)) "
             + "from Campaign c group by c.customer.id")
     List<CampaignTotals> totalsByCustomer();
+
+    @Query(value = "select percentile_cont(0.5) within group (order by rate_per_thousand_kopecks) from campaign "
+            + "where status <> 'DRAFT' and rate_per_thousand_kopecks > 0", nativeQuery = true)
+    Double medianRatePerThousandKopecks();
+
+    @Query(value = "select percentile_cont(0.5) within group (order by budget_kopecks) from campaign "
+            + "where status <> 'DRAFT' and budget_kopecks > 0", nativeQuery = true)
+    Double medianBudgetKopecks();
 }

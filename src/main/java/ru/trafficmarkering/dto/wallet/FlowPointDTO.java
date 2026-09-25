@@ -30,7 +30,7 @@ public record FlowPointDTO(
         if (campaign == null) {
             return new FlowPointDTO("CAMPAIGN", "Удалённое объявление", null, null, null);
         }
-        return new FlowPointDTO("CAMPAIGN", "Объявление «" + campaign.getTitle() + "»", null,
+        return new FlowPointDTO("CAMPAIGN", "Объявление «" + campaign.displayTitle() + "»", null,
                 campaign.getId(), campaign.getPublicId());
     }
 
