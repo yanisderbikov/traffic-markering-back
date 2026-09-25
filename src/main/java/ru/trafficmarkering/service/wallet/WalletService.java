@@ -20,6 +20,8 @@ public interface WalletService {
 
     OperationDetailDTO confirm(Long id);
 
+    String topUpTronAddress();
+
     List<WalletDTO> customers();
 
     WalletDTO customer(Long userId);

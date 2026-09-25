@@ -44,14 +44,7 @@ class WalletLedgerImpl implements WalletLedger {
                                   Campaign campaign,
                                   User actor,
                                   String comment) {
-        long next = wallet.balance() + signedAmountKopecks;
-        if (next < 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Свободных средств не хватает: доступно " + MoneyUtil.formatRubles(wallet.balance())
-                            + ", нужно ещё " + MoneyUtil.formatRubles(-next));
-        }
-        wallet.setBalanceKopecks(next);
-        saverWallet.save(wallet);
+        long next = apply(wallet, signedAmountKopecks);
         return saverWalletTransaction.save(WalletTransaction.builder()
                 .wallet(wallet)
                 .type(type)
@@ -65,12 +58,36 @@ class WalletLedgerImpl implements WalletLedger {
     }
 
     @Override
+    public WalletTransaction defer(Wallet wallet,
+                                   WalletTransactionType type,
+                                   long signedAmountKopecks,
+                                   WalletTransactionStatus status,
+                                   User actor) {
+        return saverWalletTransaction.save(WalletTransaction.builder()
+                .wallet(wallet)
+                .type(type)
+                .amountKopecks(signedAmountKopecks)
+                .balanceAfterKopecks(wallet.balance())
+                .status(status)
+                .actor(actor)
+                .build());
+    }
+
+    @Override
+    public void settle(WalletTransaction transaction, WalletTransactionStatus finalStatus) {
+        Wallet wallet = lockWalletOf(transaction);
+        transaction.setBalanceAfterKopecks(apply(wallet, transaction.amount()));
+        transaction.setStatus(finalStatus);
+        saverWalletTransaction.save(transaction);
+    }
+
+    @Override
     public void restore(WalletTransaction transaction, WalletTransactionStatus finalStatus) {
         if (!transaction.getStatus().countsTowardBalance()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Операция уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
         }
-        Wallet wallet = lockWallet(transaction.getWallet().getUser());
+        Wallet wallet = lockWalletOf(transaction);
         long next = wallet.balance() - transaction.amount();
         if (next < 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -81,5 +98,23 @@ class WalletLedgerImpl implements WalletLedger {
         saverWallet.save(wallet);
         transaction.setStatus(finalStatus);
         saverWalletTransaction.save(transaction);
+    }
+
+    private Wallet lockWalletOf(WalletTransaction transaction) {
+        return getterWallet.getByIdForUpdate(transaction.getWallet().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Кошелёк не найден для операции " + transaction.getId()));
+    }
+
+    private long apply(Wallet wallet, long signedAmountKopecks) {
+        long next = wallet.balance() + signedAmountKopecks;
+        if (next < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Свободных средств не хватает: доступно " + MoneyUtil.formatRubles(wallet.balance())
+                            + ", нужно ещё " + MoneyUtil.formatRubles(-next));
+        }
+        wallet.setBalanceKopecks(next);
+        saverWallet.save(wallet);
+        return next;
     }
 }

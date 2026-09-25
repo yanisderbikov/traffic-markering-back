@@ -1,6 +1,8 @@
 package ru.trafficmarkering.repository.impl;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,6 +27,10 @@ interface WalletTransactionRepo extends JpaRepository<WalletTransaction, Long> {
     @Query("select t from WalletTransaction t join fetch t.wallet w join fetch w.user "
             + "left join fetch t.campaign left join fetch t.actor where t.id = :id")
     Optional<WalletTransaction> findByIdWithDetails(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from WalletTransaction t where t.id = :id")
+    Optional<WalletTransaction> findByIdForUpdate(@Param("id") Long id);
 
     @Query("select t from WalletTransaction t join fetch t.wallet w join fetch w.user "
             + "left join fetch t.campaign left join fetch t.actor "

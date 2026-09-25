@@ -13,5 +13,7 @@ public interface GetterWallet {
 
     Optional<Wallet> getByUserIdForUpdate(Long userId);
 
+    Optional<Wallet> getByIdForUpdate(Long id);
+
     List<Wallet> getAllWithUserByRoles(Collection<Role> roles);
 }

@@ -94,6 +94,7 @@ class EarningsServiceImplTest {
         when(saverApplication.save(any(Application.class))).thenAnswer(inv -> inv.getArgument(0));
         when(getterWallet.getByUserId(1L)).thenReturn(Optional.of(wallet));
         when(getterWallet.getByUserIdForUpdate(1L)).thenReturn(Optional.of(wallet));
+        when(getterWallet.getByIdForUpdate(10L)).thenReturn(Optional.of(wallet));
         when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
         when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
         // Базовые тесты — без окна удержания и с проверенным криатором; антифрод проверяется отдельно
@@ -156,7 +157,7 @@ class EarningsServiceImplTest {
     void cancelPayoutReturnsMoneyOnlyWhilePending() {
         WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
         wallet.setBalanceKopecks(2_000_00L);
-        when(getterWalletTransaction.getByIdWithDetails(100L)).thenReturn(Optional.of(pending));
+        when(getterWalletTransaction.getByIdForUpdate(100L)).thenReturn(Optional.of(pending));
         when(getterTransfer.getByTransactionId(100L))
                 .thenReturn(Optional.of(Transfer.builder().transaction(pending).tronAddress(TRON).build()));
 
@@ -174,7 +175,7 @@ class EarningsServiceImplTest {
     @Test
     void confirmPayoutRequiresSentStatus() {
         WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
-        when(getterWalletTransaction.getByIdWithDetails(100L)).thenReturn(Optional.of(pending));
+        when(getterWalletTransaction.getByIdForUpdate(100L)).thenReturn(Optional.of(pending));
 
         assertThatThrownBy(() -> service.confirmPayout(100L))
                 .isInstanceOf(ResponseStatusException.class)

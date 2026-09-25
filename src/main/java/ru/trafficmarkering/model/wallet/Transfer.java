@@ -96,11 +96,15 @@ public class Transfer {
     }
 
     public void send(User actor, String txId, List<String> proofKeys, String comment) {
+        attach(txId, proofKeys);
+        this.financeComment = comment;
+        this.processedBy = actor;
+    }
+
+    public void attach(String txId, List<String> proofKeys) {
         this.proofKeys.clear();
         this.proofKeys.addAll(proofKeys);
         this.txId = txId;
-        this.financeComment = comment;
-        this.processedBy = actor;
         this.sentAt = Instant.now();
     }
 
@@ -108,6 +112,11 @@ public class Transfer {
         Instant now = Instant.now();
         confirmedAt = now;
         closedAt = now;
+    }
+
+    public void confirm(User actor) {
+        processedBy = actor;
+        confirm();
     }
 
     public void reject(User actor, String reason) {

@@ -1,5 +1,7 @@
 package ru.trafficmarkering.repository.impl;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,7 @@ import java.util.Optional;
 class WalletManager implements GetterWallet, SaverWallet {
 
     private final WalletRepo walletRepo;
+    private final EntityManager entityManager;
 
     @Override
     public Optional<Wallet> getByUserId(Long userId) {
@@ -39,6 +42,24 @@ class WalletManager implements GetterWallet, SaverWallet {
         }
         try {
             return walletRepo.findByUserIdForUpdate(userId);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Wallet> getByIdForUpdate(Long id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        try {
+            Wallet wallet = entityManager.find(Wallet.class, id);
+            if (wallet == null) {
+                return Optional.empty();
+            }
+            entityManager.refresh(wallet, LockModeType.PESSIMISTIC_WRITE);
+            return Optional.of(wallet);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

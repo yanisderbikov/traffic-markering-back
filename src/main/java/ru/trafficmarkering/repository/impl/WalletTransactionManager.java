@@ -45,6 +45,19 @@ class WalletTransactionManager implements GetterWalletTransaction, SaverWalletTr
     }
 
     @Override
+    public Optional<WalletTransaction> getByIdForUpdate(Long id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        try {
+            return walletTransactionRepo.findByIdForUpdate(id);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public List<WalletTransaction> getByType(WalletTransactionType type) {
         try {
             return walletTransactionRepo.findByType(type);

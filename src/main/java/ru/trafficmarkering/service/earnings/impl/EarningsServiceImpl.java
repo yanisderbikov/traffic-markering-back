@@ -44,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -260,19 +261,23 @@ class EarningsServiceImpl implements EarningsService {
     }
 
     private WalletTransaction requireOwn(Long id, User creator) {
-        WalletTransaction transaction = getterWalletTransaction.getByIdWithDetails(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
-        Long ownerId = transaction.getWallet().getUser().getId();
-        if (!creator.getRole().isAdmin() && !Objects.equals(ownerId, creator.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая операция");
+        return requireOwner(getterWalletTransaction.getByIdWithDetails(id), id, creator);
+    }
+
+    private WalletTransaction requireOwnPayout(Long id, User creator) {
+        WalletTransaction transaction = requireOwner(getterWalletTransaction.getByIdForUpdate(id), id, creator);
+        if (transaction.getType() != WalletTransactionType.PAYOUT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на вывод");
         }
         return transaction;
     }
 
-    private WalletTransaction requireOwnPayout(Long id, User creator) {
-        WalletTransaction transaction = requireOwn(id, creator);
-        if (transaction.getType() != WalletTransactionType.PAYOUT) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на вывод");
+    private WalletTransaction requireOwner(Optional<WalletTransaction> found, Long id, User creator) {
+        WalletTransaction transaction = found
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
+        Long ownerId = transaction.getWallet().getUser().getId();
+        if (!creator.getRole().isAdmin() && !Objects.equals(ownerId, creator.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая операция");
         }
         return transaction;
     }

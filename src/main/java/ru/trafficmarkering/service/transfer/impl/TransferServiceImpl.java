@@ -10,6 +10,8 @@ import ru.trafficmarkering.dto.transfer.TransferRejectRequestDTO;
 import ru.trafficmarkering.dto.transfer.TransferSentRequestDTO;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.dto.wallet.OperationRowDTO;
+import ru.trafficmarkering.dto.wallet.TopUpCreateRequestDTO;
+import ru.trafficmarkering.dto.wallet.TopUpPaidRequestDTO;
 import ru.trafficmarkering.dto.wallet.WalletOperationRequestDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
@@ -29,6 +31,7 @@ import ru.trafficmarkering.service.wallet.WalletService;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -48,13 +51,79 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO topUp(Long userId, WalletOperationRequestDTO request) {
+    public OperationDetailDTO requestTopUp(TopUpCreateRequestDTO request) {
+        User customer = currentUserService.require(Role.CUSTOMER);
+        String address = walletService.topUpTronAddress();
+        if (address == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Адрес для пополнения ещё не настроен — напишите менеджеру финансов");
+        }
+        Wallet wallet = ledger.walletOf(customer);
+        WalletTransaction transaction = ledger.defer(wallet, WalletTransactionType.TOP_UP, request.getAmountKopecks(),
+                WalletTransactionStatus.PENDING, customer);
+        Transfer transfer = saverTransfer.save(Transfer.builder().transaction(transaction).tronAddress(address).build());
+        return detail(transaction, transfer);
+    }
+
+    @Override
+    @Transactional
+    public OperationDetailDTO markTopUpPaid(Long id, TopUpPaidRequestDTO request) {
+        User customer = currentUserService.require(Role.CUSTOMER);
+        WalletTransaction transaction = requireOwnTopUp(id, customer);
+        if (transaction.getStatus() != WalletTransactionStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отметить оплату можно только у новой заявки, сейчас она "
+                            + transaction.getStatus().getDescription().toLowerCase());
+        }
+        Transfer transfer = requireTransfer(transaction);
+        transfer.attach(trimToNull(request.getTxId()), requireProofKeys(request.getProofKeys()));
+        saverTransfer.save(transfer);
+        transaction.setStatus(WalletTransactionStatus.SENT);
+        return detail(transaction, transfer);
+    }
+
+    @Override
+    @Transactional
+    public OperationDetailDTO cancelTopUp(Long id) {
+        User customer = currentUserService.require(Role.CUSTOMER);
+        WalletTransaction transaction = requireOwnTopUp(id, customer);
+        if (transaction.getStatus() != WalletTransactionStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отменить можно только заявку, которую вы ещё не оплатили");
+        }
+        Transfer transfer = requireTransfer(transaction);
+        transfer.cancel();
+        saverTransfer.save(transfer);
+        transaction.setStatus(WalletTransactionStatus.CANCELLED);
+        return detail(transaction, transfer);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OperationRowDTO> topUps() {
+        currentUserService.require(Role.FINANCE_MANAGER);
+        return operationReader.rows(getterWalletTransaction.getByType(WalletTransactionType.TOP_UP).stream()
+                .sorted(OPEN_FIRST)
+                .toList());
+    }
+
+    @Override
+    @Transactional
+    public OperationDetailDTO confirmTopUp(Long id) {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
-        User customer = walletService.requireCustomer(userId);
-        Wallet wallet = ledger.lockWallet(customer);
-        WalletTransaction transaction = ledger.post(wallet, WalletTransactionType.TOP_UP, request.getAmountKopecks(),
-                WalletTransactionStatus.SENT, null, actor, trimToNull(request.getComment()));
-        return detail(transaction, sentTransfer(transaction, null, actor, request));
+        WalletTransaction transaction = requireExternal(id);
+        if (transaction.getType() != WalletTransactionType.TOP_UP) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на пополнение");
+        }
+        if (!transaction.getStatus().isOpen()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Заявка уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
+        }
+        Transfer transfer = requireTransfer(transaction);
+        ledger.settle(transaction, WalletTransactionStatus.CONFIRMED);
+        transfer.confirm(actor);
+        saverTransfer.save(transfer);
+        return detail(transaction, transfer);
     }
 
     @Override
@@ -109,7 +178,11 @@ class TransferServiceImpl implements TransferService {
                     "Операция уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
         }
         Transfer transfer = requireTransfer(transaction);
-        ledger.restore(transaction, WalletTransactionStatus.REJECTED);
+        if (transaction.getType().settlesOnConfirm()) {
+            transaction.setStatus(WalletTransactionStatus.REJECTED);
+        } else {
+            ledger.restore(transaction, WalletTransactionStatus.REJECTED);
+        }
         transfer.reject(actor, request.getReason().trim());
         saverTransfer.save(transfer);
         return detail(transaction, transfer);
@@ -123,11 +196,22 @@ class TransferServiceImpl implements TransferService {
     }
 
     private WalletTransaction requireExternal(Long id) {
-        WalletTransaction transaction = getterWalletTransaction.getByIdWithDetails(id)
+        WalletTransaction transaction = getterWalletTransaction.getByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
         if (!transaction.getType().isExternal()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Это внутренняя операция платформы, у неё нет перевода");
+        }
+        return transaction;
+    }
+
+    private WalletTransaction requireOwnTopUp(Long id, User customer) {
+        WalletTransaction transaction = requireExternal(id);
+        if (!Objects.equals(transaction.getWallet().getUser().getId(), customer.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая заявка");
+        }
+        if (transaction.getType() != WalletTransactionType.TOP_UP) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на пополнение");
         }
         return transaction;
     }
@@ -151,12 +235,12 @@ class TransferServiceImpl implements TransferService {
         List<String> proofKeys = keys == null ? List.of()
                 : keys.stream().map(String::trim).filter(key -> !key.isEmpty()).toList();
         if (proofKeys.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Приложите хотя бы один скриншот перевода");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Приложите хотя бы один скриншот или файл перевода");
         }
         for (String key : proofKeys) {
             if (!key.startsWith(FileController.TRANSFER_PROOF_PREFIX + "/") || key.contains("..")) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Ключ скриншота не из загрузки подтверждений переводов: " + key);
+                        "Ключ файла не из загрузки подтверждений переводов: " + key);
             }
         }
         return proofKeys;

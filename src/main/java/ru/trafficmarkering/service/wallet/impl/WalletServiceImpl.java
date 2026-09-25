@@ -105,10 +105,9 @@ class WalletServiceImpl implements WalletService {
     @Transactional
     public OperationDetailDTO confirm(Long id) {
         User customer = currentUserService.require(Role.CUSTOMER);
-        WalletTransaction transaction = requireOwn(id, customer);
-        if (transaction.getType() != WalletTransactionType.TOP_UP
-                && transaction.getType() != WalletTransactionType.WITHDRAWAL) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтверждают только пополнение и вывод");
+        WalletTransaction transaction = requireOwner(lockTransaction(id), customer);
+        if (transaction.getType() != WalletTransactionType.WITHDRAWAL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтверждают только вывод");
         }
         if (transaction.getStatus() != WalletTransactionStatus.SENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -122,6 +121,11 @@ class WalletServiceImpl implements WalletService {
         saverTransfer.save(transfer);
         transaction.setStatus(WalletTransactionStatus.CONFIRMED);
         return operationReader.detail(transaction, transfer);
+    }
+
+    @Override
+    public String topUpTronAddress() {
+        return topUpTronAddress;
     }
 
     @Override
@@ -205,8 +209,16 @@ class WalletServiceImpl implements WalletService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
     }
 
+    private WalletTransaction lockTransaction(Long id) {
+        return getterWalletTransaction.getByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
+    }
+
     private WalletTransaction requireOwn(Long id, User customer) {
-        WalletTransaction transaction = requireTransaction(id);
+        return requireOwner(requireTransaction(id), customer);
+    }
+
+    private WalletTransaction requireOwner(WalletTransaction transaction, User customer) {
         Long ownerId = transaction.getWallet().getUser().getId();
         if (!customer.getRole().isAdmin() && !Objects.equals(ownerId, customer.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая операция");

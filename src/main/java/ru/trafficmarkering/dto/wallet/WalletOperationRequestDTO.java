@@ -17,7 +17,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Пополнение или вывод по кошельку заказчика: деньги уже переведены, финансист прикладывает документы")
+@Schema(description = "Вывод из кошелька заказчика: USDT уже отправлены, финансист прикладывает документы")
 public class WalletOperationRequestDTO {
 
     @NotNull(message = "Сумма обязательна")
@@ -37,7 +37,7 @@ public class WalletOperationRequestDTO {
     private List<@Size(max = 512) String> proofKeys;
 
     @Size(max = 64)
-    @Schema(description = "Адрес TRON заказчика, куда ушли USDT; обязателен для вывода, для пополнения не нужен",
+    @Schema(description = "Адрес TRON заказчика, куда ушли USDT",
             example = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE")
     private String tronAddress;
 

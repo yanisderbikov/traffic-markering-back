@@ -21,4 +21,8 @@ public enum WalletTransactionType {
     public boolean isExternal() {
         return this == TOP_UP || this == WITHDRAWAL || this == PAYOUT;
     }
+
+    public boolean settlesOnConfirm() {
+        return this == TOP_UP;
+    }
 }

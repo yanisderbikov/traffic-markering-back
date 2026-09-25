@@ -12,6 +12,8 @@ public interface GetterWalletTransaction {
 
     Optional<WalletTransaction> getByIdWithDetails(Long id);
 
+    Optional<WalletTransaction> getByIdForUpdate(Long id);
+
     List<WalletTransaction> getByType(WalletTransactionType type);
 
     List<WalletTransaction> getAllWithDetails();

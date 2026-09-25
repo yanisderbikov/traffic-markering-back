@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/finance")
 @RequiredArgsConstructor
-@Tag(name = "Finance", description = "Кабинет менеджера финансов: кошельки заказчиков, пополнения, выводы и выплаты криаторам")
+@Tag(name = "Finance", description = "Кабинет менеджера финансов: кошельки заказчиков, проверка пополнений, выводы и выплаты криаторам")
 public class FinanceController {
 
     private final WalletService walletService;
@@ -79,8 +79,9 @@ public class FinanceController {
     }
 
     @Operation(summary = "Отклонить пополнение, вывод или выплату",
-            description = "Пока операция открыта (PENDING или SENT): деньги возвращаются туда, откуда ушли, "
-                    + "владелец кошелька видит причину. 409, если пополнение уже разошлось по объявлениям",
+            description = "Пока операция открыта (PENDING или SENT): владелец кошелька видит причину. "
+                    + "По выводу и выплате деньги возвращаются в кошелёк; по заявке на пополнение ничего не зачислялось, "
+                    + "она просто закрывается",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/operations/{id}/reject")
     public ResponseEntity<OperationDetailDTO> rejectOperation(@PathVariable("id") Long id,
@@ -88,14 +89,21 @@ public class FinanceController {
         return ResponseEntity.ok(transferService.reject(id, request));
     }
 
-    @Operation(summary = "Пополнить кошелёк заказчика",
-            description = "Заказчик уже перевёл USDT: сумма в копейках, номер транзакции и скриншоты обязательны. "
-                    + "Деньги сразу доступны, операция в SENT ждёт подтверждения заказчика",
+    @Operation(summary = "Заявки заказчиков на пополнение",
+            description = "Короткие строки: кто, сколько, статус; открытые (PENDING, SENT) сверху",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/customers/{userId}/top-up")
-    public ResponseEntity<OperationDetailDTO> topUpWallet(@PathVariable("userId") Long userId,
-                                                          @Valid @RequestBody WalletOperationRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(transferService.topUp(userId, request));
+    @GetMapping("/top-ups")
+    public ResponseEntity<List<OperationRowDTO>> financeTopUps() {
+        return ResponseEntity.ok(transferService.topUps());
+    }
+
+    @Operation(summary = "Подтвердить поступление по заявке на пополнение",
+            description = "Пока заявка открыта (PENDING или SENT): USDT пришли на адрес платформы, "
+                    + "сумма зачисляется на баланс заказчика, заявка переходит в CONFIRMED",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/top-ups/{id}/confirm")
+    public ResponseEntity<OperationDetailDTO> confirmTopUp(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(transferService.confirmTopUp(id));
     }
 
     @Operation(summary = "Вывести заказчику из кошелька",

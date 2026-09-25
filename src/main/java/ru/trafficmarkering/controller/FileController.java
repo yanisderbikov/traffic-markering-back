@@ -34,6 +34,8 @@ public class FileController {
 
     private static final Set<String> ALLOWED_IMAGE_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
+    private static final Set<String> ALLOWED_PROOF_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf");
     private static final Set<String> SCRIPTABLE_MATERIAL_TYPES = Set.of(
             "text/html", "application/xhtml+xml", "image/svg+xml",
             "text/javascript", "application/javascript", "application/x-javascript");
@@ -56,16 +58,16 @@ public class FileController {
         return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
     }
 
-    @Operation(summary = "Ссылка на загрузку скриншота перевода",
-            description = "Для менеджера финансов: presigned PUT-ссылка на скриншот перевода USDT. "
-                    + "Полученный key передаётся в пополнение, вывод заказчику или отправку выплаты криатору",
+    @Operation(summary = "Ссылка на загрузку подтверждения перевода",
+            description = "Presigned PUT-ссылка на скриншот или PDF перевода USDT. Заказчик прикладывает его к своей "
+                    + "заявке на пополнение, менеджер финансов — к выводу заказчику или выплате криатору",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/transfer-proof/presign")
     public ResponseEntity<PresignUploadResponseDTO> presignTransferProof(
             @Valid @RequestBody PresignUploadRequestDTO request) {
-        if (!ALLOWED_IMAGE_TYPES.contains(request.getContentType())) {
+        if (!ALLOWED_PROOF_TYPES.contains(request.getContentType())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Можно загрузить только изображение: JPEG, PNG, WebP или GIF");
+                    "Можно загрузить изображение (JPEG, PNG, WebP, GIF) или PDF");
         }
         FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
                 request.getFilename(), request.getContentType(), TRANSFER_PROOF_PREFIX);

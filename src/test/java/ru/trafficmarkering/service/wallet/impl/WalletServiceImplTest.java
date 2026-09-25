@@ -143,17 +143,17 @@ class WalletServiceImplTest {
         assertThat(saved.getValue().getComment()).contains("Ролик про кофе");
     }
 
-    private WalletTransaction sentTopUp() {
-        return WalletTransaction.builder().id(7L).wallet(wallet).type(WalletTransactionType.TOP_UP)
-                .amountKopecks(500_00L).balanceAfterKopecks(1_000_00L).status(WalletTransactionStatus.SENT).build();
+    private WalletTransaction sentWithdrawal() {
+        return WalletTransaction.builder().id(7L).wallet(wallet).type(WalletTransactionType.WITHDRAWAL)
+                .amountKopecks(-500_00L).balanceAfterKopecks(1_000_00L).status(WalletTransactionStatus.SENT).build();
     }
 
     @Test
-    void confirmClosesTopUpSentByFinance() {
+    void confirmClosesWithdrawalSentByFinance() {
         when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
-        WalletTransaction topUp = sentTopUp();
-        Transfer transfer = Transfer.builder().id(70L).transaction(topUp).txId("tx").processedBy(finance).build();
-        when(getterWalletTransaction.getByIdWithDetails(7L)).thenReturn(Optional.of(topUp));
+        WalletTransaction withdrawal = sentWithdrawal();
+        Transfer transfer = Transfer.builder().id(70L).transaction(withdrawal).txId("tx").processedBy(finance).build();
+        when(getterWalletTransaction.getByIdForUpdate(7L)).thenReturn(Optional.of(withdrawal));
         when(getterTransfer.getByTransactionId(7L)).thenReturn(Optional.of(transfer));
 
         OperationDetailDTO detail = service.confirm(7L);
@@ -171,12 +171,27 @@ class WalletServiceImplTest {
     }
 
     @Test
+    void confirmLeavesTopUpsToFinance() {
+        when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
+        WalletTransaction topUp = WalletTransaction.builder().id(9L).wallet(wallet).type(WalletTransactionType.TOP_UP)
+                .amountKopecks(500_00L).balanceAfterKopecks(1_000_00L).status(WalletTransactionStatus.SENT).build();
+        when(getterWalletTransaction.getByIdForUpdate(9L)).thenReturn(Optional.of(topUp));
+
+        assertThatThrownBy(() -> service.confirm(9L))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(wallet.balance()).isEqualTo(1_000_00L);
+        verify(saverTransfer, never()).save(any());
+    }
+
+    @Test
     void confirmRefusesInternalOperations() {
         when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
         WalletTransaction allocation = WalletTransaction.builder().id(8L).wallet(wallet)
                 .type(WalletTransactionType.ALLOCATION).amountKopecks(-100_00L).balanceAfterKopecks(900_00L)
                 .status(WalletTransactionStatus.DONE).build();
-        when(getterWalletTransaction.getByIdWithDetails(8L)).thenReturn(Optional.of(allocation));
+        when(getterWalletTransaction.getByIdForUpdate(8L)).thenReturn(Optional.of(allocation));
 
         assertThatThrownBy(() -> service.confirm(8L))
                 .isInstanceOf(ResponseStatusException.class)
@@ -189,9 +204,9 @@ class WalletServiceImplTest {
     void confirmRejectsForeignOperation() {
         when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
         User other = User.builder().id(9L).username("other@traffic.ru").name("Другой").role(Role.CUSTOMER).build();
-        WalletTransaction foreign = sentTopUp();
+        WalletTransaction foreign = sentWithdrawal();
         foreign.setWallet(Wallet.builder().id(12L).user(other).balanceKopecks(0L).build());
-        when(getterWalletTransaction.getByIdWithDetails(7L)).thenReturn(Optional.of(foreign));
+        when(getterWalletTransaction.getByIdForUpdate(7L)).thenReturn(Optional.of(foreign));
 
         assertThatThrownBy(() -> service.confirm(7L))
                 .isInstanceOf(ResponseStatusException.class)

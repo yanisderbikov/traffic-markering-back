@@ -21,5 +21,13 @@ public interface WalletLedger {
                            User actor,
                            String comment);
 
+    WalletTransaction defer(Wallet wallet,
+                            WalletTransactionType type,
+                            long signedAmountKopecks,
+                            WalletTransactionStatus status,
+                            User actor);
+
+    void settle(WalletTransaction transaction, WalletTransactionStatus finalStatus);
+
     void restore(WalletTransaction transaction, WalletTransactionStatus finalStatus);
 }
