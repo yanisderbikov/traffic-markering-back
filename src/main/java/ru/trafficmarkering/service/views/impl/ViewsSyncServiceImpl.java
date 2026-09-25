@@ -4,25 +4,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import ru.trafficmarkering.model.application.Application;
-import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
 import ru.trafficmarkering.model.application.Platform;
-import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.repository.GetterApplication;
-import ru.trafficmarkering.repository.SaverApplication;
-import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
-import ru.trafficmarkering.service.fraud.FraudCheckService;
-import ru.trafficmarkering.service.views.VideoMetrics;
 import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.service.views.ViewsSyncService;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -32,11 +26,9 @@ import java.util.stream.Collectors;
 class ViewsSyncServiceImpl implements ViewsSyncService {
 
     private final GetterApplication getterApplication;
-    private final SaverApplication saverApplication;
-    private final SaverViewSnapshot saverViewSnapshot;
     private final ViewCountProviders viewCountProviders;
+    private final ViewsRecorder viewsRecorder;
     private final CampaignAccrualService campaignAccrualService;
-    private final FraudCheckService fraudCheckService;
 
     @Override
     public int syncApproved() {
@@ -51,7 +43,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                         application -> new GroupKey(application.getPlatform(), application.getCreator().getId())));
 
         Instant capturedAt = Instant.now();
-        Map<UUID, Campaign> touched = new LinkedHashMap<>();
+        Set<UUID> touched = new LinkedHashSet<>();
         int captured = 0;
 
         for (Map.Entry<GroupKey, List<Application>> group : groups.entrySet()) {
@@ -79,51 +71,31 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
                 if (fresh == null || fresh.total() < 0) {
                     continue;
                 }
-                VideoMetrics metrics = fresh.metrics();
-                saverViewSnapshot.save(ApplicationViewSnapshot.builder()
-                        .application(application)
-                        .capturedAt(capturedAt)
-                        .views(fresh.total())
-                        .countryViews(fresh.byCountry())
-                        .source(provider.get().source())
-                        .likes(metrics.likes())
-                        .comments(metrics.comments())
-                        .shares(metrics.shares())
-                        .saves(metrics.saves())
-                        .reach(metrics.reach())
-                        .engagedViews(metrics.engagedViews())
-                        .avgWatchSeconds(metrics.avgWatchSeconds())
-                        .avgViewPercentage(metrics.avgViewPercentage())
-                        .trafficSources(metrics.trafficSources())
-                        .build());
+                Optional<ViewsRecorder.Recorded> recorded = viewsRecorder.record(application.getId(), fresh,
+                        provider.get().source(), capturedAt);
+                if (recorded.isEmpty()) {
+                    continue;
+                }
                 captured++;
-                if (metrics.publishedAt() != null && application.getVideoPublishedAt() == null) {
-                    application.setVideoPublishedAt(metrics.publishedAt());
-                }
-
-                long current = application.totalViews();
-                long effective = Math.max(current, fresh.total());
-                boolean geographyChanged = fresh.geographyKnown()
-                        && !Objects.equals(application.getCountryViews(), fresh.byCountry());
-                application.setViews(effective);
-                if (fresh.geographyKnown()) {
-                    application.setCountryViews(fresh.byCountry());
-                }
-                application.setViewsSyncedAt(capturedAt);
-                saverApplication.save(application);
-
-                // Скоринг после каждого замера: свежий снимок уже в базе, история полная
-                boolean fraudChanged = fraudCheckService.check(application);
-                if (effective != current || geographyChanged || fraudChanged) {
-                    touched.put(application.getCampaign().getId(), application.getCampaign());
+                if (recorded.get().accrualAffected()) {
+                    touched.add(recorded.get().campaignId());
                 }
             }
         }
 
-        touched.values().forEach(campaignAccrualService::recalculate);
+        touched.forEach(this::recalculate);
         log.info("Синхронизация просмотров: откликов {}, снимков {}, пересчитано объявлений {}",
                 applications.size(), captured, touched.size());
         return captured;
+    }
+
+    private void recalculate(UUID campaignId) {
+        try {
+            campaignAccrualService.recalculate(campaignId);
+        } catch (RuntimeException e) {
+            log.warn("Не удалось пересчитать начисления объявления {} после синхронизации: {}",
+                    campaignId, e.getMessage());
+        }
     }
 
     private record GroupKey(Platform platform, Long creatorId) {

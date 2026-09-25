@@ -41,7 +41,9 @@ import ru.trafficmarkering.service.wallet.impl.WalletLedgerTestSupport;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -79,6 +81,7 @@ class EarningsServiceImplTest {
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final Wallet wallet = Wallet.builder().id(10L).user(creator).balanceKopecks(7_000_00L).build();
+    private final Map<UUID, Application> lockable = new HashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -92,6 +95,8 @@ class EarningsServiceImplTest {
         });
         when(saverTransfer.save(any(Transfer.class))).thenAnswer(inv -> inv.getArgument(0));
         when(saverApplication.save(any(Application.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(getterApplication.getByIdForUpdate(any()))
+                .thenAnswer(inv -> Optional.ofNullable(lockable.get(inv.<UUID>getArgument(0))));
         when(getterWallet.getByUserId(1L)).thenReturn(Optional.of(wallet));
         when(getterWallet.getByUserIdForUpdate(1L)).thenReturn(Optional.of(wallet));
         when(getterWallet.getByIdForUpdate(10L)).thenReturn(Optional.of(wallet));
@@ -268,6 +273,33 @@ class EarningsServiceImplTest {
         Application settled = application(campaign, 500_00L, 500_00L);
         when(getterApplication.getCreditable()).thenReturn(List.of(settled));
         when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(settled));
+
+        assertThat(service.creditAccrued()).isZero();
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedTakesCreditedAmountFromLockedRowNotFromStaleList() {
+        Campaign campaign = campaign(100_00L);
+        Application stale = application(campaign, 500_00L, 0L);
+        Application locked = Application.builder().id(stale.getId()).campaign(campaign).creator(creator)
+                .status(ApplicationStatus.APPROVED).accruedKopecks(500_00L).creditedKopecks(500_00L).build();
+        when(getterApplication.getByIdForUpdate(stale.getId())).thenReturn(Optional.of(locked));
+        when(getterApplication.getCreditable()).thenReturn(List.of(stale));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(stale));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedSkipsApplicationDeletedBeforeLock() {
+        Campaign campaign = campaign(100_00L);
+        Application gone = application(campaign, 500_00L, 0L);
+        when(getterApplication.getByIdForUpdate(gone.getId())).thenReturn(Optional.empty());
+        when(getterApplication.getCreditable()).thenReturn(List.of(gone));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(gone));
 
         assertThat(service.creditAccrued()).isZero();
         verify(saverWalletTransaction, never()).save(any());
@@ -452,7 +484,9 @@ class EarningsServiceImplTest {
     }
 
     private Application application(Campaign campaign, long accruedKopecks, long creditedKopecks) {
-        return Application.builder().id(UUID.randomUUID()).campaign(campaign).creator(creator)
+        Application application = Application.builder().id(UUID.randomUUID()).campaign(campaign).creator(creator)
                 .status(ApplicationStatus.APPROVED).accruedKopecks(accruedKopecks).creditedKopecks(creditedKopecks).build();
+        lockable.put(application.getId(), application);
+        return application;
     }
 }

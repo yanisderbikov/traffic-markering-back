@@ -43,6 +43,9 @@ public class Application {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
+    @Version
+    private Long version;
+
     @Column(name = "public_id", nullable = false, unique = true, length = 16)
     private String publicId;
 

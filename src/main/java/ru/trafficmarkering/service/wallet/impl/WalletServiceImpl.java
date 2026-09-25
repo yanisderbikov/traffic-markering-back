@@ -76,7 +76,7 @@ class WalletServiceImpl implements WalletService {
         this.getterCustomerProfile = getterCustomerProfile;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
-        this.topUpTronAddress = trimToNull(topUpTronAddress);
+        this.topUpTronAddress = requireTronOrNull(trimToNull(topUpTronAddress));
     }
 
     @Override
@@ -258,5 +258,13 @@ class WalletServiceImpl implements WalletService {
             return null;
         }
         return value.trim();
+    }
+
+    private String requireTronOrNull(String address) {
+        if (address != null && !Transfer.isTronAddress(address)) {
+            throw new IllegalStateException("wallet.top-up-tron-address (TOP_UP_TRON_ADDRESS) должен быть адресом TRON: "
+                    + "T и ещё 33 символа base58, сейчас «" + address + "»");
+        }
+        return address;
     }
 }

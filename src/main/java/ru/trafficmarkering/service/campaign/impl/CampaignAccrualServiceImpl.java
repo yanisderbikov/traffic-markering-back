@@ -8,6 +8,7 @@ import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.fraud.TrustLevel;
 import ru.trafficmarkering.repository.GetterApplication;
+import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
@@ -17,6 +18,7 @@ import ru.trafficmarkering.util.PayoutCalculator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Отклики читаем через репозиторий, а не через ApplicationService: пересчёт зовётся
@@ -31,6 +33,7 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
     private final SaverCampaign saverCampaign;
     private final CreatorTrustService creatorTrustService;
     private final FraudProperties fraudProperties;
+    private final GetterCampaign getterCampaign;
 
     @Override
     @Transactional
@@ -63,6 +66,12 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
 
         campaign.setSpentKopecks(spent);
         saverCampaign.save(campaign);
+    }
+
+    @Override
+    @Transactional
+    public void recalculate(UUID campaignId) {
+        getterCampaign.getById(campaignId).ifPresent(this::recalculate);
     }
 
     /** Новичкам и ограниченным криаторам оплачиваемые просмотры одного ролика режутся потолком. */

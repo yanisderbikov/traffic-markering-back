@@ -55,11 +55,9 @@ class WalletServiceImplTest {
     private final SaverTransfer saverTransfer = mock(SaverTransfer.class);
     private final FileStorage fileStorage = mock(FileStorage.class);
 
-    private final WalletServiceImpl service = new WalletServiceImpl(
-            new WalletLedgerImpl(getterWallet, saverWallet, saverWalletTransaction),
-            new OperationReaderImpl(getterTransfer, fileStorage),
-            getterWallet, getterWalletTransaction, getterTransfer, saverTransfer, getterCampaign,
-            getterCustomerProfile, userRepository, currentUserService, " TPlatformAddress00000000000000000000 ");
+    private static final String PLATFORM_TRON = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE";
+
+    private final WalletServiceImpl service = serviceWith(" " + PLATFORM_TRON + " ");
 
     private final User customer = User.builder().id(1L).username("customer@traffic.ru").name("Заказчик").role(Role.CUSTOMER).build();
     private final User finance = User.builder().id(2L).username("money@traffic.ru").name("Финансист").role(Role.FINANCE_MANAGER).build();
@@ -75,6 +73,26 @@ class WalletServiceImplTest {
         when(getterCampaign.getByCustomerId(1L)).thenReturn(List.of());
         when(getterCustomerProfile.getByUserId(1L)).thenReturn(Optional.empty());
         when(userRepository.findById(1L)).thenReturn(Optional.of(customer));
+    }
+
+    private WalletServiceImpl serviceWith(String topUpTronAddress) {
+        return new WalletServiceImpl(
+                new WalletLedgerImpl(getterWallet, saverWallet, saverWalletTransaction),
+                new OperationReaderImpl(getterTransfer, fileStorage),
+                getterWallet, getterWalletTransaction, getterTransfer, saverTransfer, getterCampaign,
+                getterCustomerProfile, userRepository, currentUserService, topUpTronAddress);
+    }
+
+    @Test
+    void blankTopUpAddressMeansNotConfigured() {
+        assertThat(serviceWith("  ").topUpTronAddress()).isNull();
+    }
+
+    @Test
+    void rejectsTopUpAddressThatIsNotTron() {
+        assertThatThrownBy(() -> serviceWith("rGG1mB1hpOPxGWD4q6Da6qEVDRkNRw7F8b7u3csbor34ff20phKg7KsBclVY9gyW0y"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("TOP_UP_TRON_ADDRESS");
     }
 
     private Campaign campaign(long budgetKopecks) {
@@ -288,6 +306,6 @@ class WalletServiceImplTest {
         assertThat(dto.allocatedKopecks()).isEqualTo(500_00L);
         assertThat(dto.spentKopecks()).isEqualTo(120_00L);
         assertThat(dto.customerEmail()).isEqualTo("customer@traffic.ru");
-        assertThat(dto.topUpTronAddress()).isEqualTo("TPlatformAddress00000000000000000000");
+        assertThat(dto.topUpTronAddress()).isEqualTo(PLATFORM_TRON);
     }
 }

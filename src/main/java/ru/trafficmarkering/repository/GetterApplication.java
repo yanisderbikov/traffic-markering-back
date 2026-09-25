@@ -20,6 +20,8 @@ public interface GetterApplication {
 
     Optional<Application> getById(UUID id);
 
+    Optional<Application> getByIdForUpdate(UUID id);
+
     /** Отклики криатора, новые сверху. */
     List<Application> getByCreatorId(Long creatorId);
 

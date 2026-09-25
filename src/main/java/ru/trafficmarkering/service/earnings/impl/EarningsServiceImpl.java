@@ -184,8 +184,9 @@ class EarningsServiceImpl implements EarningsService {
             }
             Map<UUID, Long> accruedByCampaign = accruedByCampaign(creator);
             Wallet wallet = null;
-            for (Application application : applications) {
-                long delta = application.uncreditedKopecks();
+            for (Application candidate : applications) {
+                Application application = getterApplication.getByIdForUpdate(candidate.getId()).orElse(null);
+                long delta = application != null ? application.uncreditedKopecks() : 0L;
                 if (delta <= 0) {
                     continue;
                 }

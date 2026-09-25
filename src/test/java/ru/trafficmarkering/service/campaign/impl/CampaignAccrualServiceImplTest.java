@@ -13,12 +13,14 @@ import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.repository.GetterApplication;
+import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,10 +37,11 @@ class CampaignAccrualServiceImplTest {
     private final SaverCampaign saverCampaign = mock(SaverCampaign.class);
     private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
     private final FraudProperties fraudProperties = new FraudProperties();
+    private final GetterCampaign getterCampaign = mock(GetterCampaign.class);
 
     private final CampaignAccrualService service =
             new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign,
-                    creatorTrustService, fraudProperties);
+                    creatorTrustService, fraudProperties, getterCampaign);
 
     private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
 
@@ -75,6 +78,29 @@ class CampaignAccrualServiceImplTest {
         service.recalculate(campaign);
 
         assertEquals(700_00L, suspicious.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculateById_usesFreshlyLoadedCampaign() {
+        Campaign campaign = campaign(350_00, 1_000_00);
+        Application honest = application(ApplicationStatus.APPROVED, 2_000, 0);
+        when(getterCampaign.getById(campaign.getId())).thenReturn(Optional.of(campaign));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(honest));
+
+        service.recalculate(campaign.getId());
+
+        assertEquals(700_00L, campaign.getSpentKopecks().longValue());
+        verify(saverCampaign).save(campaign);
+    }
+
+    @Test
+    void recalculateById_ignoresDeletedCampaign() {
+        UUID deleted = UUID.randomUUID();
+        when(getterCampaign.getById(deleted)).thenReturn(Optional.empty());
+
+        service.recalculate(deleted);
+
+        verify(saverCampaign, never()).save(any());
     }
 
     @Test

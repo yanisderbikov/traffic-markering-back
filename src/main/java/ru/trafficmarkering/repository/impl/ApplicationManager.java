@@ -1,5 +1,7 @@
 package ru.trafficmarkering.repository.impl;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
@@ -22,6 +24,7 @@ import java.util.UUID;
 class ApplicationManager implements GetterApplication, SaverApplication, ApplicationDeleter {
 
     private final ApplicationRepo applicationRepo;
+    private final EntityManager entityManager;
 
     @Override
     public List<Application> getByCampaignIdOrderByCreatedAt(UUID campaignId) {
@@ -37,6 +40,24 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     public Optional<Application> getById(UUID id) {
         try {
             return applicationRepo.findById(id);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Application> getByIdForUpdate(UUID id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        try {
+            Application application = entityManager.find(Application.class, id);
+            if (application == null) {
+                return Optional.empty();
+            }
+            entityManager.refresh(application, LockModeType.PESSIMISTIC_WRITE);
+            return Optional.of(application);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

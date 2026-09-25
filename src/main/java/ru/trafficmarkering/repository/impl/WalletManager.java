@@ -41,7 +41,9 @@ class WalletManager implements GetterWallet, SaverWallet {
             return Optional.empty();
         }
         try {
-            return walletRepo.findByUserIdForUpdate(userId);
+            Optional<Wallet> wallet = walletRepo.findByUserId(userId);
+            wallet.ifPresent(found -> entityManager.refresh(found, LockModeType.PESSIMISTIC_WRITE));
+            return wallet;
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

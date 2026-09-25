@@ -45,6 +45,9 @@ public class Campaign {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
+    @Version
+    private Long version;
+
     /** Короткий номер для публичных ссылок: внутренний UUID наружу не отдаём */
     @Column(name = "public_id", nullable = false, unique = true, length = 16)
     private String publicId;
