@@ -46,7 +46,7 @@ public class WalletController {
     }
 
     @Operation(summary = "Операции по моему кошельку",
-            description = "Короткие строки: что за операция, откуда → куда, сумма и статус; подробности — по id",
+            description = "Короткие строки: что за операция, откуда → куда, сумма и статус; подробности — по publicId",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/operations")
     public ResponseEntity<List<OperationRowDTO>> myWalletOperations() {
@@ -57,17 +57,17 @@ public class WalletController {
             description = "Проводка с объявлением, комментарием, кто провёл и остатком после; для пополнения и вывода — "
                     + "ещё перевод: адрес TRON, номер транзакции, скриншоты и файлы",
             security = @SecurityRequirement(name = "Bearer"))
-    @GetMapping("/operations/{id}")
-    public ResponseEntity<OperationDetailDTO> myWalletOperation(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(walletService.myOperation(id));
+    @GetMapping("/operations/{publicId}")
+    public ResponseEntity<OperationDetailDTO> myWalletOperation(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(walletService.myOperation(publicId));
     }
 
     @Operation(summary = "Подтвердить вывод",
             description = "Только для вывода в статусе SENT: заказчик проверил поступление USDT и подтверждает его",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/operations/{id}/confirm")
-    public ResponseEntity<OperationDetailDTO> confirmWalletOperation(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(walletService.confirm(id));
+    @PostMapping("/operations/{publicId}/confirm")
+    public ResponseEntity<OperationDetailDTO> confirmWalletOperation(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(walletService.confirm(publicId));
     }
 
     @Operation(summary = "Заявка на пополнение",
@@ -84,18 +84,18 @@ public class WalletController {
             description = "Только из PENDING: скриншоты или файлы перевода обязательны, номер транзакции — по желанию. "
                     + "Заявка переходит в SENT и ждёт проверки финансиста",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/top-ups/{id}/paid")
-    public ResponseEntity<OperationDetailDTO> markTopUpPaid(@PathVariable("id") Long id,
+    @PostMapping("/top-ups/{publicId}/paid")
+    public ResponseEntity<OperationDetailDTO> markTopUpPaid(@PathVariable("publicId") String publicId,
                                                             @Valid @RequestBody TopUpPaidRequestDTO request) {
-        return ResponseEntity.ok(transferService.markTopUpPaid(id, request));
+        return ResponseEntity.ok(transferService.markTopUpPaid(publicId, request));
     }
 
     @Operation(summary = "Отменить заявку на пополнение",
             description = "Только пока заявка не оплачена (PENDING)",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/top-ups/{id}/cancel")
-    public ResponseEntity<OperationDetailDTO> cancelTopUp(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(transferService.cancelTopUp(id));
+    @PostMapping("/top-ups/{publicId}/cancel")
+    public ResponseEntity<OperationDetailDTO> cancelTopUp(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(transferService.cancelTopUp(publicId));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

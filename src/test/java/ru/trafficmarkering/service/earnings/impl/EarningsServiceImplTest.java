@@ -73,7 +73,7 @@ class EarningsServiceImplTest {
     private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
     private final FraudProperties fraudProperties = new FraudProperties();
 
-    private final WalletLedger ledger = WalletLedgerTestSupport.ledger(getterWallet, saverWallet, saverWalletTransaction);
+    private final WalletLedger ledger = WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction);
     private final EarningsServiceImpl service = new EarningsServiceImpl(ledger,
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage), getterWalletTransaction,
             getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService,
@@ -108,7 +108,7 @@ class EarningsServiceImplTest {
     }
 
     private WalletTransaction payout(long amount, WalletTransactionStatus status) {
-        return WalletTransaction.builder().id(100L).wallet(wallet).type(WalletTransactionType.PAYOUT)
+        return WalletTransaction.builder().id(100L).publicId("PO000100").wallet(wallet).type(WalletTransactionType.PAYOUT)
                 .amountKopecks(-amount).balanceAfterKopecks(wallet.balance()).status(status)
                 .comment("USDT TRC-20 → " + TRON).createdAt(Instant.now()).build();
     }
@@ -162,16 +162,16 @@ class EarningsServiceImplTest {
     void cancelPayoutReturnsMoneyOnlyWhilePending() {
         WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
         wallet.setBalanceKopecks(2_000_00L);
-        when(getterWalletTransaction.getByIdForUpdate(100L)).thenReturn(Optional.of(pending));
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(pending));
         when(getterTransfer.getByTransactionId(100L))
                 .thenReturn(Optional.of(Transfer.builder().transaction(pending).tronAddress(TRON).build()));
 
-        OperationDetailDTO detail = service.cancelPayout(100L);
+        OperationDetailDTO detail = service.cancelPayout("PO000100");
 
         assertThat(detail.transaction().status()).isEqualTo("CANCELLED");
         assertThat(wallet.balance()).isEqualTo(7_000_00L);
 
-        assertThatThrownBy(() -> service.cancelPayout(100L))
+        assertThatThrownBy(() -> service.cancelPayout("PO000100"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -180,9 +180,9 @@ class EarningsServiceImplTest {
     @Test
     void confirmPayoutRequiresSentStatus() {
         WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
-        when(getterWalletTransaction.getByIdForUpdate(100L)).thenReturn(Optional.of(pending));
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(pending));
 
-        assertThatThrownBy(() -> service.confirmPayout(100L))
+        assertThatThrownBy(() -> service.confirmPayout("PO000100"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -191,7 +191,7 @@ class EarningsServiceImplTest {
         Transfer transfer = Transfer.builder().transaction(pending).tronAddress(TRON).build();
         when(getterTransfer.getByTransactionId(100L)).thenReturn(Optional.of(transfer));
 
-        OperationDetailDTO detail = service.confirmPayout(100L);
+        OperationDetailDTO detail = service.confirmPayout("PO000100");
 
         assertThat(detail.transaction().status()).isEqualTo("CONFIRMED");
         assertThat(transfer.getConfirmedAt()).isNotNull();
@@ -199,16 +199,21 @@ class EarningsServiceImplTest {
     }
 
     @Test
-    void foreignOperationIsForbidden() {
+    void foreignOperationLooksMissing() {
         User other = User.builder().id(2L).username("other@traffic.ru").name("Кто-то").role(Role.CREATOR).build();
         WalletTransaction foreign = payout(5_000_00L, WalletTransactionStatus.PENDING);
         foreign.setWallet(Wallet.builder().id(11L).user(other).balanceKopecks(0L).build());
-        when(getterWalletTransaction.getByIdWithDetails(100L)).thenReturn(Optional.of(foreign));
+        when(getterWalletTransaction.getByPublicIdWithDetails("PO000100")).thenReturn(Optional.of(foreign));
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.myOperation(100L))
+        assertThatThrownBy(() -> service.myOperation("PO000100"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
-                .isEqualTo(HttpStatus.FORBIDDEN);
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThatThrownBy(() -> service.cancelPayout("PO000100"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test

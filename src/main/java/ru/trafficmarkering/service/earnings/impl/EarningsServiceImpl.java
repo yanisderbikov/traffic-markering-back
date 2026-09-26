@@ -43,8 +43,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -107,9 +105,11 @@ class EarningsServiceImpl implements EarningsService {
 
     @Override
     @Transactional(readOnly = true)
-    public OperationDetailDTO myOperation(Long id) {
+    public OperationDetailDTO myOperation(String publicId) {
         User creator = currentUserService.require(Role.CREATOR);
-        WalletTransaction transaction = requireOwn(id, creator);
+        WalletTransaction transaction = getterWalletTransaction.getByPublicIdWithDetails(publicId)
+                .filter(found -> found.isVisibleTo(creator))
+                .orElseThrow(() -> notFound(publicId));
         return detail(transaction);
     }
 
@@ -135,9 +135,9 @@ class EarningsServiceImpl implements EarningsService {
 
     @Override
     @Transactional
-    public OperationDetailDTO confirmPayout(Long id) {
+    public OperationDetailDTO confirmPayout(String publicId) {
         User creator = currentUserService.require(Role.CREATOR);
-        WalletTransaction transaction = requireOwnPayout(id, creator);
+        WalletTransaction transaction = requireOwnPayout(publicId, creator);
         if (transaction.getStatus() != WalletTransactionStatus.SENT) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Подтвердить можно только выплату, которую финансист уже отправил");
@@ -151,9 +151,9 @@ class EarningsServiceImpl implements EarningsService {
 
     @Override
     @Transactional
-    public OperationDetailDTO cancelPayout(Long id) {
+    public OperationDetailDTO cancelPayout(String publicId) {
         User creator = currentUserService.require(Role.CREATOR);
-        WalletTransaction transaction = requireOwnPayout(id, creator);
+        WalletTransaction transaction = requireOwnPayout(publicId, creator);
         if (transaction.getStatus() != WalletTransactionStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отменить можно только заявку, которую финансист ещё не отправил");
@@ -261,32 +261,24 @@ class EarningsServiceImpl implements EarningsService {
                         Collectors.summingLong(Application::accrued)));
     }
 
-    private WalletTransaction requireOwn(Long id, User creator) {
-        return requireOwner(getterWalletTransaction.getByIdWithDetails(id), id, creator);
-    }
-
-    private WalletTransaction requireOwnPayout(Long id, User creator) {
-        WalletTransaction transaction = requireOwner(getterWalletTransaction.getByIdForUpdate(id), id, creator);
+    private WalletTransaction requireOwnPayout(String publicId, User creator) {
+        WalletTransaction transaction = getterWalletTransaction.getByPublicIdForUpdate(publicId)
+                .filter(found -> found.belongsTo(creator))
+                .orElseThrow(() -> notFound(publicId));
         if (transaction.getType() != WalletTransactionType.PAYOUT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на вывод");
         }
         return transaction;
     }
 
-    private WalletTransaction requireOwner(Optional<WalletTransaction> found, Long id, User creator) {
-        WalletTransaction transaction = found
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
-        Long ownerId = transaction.getWallet().getUser().getId();
-        if (!creator.getRole().isAdmin() && !Objects.equals(ownerId, creator.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая операция");
-        }
-        return transaction;
+    private ResponseStatusException notFound(String publicId) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + publicId);
     }
 
     private Transfer requireTransfer(WalletTransaction transaction) {
         return getterTransfer.getByTransactionId(transaction.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Перевод не найден для операции " + transaction.getId()));
+                        "Перевод не найден для операции " + transaction.getPublicId()));
     }
 
     private OperationDetailDTO detail(WalletTransaction transaction) {

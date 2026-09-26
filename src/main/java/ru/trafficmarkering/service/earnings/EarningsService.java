@@ -13,13 +13,13 @@ public interface EarningsService {
 
     List<OperationRowDTO> myOperations();
 
-    OperationDetailDTO myOperation(Long id);
+    OperationDetailDTO myOperation(String publicId);
 
     OperationDetailDTO requestPayout(PayoutCreateRequestDTO request);
 
-    OperationDetailDTO confirmPayout(Long id);
+    OperationDetailDTO confirmPayout(String publicId);
 
-    OperationDetailDTO cancelPayout(Long id);
+    OperationDetailDTO cancelPayout(String publicId);
 
     int creditAccrued();
 }

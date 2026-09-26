@@ -23,8 +23,13 @@ interface WalletTransactionRepo extends JpaRepository<WalletTransaction, Long> {
     List<WalletTransaction> findAllWithDetails();
 
     @Query("select t from WalletTransaction t join fetch t.wallet w join fetch w.user "
-            + "left join fetch t.campaign left join fetch t.actor where t.id = :id")
-    Optional<WalletTransaction> findByIdWithDetails(@Param("id") Long id);
+            + "left join fetch t.campaign left join fetch t.actor where t.publicId = :publicId")
+    Optional<WalletTransaction> findByPublicIdWithDetails(@Param("publicId") String publicId);
+
+    @Query("select t.id from WalletTransaction t where t.publicId = :publicId")
+    Optional<Long> findIdByPublicId(@Param("publicId") String publicId);
+
+    boolean existsByPublicId(String publicId);
 
     @Query("select t from WalletTransaction t join fetch t.wallet w join fetch w.user "
             + "left join fetch t.campaign left join fetch t.actor "

@@ -35,12 +35,12 @@ class WalletTransactionManager implements GetterWalletTransaction, SaverWalletTr
     }
 
     @Override
-    public Optional<WalletTransaction> getByIdWithDetails(Long id) {
-        if (id == null) {
+    public Optional<WalletTransaction> getByPublicIdWithDetails(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
             return Optional.empty();
         }
         try {
-            return walletTransactionRepo.findByIdWithDetails(id);
+            return walletTransactionRepo.findByPublicIdWithDetails(publicId.trim());
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
@@ -48,17 +48,31 @@ class WalletTransactionManager implements GetterWalletTransaction, SaverWalletTr
     }
 
     @Override
-    public Optional<WalletTransaction> getByIdForUpdate(Long id) {
-        if (id == null) {
+    public Optional<WalletTransaction> getByPublicIdForUpdate(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
             return Optional.empty();
         }
         try {
+            Long id = walletTransactionRepo.findIdByPublicId(publicId.trim()).orElse(null);
+            if (id == null) {
+                return Optional.empty();
+            }
             WalletTransaction transaction = entityManager.find(WalletTransaction.class, id);
             if (transaction == null) {
                 return Optional.empty();
             }
             entityManager.refresh(transaction, LockModeType.PESSIMISTIC_WRITE);
             return Optional.of(transaction);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public boolean existsByPublicId(String publicId) {
+        try {
+            return walletTransactionRepo.existsByPublicId(publicId);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

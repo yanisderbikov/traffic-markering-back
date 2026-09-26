@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Schema(description = "Операция по кошельку; сумма со знаком относительно свободных средств")
 public record WalletTransactionDTO(
-        Long id,
+        @Schema(description = "Публичный номер операции для ссылок", example = "K7Q2M9XA") String publicId,
         @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT") String type,
         @Schema(description = "Человекочитаемый тип", example = "Пополнение") String typeDescription,
         @Schema(description = "Сумма в копейках: плюс — деньги пришли в кошелёк, минус — ушли") Long amountKopecks,
@@ -33,7 +33,7 @@ public record WalletTransactionDTO(
         User owner = transaction.getWallet() != null ? transaction.getWallet().getUser() : null;
         MoneyFlowDTO flow = MoneyFlowDTO.of(transaction, transfer);
         return new WalletTransactionDTO(
-                transaction.getId(),
+                transaction.getPublicId(),
                 transaction.getType() != null ? transaction.getType().name() : null,
                 transaction.getType() != null ? transaction.getType().getDescription() : null,
                 transaction.getAmountKopecks(),

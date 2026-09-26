@@ -11,10 +11,12 @@ import ru.trafficmarkering.model.wallet.WalletTransaction;
 import ru.trafficmarkering.model.wallet.WalletTransactionStatus;
 import ru.trafficmarkering.model.wallet.WalletTransactionType;
 import ru.trafficmarkering.repository.GetterWallet;
+import ru.trafficmarkering.repository.GetterWalletTransaction;
 import ru.trafficmarkering.repository.SaverWallet;
 import ru.trafficmarkering.repository.SaverWalletTransaction;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.util.MoneyUtil;
+import ru.trafficmarkering.util.PublicIdGenerator;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ class WalletLedgerImpl implements WalletLedger {
 
     private final GetterWallet getterWallet;
     private final SaverWallet saverWallet;
+    private final GetterWalletTransaction getterWalletTransaction;
     private final SaverWalletTransaction saverWalletTransaction;
 
     @Override
@@ -46,6 +49,7 @@ class WalletLedgerImpl implements WalletLedger {
                                   String comment) {
         long next = apply(wallet, signedAmountKopecks);
         return saverWalletTransaction.save(WalletTransaction.builder()
+                .publicId(PublicIdGenerator.generateUnique(getterWalletTransaction::existsByPublicId))
                 .wallet(wallet)
                 .type(type)
                 .amountKopecks(signedAmountKopecks)
@@ -64,6 +68,7 @@ class WalletLedgerImpl implements WalletLedger {
                                    WalletTransactionStatus status,
                                    User actor) {
         return saverWalletTransaction.save(WalletTransaction.builder()
+                .publicId(PublicIdGenerator.generateUnique(getterWalletTransaction::existsByPublicId))
                 .wallet(wallet)
                 .type(type)
                 .amountKopecks(signedAmountKopecks)
@@ -103,7 +108,7 @@ class WalletLedgerImpl implements WalletLedger {
     private Wallet lockWalletOf(WalletTransaction transaction) {
         return getterWallet.getByIdForUpdate(transaction.getWallet().getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Кошелёк не найден для операции " + transaction.getId()));
+                        "Кошелёк не найден для операции " + transaction.getPublicId()));
     }
 
     private long apply(Wallet wallet, long signedAmountKopecks) {

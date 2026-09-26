@@ -96,16 +96,23 @@ class WalletServiceImpl implements WalletService {
 
     @Override
     @Transactional(readOnly = true)
-    public OperationDetailDTO myOperation(Long id) {
+    public OperationDetailDTO myOperation(String publicId) {
         User customer = currentUserService.require(Role.CUSTOMER);
-        return operationReader.detail(requireOwn(id, customer));
+        WalletTransaction transaction = requireTransaction(publicId);
+        if (!transaction.isVisibleTo(customer)) {
+            throw notFound(publicId);
+        }
+        return operationReader.detail(transaction);
     }
 
     @Override
     @Transactional
-    public OperationDetailDTO confirm(Long id) {
+    public OperationDetailDTO confirm(String publicId) {
         User customer = currentUserService.require(Role.CUSTOMER);
-        WalletTransaction transaction = requireOwner(lockTransaction(id), customer);
+        WalletTransaction transaction = lockTransaction(publicId);
+        if (!transaction.belongsTo(customer)) {
+            throw notFound(publicId);
+        }
         if (transaction.getType() != WalletTransactionType.WITHDRAWAL) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтверждают только вывод");
         }
@@ -116,7 +123,7 @@ class WalletServiceImpl implements WalletService {
         }
         Transfer transfer = getterTransfer.getByTransactionId(transaction.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Перевод не найден для операции " + transaction.getId()));
+                        "Перевод не найден для операции " + transaction.getPublicId()));
         transfer.confirm();
         saverTransfer.save(transfer);
         transaction.setStatus(WalletTransactionStatus.CONFIRMED);
@@ -173,9 +180,9 @@ class WalletServiceImpl implements WalletService {
 
     @Override
     @Transactional(readOnly = true)
-    public OperationDetailDTO operation(Long id) {
+    public OperationDetailDTO operation(String publicId) {
         currentUserService.require(Role.FINANCE_MANAGER);
-        return operationReader.detail(requireTransaction(id));
+        return operationReader.detail(requireTransaction(publicId));
     }
 
     @Override
@@ -204,26 +211,16 @@ class WalletServiceImpl implements WalletService {
                 "Удалено объявление «" + campaign.displayTitle() + "»");
     }
 
-    private WalletTransaction requireTransaction(Long id) {
-        return getterWalletTransaction.getByIdWithDetails(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
+    private WalletTransaction requireTransaction(String publicId) {
+        return getterWalletTransaction.getByPublicIdWithDetails(publicId).orElseThrow(() -> notFound(publicId));
     }
 
-    private WalletTransaction lockTransaction(Long id) {
-        return getterWalletTransaction.getByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
+    private WalletTransaction lockTransaction(String publicId) {
+        return getterWalletTransaction.getByPublicIdForUpdate(publicId).orElseThrow(() -> notFound(publicId));
     }
 
-    private WalletTransaction requireOwn(Long id, User customer) {
-        return requireOwner(requireTransaction(id), customer);
-    }
-
-    private WalletTransaction requireOwner(WalletTransaction transaction, User customer) {
-        Long ownerId = transaction.getWallet().getUser().getId();
-        if (!customer.getRole().isAdmin() && !Objects.equals(ownerId, customer.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая операция");
-        }
-        return transaction;
+    private ResponseStatusException notFound(String publicId) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + publicId);
     }
 
     @Override

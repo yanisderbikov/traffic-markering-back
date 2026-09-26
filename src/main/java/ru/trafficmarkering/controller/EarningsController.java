@@ -43,7 +43,7 @@ public class EarningsController {
     }
 
     @Operation(summary = "Мои операции",
-            description = "Короткие строки: что за операция, сумма и статус; подробности — по id",
+            description = "Короткие строки: что за операция, сумма и статус; подробности — по publicId",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/operations")
     public ResponseEntity<List<OperationRowDTO>> myOperations() {
@@ -53,9 +53,9 @@ public class EarningsController {
     @Operation(summary = "Операция целиком",
             description = "Проводка и, для вывода, заявка: адрес, скриншоты и комментарий финансиста, причина отказа",
             security = @SecurityRequirement(name = "Bearer"))
-    @GetMapping("/operations/{id}")
-    public ResponseEntity<OperationDetailDTO> myOperation(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(earningsService.myOperation(id));
+    @GetMapping("/operations/{publicId}")
+    public ResponseEntity<OperationDetailDTO> myOperation(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(earningsService.myOperation(publicId));
     }
 
     @Operation(summary = "Заявка на вывод",
@@ -70,17 +70,17 @@ public class EarningsController {
     @Operation(summary = "Подтвердить получение",
             description = "Только для заявки в статусе SENT: криатор увидел USDT на своём кошельке",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/payouts/{id}/confirm")
-    public ResponseEntity<OperationDetailDTO> confirmPayout(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(earningsService.confirmPayout(id));
+    @PostMapping("/payouts/{publicId}/confirm")
+    public ResponseEntity<OperationDetailDTO> confirmPayout(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(earningsService.confirmPayout(publicId));
     }
 
     @Operation(summary = "Отменить заявку",
             description = "Только пока финансист её не отправил (PENDING); деньги возвращаются в доступные",
             security = @SecurityRequirement(name = "Bearer"))
-    @PostMapping("/payouts/{id}/cancel")
-    public ResponseEntity<OperationDetailDTO> cancelPayout(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(earningsService.cancelPayout(id));
+    @PostMapping("/payouts/{publicId}/cancel")
+    public ResponseEntity<OperationDetailDTO> cancelPayout(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(earningsService.cancelPayout(publicId));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

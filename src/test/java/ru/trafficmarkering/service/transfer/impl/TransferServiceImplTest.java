@@ -58,7 +58,7 @@ class TransferServiceImplTest {
     private final FileStorage fileStorage = mock(FileStorage.class);
 
     private final TransferServiceImpl service = new TransferServiceImpl(
-            WalletLedgerTestSupport.ledger(getterWallet, saverWallet, saverWalletTransaction),
+            WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction),
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage),
             getterWalletTransaction, getterTransfer, saverTransfer, walletService, currentUserService);
 
@@ -67,7 +67,7 @@ class TransferServiceImplTest {
     private final User finance = User.builder().id(2L).username("money@traffic.ru").name("Маша").role(Role.FINANCE_MANAGER).build();
     private final Wallet creatorWallet = Wallet.builder().id(10L).user(creator).balanceKopecks(2_000_00L).build();
     private final Wallet customerWallet = Wallet.builder().id(11L).user(customer).balanceKopecks(1_000_00L).build();
-    private final WalletTransaction pending = WalletTransaction.builder().id(100L).wallet(creatorWallet)
+    private final WalletTransaction pending = WalletTransaction.builder().id(100L).publicId("PO000100").wallet(creatorWallet)
             .type(WalletTransactionType.PAYOUT).amountKopecks(-5_000_00L).balanceAfterKopecks(2_000_00L)
             .status(WalletTransactionStatus.PENDING).createdAt(Instant.now()).build();
     private final Transfer payout = Transfer.builder().id(7L).transaction(pending).tronAddress(TRON).build();
@@ -92,7 +92,7 @@ class TransferServiceImplTest {
         when(getterWallet.getByUserId(3L)).thenReturn(Optional.of(customerWallet));
         when(getterWallet.getByIdForUpdate(10L)).thenReturn(Optional.of(creatorWallet));
         when(getterWallet.getByIdForUpdate(11L)).thenReturn(Optional.of(customerWallet));
-        when(getterWalletTransaction.getByIdForUpdate(100L)).thenReturn(Optional.of(pending));
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(pending));
         when(getterTransfer.getByTransactionId(100L)).thenReturn(Optional.of(payout));
         when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
     }
@@ -102,10 +102,10 @@ class TransferServiceImplTest {
     }
 
     private WalletTransaction topUp(WalletTransactionStatus status) {
-        WalletTransaction topUp = WalletTransaction.builder().id(300L).wallet(customerWallet)
+        WalletTransaction topUp = WalletTransaction.builder().id(300L).publicId("TU000300").wallet(customerWallet)
                 .type(WalletTransactionType.TOP_UP).amountKopecks(800_00L).balanceAfterKopecks(1_000_00L)
                 .status(status).actor(customer).createdAt(Instant.now()).build();
-        when(getterWalletTransaction.getByIdForUpdate(300L)).thenReturn(Optional.of(topUp));
+        when(getterWalletTransaction.getByPublicIdForUpdate("TU000300")).thenReturn(Optional.of(topUp));
         return topUp;
     }
 
@@ -145,7 +145,7 @@ class TransferServiceImplTest {
         WalletTransaction topUp = topUp(WalletTransactionStatus.PENDING);
         Transfer transfer = topUpTransfer(topUp);
 
-        OperationDetailDTO detail = service.markTopUpPaid(300L, TopUpPaidRequestDTO.builder()
+        OperationDetailDTO detail = service.markTopUpPaid("TU000300", TopUpPaidRequestDTO.builder()
                 .txId("  ").proofKeys(List.of("transfer-proofs/1.png", " transfer-proofs/2.pdf ")).build());
 
         assertThat(detail.transaction().status()).isEqualTo("SENT");
@@ -156,7 +156,7 @@ class TransferServiceImplTest {
         assertThat(transfer.getSentAt()).isNotNull();
         assertThat(customerWallet.balance()).isEqualTo(1_000_00L);
 
-        assertThatThrownBy(() -> service.markTopUpPaid(300L, TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build()))
+        assertThatThrownBy(() -> service.markTopUpPaid("TU000300", TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -166,21 +166,21 @@ class TransferServiceImplTest {
     void markTopUpPaidRejectsForeignProofKeys() {
         topUpTransfer(topUp(WalletTransactionStatus.PENDING));
 
-        assertThatThrownBy(() -> service.markTopUpPaid(300L,
+        assertThatThrownBy(() -> service.markTopUpPaid("TU000300",
                 TopUpPaidRequestDTO.builder().proofKeys(List.of("campaign-photos/x.png")).build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Ключ файла");
     }
 
     @Test
-    void markTopUpPaidRejectsForeignRequest() {
+    void markTopUpPaidHidesForeignRequest() {
         WalletTransaction foreign = topUp(WalletTransactionStatus.PENDING);
         foreign.setWallet(creatorWallet);
 
-        assertThatThrownBy(() -> service.markTopUpPaid(300L, TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build()))
+        assertThatThrownBy(() -> service.markTopUpPaid("TU000300", TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
-                .isEqualTo(HttpStatus.FORBIDDEN);
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -188,13 +188,13 @@ class TransferServiceImplTest {
         WalletTransaction topUp = topUp(WalletTransactionStatus.PENDING);
         Transfer transfer = topUpTransfer(topUp);
 
-        OperationDetailDTO detail = service.cancelTopUp(300L);
+        OperationDetailDTO detail = service.cancelTopUp("TU000300");
 
         assertThat(detail.transaction().status()).isEqualTo("CANCELLED");
         assertThat(transfer.getClosedAt()).isNotNull();
 
         topUp.setStatus(WalletTransactionStatus.SENT);
-        assertThatThrownBy(() -> service.cancelTopUp(300L))
+        assertThatThrownBy(() -> service.cancelTopUp("TU000300"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -205,7 +205,7 @@ class TransferServiceImplTest {
         WalletTransaction topUp = topUp(WalletTransactionStatus.SENT);
         Transfer transfer = topUpTransfer(topUp);
 
-        OperationDetailDTO detail = service.confirmTopUp(300L);
+        OperationDetailDTO detail = service.confirmTopUp("TU000300");
 
         assertThat(customerWallet.balance()).isEqualTo(1_800_00L);
         assertThat(detail.transaction().status()).isEqualTo("CONFIRMED");
@@ -213,7 +213,7 @@ class TransferServiceImplTest {
         assertThat(detail.transfer().processedByName()).isEqualTo("Маша");
         assertThat(transfer.getConfirmedAt()).isNotNull();
 
-        assertThatThrownBy(() -> service.confirmTopUp(300L))
+        assertThatThrownBy(() -> service.confirmTopUp("TU000300"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -222,7 +222,7 @@ class TransferServiceImplTest {
 
     @Test
     void confirmTopUpRefusesPayouts() {
-        assertThatThrownBy(() -> service.confirmTopUp(100L))
+        assertThatThrownBy(() -> service.confirmTopUp("PO000100"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -260,7 +260,7 @@ class TransferServiceImplTest {
 
     @Test
     void markPayoutSentStoresTxIdProofsAndMovesToSent() {
-        OperationDetailDTO detail = service.markPayoutSent(100L, TransferSentRequestDTO.builder()
+        OperationDetailDTO detail = service.markPayoutSent("PO000100", TransferSentRequestDTO.builder()
                 .txId(" abc123 ")
                 .comment("  https://tronscan.org/#/transaction/abc  ")
                 .proofKeys(List.of("transfer-proofs/1.png", " transfer-proofs/2.png "))
@@ -278,7 +278,7 @@ class TransferServiceImplTest {
 
     @Test
     void markPayoutSentNeedsProofs() {
-        assertThatThrownBy(() -> service.markPayoutSent(100L,
+        assertThatThrownBy(() -> service.markPayoutSent("PO000100",
                 TransferSentRequestDTO.builder().txId("abc").proofKeys(List.of("  ")).build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
@@ -290,7 +290,7 @@ class TransferServiceImplTest {
     void markPayoutSentOnlyFromPending() {
         pending.setStatus(WalletTransactionStatus.SENT);
 
-        assertThatThrownBy(() -> service.markPayoutSent(100L,
+        assertThatThrownBy(() -> service.markPayoutSent("PO000100",
                 TransferSentRequestDTO.builder().txId("abc").proofKeys(PROOFS).build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
@@ -299,7 +299,7 @@ class TransferServiceImplTest {
 
     @Test
     void rejectPayoutReturnsMoneyAndKeepsReason() {
-        OperationDetailDTO detail = service.reject(100L,
+        OperationDetailDTO detail = service.reject("PO000100",
                 TransferRejectRequestDTO.builder().reason(" Адрес не TRC-20 ").build());
 
         assertThat(detail.transaction().status()).isEqualTo("REJECTED");
@@ -307,7 +307,7 @@ class TransferServiceImplTest {
         assertThat(creatorWallet.balance()).isEqualTo(7_000_00L);
         assertThat(payout.getClosedAt()).isNotNull();
 
-        assertThatThrownBy(() -> service.reject(100L, TransferRejectRequestDTO.builder().reason("ещё раз").build()))
+        assertThatThrownBy(() -> service.reject("PO000100", TransferRejectRequestDTO.builder().reason("ещё раз").build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -319,7 +319,7 @@ class TransferServiceImplTest {
         WalletTransaction topUp = topUp(WalletTransactionStatus.SENT);
         Transfer transfer = topUpTransfer(topUp);
 
-        OperationDetailDTO detail = service.reject(300L, TransferRejectRequestDTO.builder().reason("Перевод не пришёл").build());
+        OperationDetailDTO detail = service.reject("TU000300", TransferRejectRequestDTO.builder().reason("Перевод не пришёл").build());
 
         assertThat(detail.transaction().status()).isEqualTo("REJECTED");
         assertThat(detail.transfer().rejectReason()).isEqualTo("Перевод не пришёл");
@@ -329,12 +329,12 @@ class TransferServiceImplTest {
 
     @Test
     void rejectRefusesInternalOperations() {
-        WalletTransaction allocation = WalletTransaction.builder().id(400L).wallet(customerWallet)
+        WalletTransaction allocation = WalletTransaction.builder().id(400L).publicId("AL000400").wallet(customerWallet)
                 .type(WalletTransactionType.ALLOCATION).amountKopecks(-100_00L).balanceAfterKopecks(900_00L)
                 .status(WalletTransactionStatus.DONE).build();
-        when(getterWalletTransaction.getByIdForUpdate(400L)).thenReturn(Optional.of(allocation));
+        when(getterWalletTransaction.getByPublicIdForUpdate("AL000400")).thenReturn(Optional.of(allocation));
 
-        assertThatThrownBy(() -> service.reject(400L, TransferRejectRequestDTO.builder().reason("x").build()))
+        assertThatThrownBy(() -> service.reject("AL000400", TransferRejectRequestDTO.builder().reason("x").build()))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -342,7 +342,7 @@ class TransferServiceImplTest {
 
     @Test
     void payoutsListPutsOpenRequestsFirst() {
-        WalletTransaction confirmed = WalletTransaction.builder().id(90L).wallet(creatorWallet)
+        WalletTransaction confirmed = WalletTransaction.builder().id(90L).publicId("PO000090").wallet(creatorWallet)
                 .type(WalletTransactionType.PAYOUT).amountKopecks(-5_000_00L).balanceAfterKopecks(0L)
                 .status(WalletTransactionStatus.CONFIRMED).createdAt(Instant.now().plusSeconds(60)).build();
         when(getterWalletTransaction.getByType(WalletTransactionType.PAYOUT)).thenReturn(List.of(confirmed, pending));
@@ -350,7 +350,7 @@ class TransferServiceImplTest {
 
         List<OperationRowDTO> rows = service.payouts();
 
-        assertThat(rows).extracting(OperationRowDTO::id).containsExactly(100L, 90L);
+        assertThat(rows).extracting(OperationRowDTO::publicId).containsExactly("PO000100", "PO000090");
         assertThat(rows.get(0).ownerName()).isEqualTo("Аня");
         assertThat(rows.get(0).status()).isEqualTo("PENDING");
         assertThat(rows.get(0).destination().label()).isEqualTo("TRON · " + TRON);

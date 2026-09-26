@@ -19,10 +19,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
+import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.campaign.Campaign;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "wallet_transaction")
@@ -37,6 +39,9 @@ public class WalletTransaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "public_id", nullable = false, unique = true, length = 16, updatable = false)
+    private String publicId;
 
     @Version
     private Long version;
@@ -80,5 +85,14 @@ public class WalletTransaction {
 
     public long amount() {
         return amountKopecks != null ? amountKopecks : 0L;
+    }
+
+    public boolean belongsTo(User user) {
+        return user != null && wallet != null && wallet.getUser() != null
+                && Objects.equals(wallet.getUser().getId(), user.getId());
+    }
+
+    public boolean isVisibleTo(User viewer) {
+        return belongsTo(viewer) || (viewer != null && viewer.getRole().implies(Role.FINANCE_MANAGER));
     }
 }

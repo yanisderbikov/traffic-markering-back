@@ -31,7 +31,7 @@ import ru.trafficmarkering.service.wallet.WalletService;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
+import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -67,9 +67,9 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO markTopUpPaid(Long id, TopUpPaidRequestDTO request) {
+    public OperationDetailDTO markTopUpPaid(String publicId, TopUpPaidRequestDTO request) {
         User customer = currentUserService.require(Role.CUSTOMER);
-        WalletTransaction transaction = requireOwnTopUp(id, customer);
+        WalletTransaction transaction = requireOwnTopUp(publicId, customer);
         if (transaction.getStatus() != WalletTransactionStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отметить оплату можно только у новой заявки, сейчас она "
@@ -84,9 +84,9 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO cancelTopUp(Long id) {
+    public OperationDetailDTO cancelTopUp(String publicId) {
         User customer = currentUserService.require(Role.CUSTOMER);
-        WalletTransaction transaction = requireOwnTopUp(id, customer);
+        WalletTransaction transaction = requireOwnTopUp(publicId, customer);
         if (transaction.getStatus() != WalletTransactionStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отменить можно только заявку, которую вы ещё не оплатили");
@@ -109,9 +109,9 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO confirmTopUp(Long id) {
+    public OperationDetailDTO confirmTopUp(String publicId) {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
-        WalletTransaction transaction = requireExternal(id);
+        WalletTransaction transaction = requireExternal(publicId);
         if (transaction.getType() != WalletTransactionType.TOP_UP) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на пополнение");
         }
@@ -149,9 +149,9 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO markPayoutSent(Long id, TransferSentRequestDTO request) {
+    public OperationDetailDTO markPayoutSent(String publicId, TransferSentRequestDTO request) {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
-        WalletTransaction transaction = requireExternal(id);
+        WalletTransaction transaction = requireExternal(publicId);
         if (transaction.getType() != WalletTransactionType.PAYOUT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на выплату");
         }
@@ -170,9 +170,9 @@ class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional
-    public OperationDetailDTO reject(Long id, TransferRejectRequestDTO request) {
+    public OperationDetailDTO reject(String publicId, TransferRejectRequestDTO request) {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
-        WalletTransaction transaction = requireExternal(id);
+        WalletTransaction transaction = requireExternal(publicId);
         if (!transaction.getStatus().isOpen()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Операция уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
@@ -195,9 +195,14 @@ class TransferServiceImpl implements TransferService {
         return saverTransfer.save(transfer);
     }
 
-    private WalletTransaction requireExternal(Long id) {
-        WalletTransaction transaction = getterWalletTransaction.getByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + id));
+    private WalletTransaction requireExternal(String publicId) {
+        return requireExternal(publicId, transaction -> true);
+    }
+
+    private WalletTransaction requireExternal(String publicId, Predicate<WalletTransaction> accessible) {
+        WalletTransaction transaction = getterWalletTransaction.getByPublicIdForUpdate(publicId)
+                .filter(accessible)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Операция не найдена: " + publicId));
         if (!transaction.getType().isExternal()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Это внутренняя операция платформы, у неё нет перевода");
@@ -205,11 +210,8 @@ class TransferServiceImpl implements TransferService {
         return transaction;
     }
 
-    private WalletTransaction requireOwnTopUp(Long id, User customer) {
-        WalletTransaction transaction = requireExternal(id);
-        if (!Objects.equals(transaction.getWallet().getUser().getId(), customer.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужая заявка");
-        }
+    private WalletTransaction requireOwnTopUp(String publicId, User customer) {
+        WalletTransaction transaction = requireExternal(publicId, found -> found.belongsTo(customer));
         if (transaction.getType() != WalletTransactionType.TOP_UP) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на пополнение");
         }
@@ -219,7 +221,7 @@ class TransferServiceImpl implements TransferService {
     private Transfer requireTransfer(WalletTransaction transaction) {
         return getterTransfer.getByTransactionId(transaction.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Перевод не найден для операции " + transaction.getId()));
+                        "Перевод не найден для операции " + transaction.getPublicId()));
     }
 
     private String requireTronAddress(String value) {

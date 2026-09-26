@@ -14,19 +14,19 @@ public interface TransferService {
 
     OperationDetailDTO requestTopUp(TopUpCreateRequestDTO request);
 
-    OperationDetailDTO markTopUpPaid(Long id, TopUpPaidRequestDTO request);
+    OperationDetailDTO markTopUpPaid(String publicId, TopUpPaidRequestDTO request);
 
-    OperationDetailDTO cancelTopUp(Long id);
+    OperationDetailDTO cancelTopUp(String publicId);
 
     List<OperationRowDTO> topUps();
 
-    OperationDetailDTO confirmTopUp(Long id);
+    OperationDetailDTO confirmTopUp(String publicId);
 
     OperationDetailDTO withdraw(Long userId, WalletOperationRequestDTO request);
 
     List<OperationRowDTO> payouts();
 
-    OperationDetailDTO markPayoutSent(Long id, TransferSentRequestDTO request);
+    OperationDetailDTO markPayoutSent(String publicId, TransferSentRequestDTO request);
 
-    OperationDetailDTO reject(Long id, TransferRejectRequestDTO request);
+    OperationDetailDTO reject(String publicId, TransferRejectRequestDTO request);
 }

@@ -10,9 +10,11 @@ public interface GetterWalletTransaction {
 
     List<WalletTransaction> getByWalletId(Long walletId);
 
-    Optional<WalletTransaction> getByIdWithDetails(Long id);
+    Optional<WalletTransaction> getByPublicIdWithDetails(String publicId);
 
-    Optional<WalletTransaction> getByIdForUpdate(Long id);
+    Optional<WalletTransaction> getByPublicIdForUpdate(String publicId);
+
+    boolean existsByPublicId(String publicId);
 
     List<WalletTransaction> getByType(WalletTransactionType type);
 

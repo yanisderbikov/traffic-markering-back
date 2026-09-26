@@ -16,9 +16,9 @@ public interface WalletService {
 
     List<OperationRowDTO> myOperations();
 
-    OperationDetailDTO myOperation(Long id);
+    OperationDetailDTO myOperation(String publicId);
 
-    OperationDetailDTO confirm(Long id);
+    OperationDetailDTO confirm(String publicId);
 
     String topUpTronAddress();
 
@@ -30,7 +30,7 @@ public interface WalletService {
 
     List<OperationRowDTO> operations(Long userId, WalletTransactionType type, WalletTransactionStatus status);
 
-    OperationDetailDTO operation(Long id);
+    OperationDetailDTO operation(String publicId);
 
     void reallocate(Campaign campaign, long previousBudgetKopecks, long nextBudgetKopecks);
 

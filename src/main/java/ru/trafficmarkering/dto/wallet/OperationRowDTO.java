@@ -6,9 +6,9 @@ import ru.trafficmarkering.model.wallet.Transfer;
 import ru.trafficmarkering.model.wallet.WalletTransaction;
 import ru.trafficmarkering.model.wallet.WalletTransactionType;
 
-@Schema(description = "Строка списка операций: суть, откуда → куда и статус; подробности — отдельной ручкой по id")
+@Schema(description = "Строка списка операций: суть, откуда → куда и статус; подробности — отдельной ручкой по publicId")
 public record OperationRowDTO(
-        Long id,
+        @Schema(description = "Публичный номер операции для ссылок", example = "K7Q2M9XA") String publicId,
         @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT") String type,
         @Schema(description = "Что за операция", example = "Начисление за просмотры") String title,
         @Schema(description = "Уточнение: объявление или комментарий; может быть null") String subtitle,
@@ -27,7 +27,7 @@ public record OperationRowDTO(
         String subtitle = campaign != null ? campaign.getTitle()
                 : transaction.getType() == WalletTransactionType.PAYOUT ? null : transaction.getComment();
         return new OperationRowDTO(
-                transaction.getId(),
+                transaction.getPublicId(),
                 transaction.getType() != null ? transaction.getType().name() : null,
                 transaction.getType() != null ? transaction.getType().getDescription() : null,
                 subtitle,
