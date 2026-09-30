@@ -118,6 +118,17 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
+    public Optional<Application> getInProgress(UUID campaignId, Long creatorId) {
+        try {
+            return applicationRepo.findByCampaignIdAndCreatorIdAndStatus(
+                    campaignId, creatorId, ApplicationStatus.IN_PROGRESS).stream().findFirst();
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public boolean existsByPublicId(String publicId) {
         try {
             return applicationRepo.existsByPublicId(publicId);

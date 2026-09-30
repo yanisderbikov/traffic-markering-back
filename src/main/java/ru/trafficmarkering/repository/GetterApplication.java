@@ -42,6 +42,9 @@ public interface GetterApplication {
      */
     Optional<Application> getActiveByVideoKey(String videoKey);
 
+    /** Взятый в работу оффер без ролика: повторное «взять в работу» возвращает его, а не плодит новые. */
+    Optional<Application> getInProgress(UUID campaignId, Long creatorId);
+
     /** Проверка занятости публичного номера для {@link ru.trafficmarkering.util.PublicIdGenerator}. */
     boolean existsByPublicId(String publicId);
 

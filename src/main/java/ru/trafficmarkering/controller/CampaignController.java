@@ -71,9 +71,10 @@ public class CampaignController {
         return ResponseEntity.ok(campaignService.startDraft(restart));
     }
 
-    @Operation(summary = "Медианы ставки и бюджета",
+    @Operation(summary = "Медианы ставки и бюджета, тематики",
             description = "Медианная ставка за 1000 просмотров и медианный бюджет по всем запущенным объявлениям, "
-                    + "в копейках; пока таких объявлений нет — 150 ₽ и 100 000 ₽",
+                    + "в копейках; пока таких объявлений нет — 150 ₽ и 100 000 ₽. "
+                    + "Плюс тематики со средней ставкой за 1000 просмотров по каждой",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/benchmarks")
     public ResponseEntity<CampaignBenchmarkDTO> campaignBenchmarks() {

@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.CampaignTopic;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 
 import java.time.Instant;
@@ -23,7 +24,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Schema(description = "Создание/обновление объявления. Черновик можно сохранять частично: "
         + "пустые поля остаются незаполненными. Запустить объявление можно, только когда заполнены "
-        + "заголовок, описание, фотография, площадки, ставка, бюджет и порог вывода")
+        + "заголовок, описание, фотография, тематика, площадки, ставка, бюджет и порог вывода")
 public class CampaignCreateUpdateRequestDTO {
 
     @Size(max = 255, message = "Заголовок не длиннее 255 символов")
@@ -36,6 +37,9 @@ public class CampaignCreateUpdateRequestDTO {
     @Size(max = 512, message = "Ключ фотографии не длиннее 512 символов")
     @Schema(description = "Ключ загруженной фотографии из /api/files/campaign-photo/presign; обязателен для запуска")
     private String photoKey;
+
+    @Schema(description = "Тематика объявления; обязательна для запуска", example = "TECH")
+    private CampaignTopic topic;
 
     @Positive(message = "Ставка должна быть больше нуля")
     @Schema(description = "Ставка за 1000 просмотров, в копейках; обязательна для запуска", example = "35000")
@@ -54,8 +58,8 @@ public class CampaignCreateUpdateRequestDTO {
             + "для запуска нужна хотя бы одна", example = "[\"TIKTOK\", \"YOUTUBE_SHORTS\"]")
     private Set<Platform> platforms;
 
-    @Schema(description = "Регион, просмотры из которого оплачиваются: RUSSIA (только РФ), CIS (СНГ), WORLD (весь мир); "
-            + "null — весь мир", example = "RUSSIA")
+    @Schema(description = "Регион, просмотры из которого оплачиваются: CIS (СНГ), WORLD (весь мир); "
+            + "null — весь мир", example = "CIS")
     private ViewRegion viewRegion;
 
     @Positive(message = "Минимальная длина ролика должна быть больше нуля")

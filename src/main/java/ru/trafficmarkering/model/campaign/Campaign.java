@@ -107,6 +107,10 @@ public class Campaign {
     @Column(name = "view_region", nullable = false, length = 32)
     private ViewRegion viewRegion = ViewRegion.WORLD;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32)
+    private CampaignTopic topic;
+
     @Builder.Default
     @ToString.Exclude
     @ElementCollection
@@ -137,6 +141,7 @@ public class Campaign {
         filled.put("название", title != null && !title.isBlank());
         filled.put("описание", description != null && !description.isBlank());
         filled.put("обложка", photoKey != null && !photoKey.isBlank());
+        filled.put("тематика", topic != null);
         filled.put("площадки", platforms != null && !platforms.isEmpty());
         filled.put("ставка", ratePerThousandKopecks != null && ratePerThousandKopecks > 0);
         filled.put("бюджет", budgetKopecks != null && budgetKopecks >= 0);

@@ -45,6 +45,13 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
     List<Application> findByVideoKey(@Param("videoKey") String videoKey,
                                      @Param("excluded") ApplicationStatus excluded);
 
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.campaign.id = :campaignId and a.creator.id = :creatorId and a.status = :status "
+            + "order by a.createdAt asc")
+    List<Application> findByCampaignIdAndCreatorIdAndStatus(@Param("campaignId") UUID campaignId,
+                                                             @Param("creatorId") Long creatorId,
+                                                             @Param("status") ApplicationStatus status);
+
     boolean existsByPublicId(String publicId);
 
     @Query("select a from Application a join fetch a.campaign join fetch a.creator "

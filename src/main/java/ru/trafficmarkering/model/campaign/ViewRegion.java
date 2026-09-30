@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Set;
 
 public enum ViewRegion {
-    RUSSIA("Только РФ", Set.of("RU")),
     CIS("СНГ", Set.of("RU", "BY", "KZ", "KG", "TJ", "UZ", "AM", "AZ", "TM", "MD")),
     WORLD("Весь мир", Set.of());
 

@@ -48,6 +48,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 class CampaignServiceImpl implements CampaignService {
 
+    private static final long MIN_BUDGET_KOPECKS = 1_000_000L;
+
     private final GetterCampaign getterCampaign;
     private final SaverCampaign saverCampaign;
     private final CampaignDeleter campaignDeleter;
@@ -215,6 +217,7 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setTitle(trimToNull(request.getTitle()));
         campaign.setDescription(trimToNull(request.getDescription()));
         campaign.setPhotoKey(validPhotoKey(request.getPhotoKey()));
+        campaign.setTopic(request.getTopic());
         campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
         campaign.setBudgetKopecks(request.getBudgetKopecks());
         campaign.setMinPayoutKopecks(request.getMinPayoutKopecks());
@@ -260,6 +263,10 @@ class CampaignServiceImpl implements CampaignService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Не заполнено: " + String.join(", ", missing)
                             + ". Без этого объявление можно сохранить только черновиком");
+        }
+        if (budgetOf(campaign) < MIN_BUDGET_KOPECKS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Минимальный бюджет объявления — " + MoneyUtil.formatRubles(MIN_BUDGET_KOPECKS));
         }
     }
 

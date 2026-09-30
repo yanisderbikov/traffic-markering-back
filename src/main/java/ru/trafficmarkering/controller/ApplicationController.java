@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ApplicationVideoRequestDTO;
 import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.service.application.ApplicationService;
 
@@ -38,7 +40,8 @@ public class ApplicationController {
     private final ApplicationService applicationService;
 
     @Operation(summary = "Взять объявление в работу",
-            description = "Криатор прикладывает ссылку на ролик; площадка определяется по ссылке, "
+            description = "Без ссылки на ролик отклик встаёт в IN_PROGRESS: криатор снимает ролик и прикладывает его позже, "
+                    + "повторный вызов возвращает тот же отклик. Со ссылкой площадка определяется по ней, "
                     + "должна быть среди площадок объявления, а аккаунт этой площадки должен быть привязан в профиле. "
                     + "Откликнуться можно только "
                     + "на активное объявление и не на своё, роликов на одно объявление можно подать сколько угодно; тот же ролик повторно — 409",
@@ -46,6 +49,16 @@ public class ApplicationController {
     @PostMapping
     public ResponseEntity<ApplicationDTO> apply(@Valid @RequestBody ApplicationCreateRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(applicationService.apply(request));
+    }
+
+    @Operation(summary = "Приложить ролик к работе",
+            description = "Ролик к отклику в статусе IN_PROGRESS: те же проверки площадки, аккаунта и дублей, что и при отклике "
+                    + "со ссылкой. После этого отклик уходит заказчику на рассмотрение (PENDING)",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PutMapping("/{id}/video")
+    public ResponseEntity<ApplicationDTO> attachVideo(@PathVariable("id") UUID id,
+                                                      @Valid @RequestBody ApplicationVideoRequestDTO request) {
+        return ResponseEntity.ok(applicationService.attachVideo(id, request));
     }
 
     @Operation(summary = "Мои отклики",
@@ -67,7 +80,7 @@ public class ApplicationController {
     }
 
     @Operation(summary = "Отозвать отклик",
-            description = "Криатор убирает свой отклик, пока заказчик его не рассмотрел: после решения — 409",
+            description = "Криатор убирает свой отклик или отказывается от взятой работы, пока заказчик не принял решение: после решения — 409",
             security = @SecurityRequirement(name = "Bearer"))
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteApplication(@PathVariable("id") UUID id) {

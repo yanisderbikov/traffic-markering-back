@@ -220,7 +220,7 @@ class CampaignAccrualServiceImplTest {
     @Test
     void recalculate_paysOnlyRegionViews() {
         Campaign campaign = campaign(350_00, 100_000_00);
-        campaign.setViewRegion(ViewRegion.RUSSIA);
+        campaign.setViewRegion(ViewRegion.CIS);
         Application mixed = application(ApplicationStatus.APPROVED, 2_000, 0);
         mixed.setCountryViews(Map.of("RU", 1_000L, "US", 1_000L));
         when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(mixed));

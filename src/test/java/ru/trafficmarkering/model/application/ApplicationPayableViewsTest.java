@@ -23,21 +23,11 @@ class ApplicationPayableViewsTest {
     void regionWithoutGeographyPaysNothing() {
         Application application = application(1_000L, null);
 
-        PayableViews payable = application.payableViews(ViewRegion.RUSSIA);
+        PayableViews payable = application.payableViews(ViewRegion.CIS);
 
         assertThat(payable.views()).isZero();
         assertThat(payable.geographyKnown()).isFalse();
         assertThat(application.geographyKnown()).isFalse();
-    }
-
-    @Test
-    void russiaPaysOnlyRussianViews() {
-        Application application = application(1_000L, Map.of("RU", 800L, "KZ", 100L, "ZZ", 50L));
-
-        PayableViews payable = application.payableViews(ViewRegion.RUSSIA);
-
-        assertThat(payable.views()).isEqualTo(800L);
-        assertThat(payable.geographyKnown()).isTrue();
     }
 
     @Test
@@ -54,7 +44,7 @@ class ApplicationPayableViewsTest {
     void regionalViewsAreCappedByTotal() {
         Application application = application(1_000L, Map.of("RU", 1_500L));
 
-        PayableViews payable = application.payableViews(ViewRegion.RUSSIA);
+        PayableViews payable = application.payableViews(ViewRegion.CIS);
 
         assertThat(payable.views()).isEqualTo(1_000L);
         assertThat(payable.geographyKnown()).isTrue();
@@ -66,7 +56,7 @@ class ApplicationPayableViewsTest {
 
         assertThat(application.totalViews()).isZero();
         assertThat(application.payableViews(ViewRegion.WORLD).views()).isZero();
-        assertThat(application.payableViews(ViewRegion.RUSSIA).views()).isZero();
+        assertThat(application.payableViews(ViewRegion.CIS).views()).isZero();
     }
 
     private Application application(Long views, Map<String, Long> countryViews) {

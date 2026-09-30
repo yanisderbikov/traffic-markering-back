@@ -15,6 +15,7 @@ class CampaignDraftTest {
                 .title("Обзор приложения")
                 .description("Снять короткий ролик")
                 .photoKey("campaign-photos/cover.png")
+                .topic(CampaignTopic.TECH)
                 .platforms(EnumSet.of(Platform.TIKTOK))
                 .ratePerThousandKopecks(35_000L)
                 .budgetKopecks(0L)
@@ -27,7 +28,7 @@ class CampaignDraftTest {
         Campaign draft = Campaign.builder().build();
 
         assertThat(draft.missingForLaunch()).containsExactly(
-                "название", "описание", "обложка", "площадки", "ставка", "бюджет", "порог вывода");
+                "название", "описание", "обложка", "тематика", "площадки", "ставка", "бюджет", "порог вывода");
     }
 
     @Test

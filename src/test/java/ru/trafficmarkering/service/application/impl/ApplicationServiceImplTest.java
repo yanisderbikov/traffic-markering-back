@@ -5,8 +5,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
+import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ApplicationVideoRequestDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.application.Application;
+import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
@@ -34,6 +38,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -188,6 +193,101 @@ class ApplicationServiceImplTest {
 
         assertEquals(campaign.getId(), saved.campaignId());
         verify(saverApplication).save(any());
+    }
+
+    @Test
+    void apply_withoutVideoTakesOfferInProgress() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterCampaign.getById(campaign.getId())).thenReturn(Optional.of(campaign));
+        when(getterApplication.getInProgress(campaign.getId(), creator.getId())).thenReturn(Optional.empty());
+        when(getterApplication.existsByPublicId(anyString())).thenReturn(false);
+        when(getterCreatorProfile.getByUserId(creator.getId())).thenReturn(Optional.empty());
+        when(saverApplication.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ApplicationDTO saved = service.apply(request(campaign, null));
+
+        assertEquals("IN_PROGRESS", saved.status());
+        assertNull(saved.videoUrl());
+        assertNull(saved.platform());
+        verify(getterSocialAccount, never()).getActiveByUserIdAndPlatform(any(), any());
+    }
+
+    @Test
+    void apply_withoutVideoReturnsExistingWorkInProgress() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application existing = inProgress(campaign);
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterCampaign.getById(campaign.getId())).thenReturn(Optional.of(campaign));
+        when(getterApplication.getInProgress(campaign.getId(), creator.getId())).thenReturn(Optional.of(existing));
+        when(getterCreatorProfile.getByUserId(creator.getId())).thenReturn(Optional.empty());
+
+        ApplicationDTO result = service.apply(request(campaign, "  "));
+
+        assertEquals(existing.getId(), result.id());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void attachVideo_sendsWorkToReview() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = inProgress(campaign);
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+        when(getterSocialAccount.getActiveByUserIdAndPlatform(creator.getId(), Platform.YOUTUBE_SHORTS))
+                .thenReturn(Optional.of(new SocialAccount()));
+        when(getterApplication.getActiveByVideoKey(anyString())).thenReturn(Optional.empty());
+        when(getterCreatorProfile.getByUserId(creator.getId())).thenReturn(Optional.empty());
+
+        ApplicationDTO result = service.attachVideo(application.getId(),
+                ApplicationVideoRequestDTO.builder().videoUrl(YOUTUBE_URL).comment(" Готово ").build());
+
+        assertEquals("PENDING", result.status());
+        assertEquals("YOUTUBE_SHORTS", result.platform());
+        assertEquals(YOUTUBE_URL, result.videoUrl());
+        assertEquals("Готово", result.comment());
+        verify(saverApplication).save(application);
+    }
+
+    @Test
+    void attachVideo_rejectsWorkAlreadyWithVideo() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = inProgress(campaign);
+        application.setStatus(ApplicationStatus.PENDING);
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.attachVideo(application.getId(),
+                        ApplicationVideoRequestDTO.builder().videoUrl(YOUTUBE_URL).build()));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void updateStatus_rejectsWorkWithoutVideo() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = inProgress(campaign);
+        when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(application.getId(),
+                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.APPROVED)));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(saverApplication, never()).save(any());
+    }
+
+    private Application inProgress(Campaign campaign) {
+        return Application.builder()
+                .id(UUID.randomUUID())
+                .publicId("APP00001")
+                .campaign(campaign)
+                .creator(creator)
+                .status(ApplicationStatus.IN_PROGRESS)
+                .build();
     }
 
     private Campaign activeCampaign(Set<Platform> platforms) {

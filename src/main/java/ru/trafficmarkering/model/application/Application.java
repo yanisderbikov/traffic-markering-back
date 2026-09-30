@@ -60,13 +60,13 @@ public class Application {
     private User creator;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 32)
+    @Column(length = 32)
     private Platform platform;
 
-    @Column(name = "video_url", nullable = false, length = 1024)
+    @Column(name = "video_url", length = 1024)
     private String videoUrl;
 
-    @Column(name = "video_key", nullable = false, length = 512)
+    @Column(name = "video_key", length = 512)
     private String videoKey;
 
     @Column(name = "comment", columnDefinition = "TEXT")

@@ -8,6 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.application.ApplicationCreateRequestDTO;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.application.ApplicationStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.application.ApplicationVideoRequestDTO;
 import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.dto.application.ViewsUpdateRequestDTO;
 import ru.trafficmarkering.model.Role;
@@ -45,6 +46,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -89,38 +91,61 @@ class ApplicationServiceImpl implements ApplicationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Объявление не найдено: " + request.getCampaignId()));
 
-        if (campaign.getStatus() != CampaignStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Объявление не принимает отклики: " + campaign.getStatus().getDescription().toLowerCase());
-        }
-        requireWithinPeriod(campaign);
+        requireAcceptingApplications(campaign);
         // ADMIN проходит проверку роли выше, поэтому теоретически может оказаться и заказчиком
         if (Objects.equals(campaign.getCustomer().getId(), creator.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Нельзя откликнуться на собственное объявление");
         }
         requireNotBlocked(creator);
+
+        String rawVideoUrl = trimToNull(request.getVideoUrl());
+        if (rawVideoUrl == null) {
+            Optional<Application> inProgress = getterApplication.getInProgress(campaign.getId(), creator.getId());
+            if (inProgress.isPresent()) {
+                return ApplicationDTO.from(inProgress.get(), campaign, creator, creatorProfile(creator.getId()));
+            }
+        }
         requireVideoLimitNotReached(campaign, creator);
-        Platform platform = requirePlatform(request.getVideoUrl().trim());
-        requireAcceptedByCampaign(campaign, platform);
-        requireConnectedAccount(creator, platform);
-        String videoUrl = resolveVideoUrl(platform, request.getVideoUrl().trim());
-        String videoKey = VideoUrls.videoKey(platform, videoUrl);
-        requireVideoNotSubmitted(videoKey, creator);
 
         Application application = Application.builder()
                 .publicId(PublicIdGenerator.generateUnique(getterApplication::existsByPublicId))
                 .campaign(campaign)
                 .creator(creator)
-                .platform(platform)
-                .videoUrl(videoUrl)
-                .videoKey(videoKey)
                 .comment(trimToNull(request.getComment()))
-                .status(ApplicationStatus.PENDING)
+                .status(ApplicationStatus.IN_PROGRESS)
                 .build();
+        if (rawVideoUrl != null) {
+            submitVideo(application, campaign, creator, rawVideoUrl);
+        }
 
         Application saved = saverApplication.save(application);
         return ApplicationDTO.from(saved, campaign, creator, creatorProfile(creator.getId()));
+    }
+
+    @Override
+    @Transactional
+    public ApplicationDTO attachVideo(UUID id, ApplicationVideoRequestDTO request) {
+        User creator = currentUserService.require(Role.CREATOR);
+        Application application = requireApplication(id);
+        if (isForeign(application.getCreator().getId(), creator)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой отклик");
+        }
+        if (application.getStatus() != ApplicationStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ролик к этой работе уже приложен");
+        }
+        Campaign campaign = application.getCampaign();
+        requireAcceptingApplications(campaign);
+        requireNotBlocked(creator);
+
+        submitVideo(application, campaign, creator, request.getVideoUrl().trim());
+        String comment = trimToNull(request.getComment());
+        if (comment != null) {
+            application.setComment(comment);
+        }
+
+        saverApplication.save(application);
+        return toDto(requireApplication(id));
     }
 
     @Override
@@ -142,7 +167,10 @@ class ApplicationServiceImpl implements ApplicationService {
         if (ownerId != null && !Objects.equals(campaign.getCustomer().getId(), ownerId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужое объявление");
         }
-        return toDtoList(getterApplication.getByCampaignIdOrderByCreatedAt(campaignId));
+        // Взятые в работу без ролика заказчику решать не о чем
+        return toDtoList(getterApplication.getByCampaignIdOrderByCreatedAt(campaignId).stream()
+                .filter(application -> application.getStatus() != ApplicationStatus.IN_PROGRESS)
+                .toList());
     }
 
     @Override
@@ -157,6 +185,9 @@ class ApplicationServiceImpl implements ApplicationService {
         if (!CUSTOMER_DECISIONS.contains(request.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Заказчик может только одобрить, отклонить или завершить отклик");
+        }
+        if (application.getStatus() == ApplicationStatus.IN_PROGRESS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Криатор ещё не приложил ролик");
         }
 
         application.setStatus(request.getStatus());
@@ -175,7 +206,8 @@ class ApplicationServiceImpl implements ApplicationService {
         if (isForeign(application.getCreator().getId(), creator)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужой отклик");
         }
-        if (application.getStatus() != ApplicationStatus.PENDING) {
+        if (application.getStatus() != ApplicationStatus.PENDING
+                && application.getStatus() != ApplicationStatus.IN_PROGRESS) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отозвать можно только отклик на рассмотрении");
         }
@@ -258,6 +290,32 @@ class ApplicationServiceImpl implements ApplicationService {
             default -> true;
         };
         return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
+    }
+
+    /**
+     * Ролик к отклику: площадка из ссылки, аккаунт этой площадки в профиле, короткая ссылка
+     * развёрнута до полной, тот же ролик нигде больше не подан. После этого отклик ждёт решения заказчика.
+     */
+    private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl) {
+        Platform platform = requirePlatform(rawVideoUrl);
+        requireAcceptedByCampaign(campaign, platform);
+        requireConnectedAccount(creator, platform);
+        String videoUrl = resolveVideoUrl(platform, rawVideoUrl);
+        String videoKey = VideoUrls.videoKey(platform, videoUrl);
+        requireVideoNotSubmitted(videoKey, creator);
+
+        application.setPlatform(platform);
+        application.setVideoUrl(videoUrl);
+        application.setVideoKey(videoKey);
+        application.setStatus(ApplicationStatus.PENDING);
+    }
+
+    private void requireAcceptingApplications(Campaign campaign) {
+        if (campaign.getStatus() != CampaignStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Объявление не принимает отклики: " + campaign.getStatus().getDescription().toLowerCase());
+        }
+        requireWithinPeriod(campaign);
     }
 
     private void requireWithinPeriod(Campaign campaign) {
