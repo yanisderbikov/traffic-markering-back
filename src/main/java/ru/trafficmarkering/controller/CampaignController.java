@@ -25,8 +25,11 @@ import ru.trafficmarkering.dto.campaign.CampaignBenchmarkDTO;
 import ru.trafficmarkering.dto.campaign.CampaignCreateUpdateRequestDTO;
 import ru.trafficmarkering.dto.campaign.CampaignDTO;
 import ru.trafficmarkering.dto.campaign.CampaignStatusUpdateRequestDTO;
+import ru.trafficmarkering.dto.campaign.CampaignTopicCreateRequestDTO;
+import ru.trafficmarkering.dto.campaign.CampaignTopicDTO;
 import ru.trafficmarkering.service.campaign.CampaignBenchmarkService;
 import ru.trafficmarkering.service.campaign.CampaignService;
+import ru.trafficmarkering.service.campaign.CampaignTopicService;
 
 import java.util.List;
 import java.util.Map;
@@ -41,6 +44,7 @@ public class CampaignController {
 
     private final CampaignService campaignService;
     private final CampaignBenchmarkService campaignBenchmarkService;
+    private final CampaignTopicService campaignTopicService;
 
     @Operation(summary = "Мои объявления",
             description = "Объявления текущего заказчика, новые сверху; суммы в копейках",
@@ -71,14 +75,38 @@ public class CampaignController {
         return ResponseEntity.ok(campaignService.startDraft(restart));
     }
 
-    @Operation(summary = "Медианы ставки и бюджета, тематики",
+    @Operation(summary = "Медианы ставки и бюджета, минимальный бюджет, тематики",
             description = "Медианная ставка за 1000 просмотров и медианный бюджет по всем запущенным объявлениям, "
                     + "в копейках; пока таких объявлений нет — 150 ₽ и 100 000 ₽. "
-                    + "Плюс тематики со средней ставкой за 1000 просмотров по каждой",
+                    + "Минимальный бюджет для запуска объявления, в копейках (настройка CAMPAIGN_MIN_BUDGET_RUB). "
+                    + "Плюс до 10 самых популярных тематик со средней ставкой за 1000 просмотров по каждой",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/benchmarks")
     public ResponseEntity<CampaignBenchmarkDTO> campaignBenchmarks() {
         return ResponseEntity.ok(campaignBenchmarkService.getBenchmarks());
+    }
+
+    @Operation(summary = "Поиск тематик",
+            description = "Тематики, в названии которых есть query, без учёта регистра, «ё» и лишних пробелов: "
+                    + "сначала начинающиеся с него, дальше — по числу запущенных объявлений. "
+                    + "Без query — самые популярные. limit — от 1 до 20",
+            security = @SecurityRequirement(name = "Bearer"))
+    @GetMapping("/topics")
+    public ResponseEntity<List<CampaignTopicDTO>> searchCampaignTopics(
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "limit", defaultValue = "10") int limit) {
+        return ResponseEntity.ok(campaignTopicService.search(query, limit));
+    }
+
+    @Operation(summary = "Добавить тематику",
+            description = "Когда подходящей не нашлось поиском. Если такая уже есть — без учёта регистра, «ё» "
+                    + "и лишних пробелов — возвращается она, дубль не заводится. Первая буква становится заглавной; "
+                    + "средней ставки у добавленной тематики нет",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/topics")
+    public ResponseEntity<CampaignTopicDTO> createCampaignTopic(
+            @Valid @RequestBody CampaignTopicCreateRequestDTO request) {
+        return ResponseEntity.ok(campaignTopicService.create(request));
     }
 
     @Operation(summary = "Объявление по id",

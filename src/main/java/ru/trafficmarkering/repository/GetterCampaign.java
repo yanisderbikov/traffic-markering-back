@@ -27,4 +27,10 @@ public interface GetterCampaign {
     Optional<Long> getMedianRatePerThousandKopecks();
 
     Optional<Long> getMedianBudgetKopecks();
+
+    /**
+     * Запущенные объявления тематики, кроме самого объявления excludedPublicId.
+     * rate и budget — значения сравниваемого объявления: по ним считается, у скольких ниже.
+     */
+    CampaignSegmentStats getSegmentStats(String topicCode, String excludedPublicId, long rate, long budget);
 }

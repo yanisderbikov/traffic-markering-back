@@ -15,7 +15,7 @@ class CampaignDraftTest {
                 .title("Обзор приложения")
                 .description("Снять короткий ролик")
                 .photoKey("campaign-photos/cover.png")
-                .topic(CampaignTopic.TECH)
+                .topic(CampaignTopic.builder().code("TECH").name("Технологии и гаджеты").build())
                 .platforms(EnumSet.of(Platform.TIKTOK))
                 .ratePerThousandKopecks(35_000L)
                 .budgetKopecks(0L)

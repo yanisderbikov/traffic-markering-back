@@ -107,8 +107,9 @@ public class Campaign {
     @Column(name = "view_region", nullable = false, length = 32)
     private ViewRegion viewRegion = ViewRegion.WORLD;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 32)
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "topic")
     private CampaignTopic topic;
 
     @Builder.Default

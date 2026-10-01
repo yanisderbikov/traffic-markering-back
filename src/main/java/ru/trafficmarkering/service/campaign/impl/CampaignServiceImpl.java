@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CampaignProperties;
 import ru.trafficmarkering.dto.application.ApplicationDTO;
 import ru.trafficmarkering.dto.campaign.CampaignCreateUpdateRequestDTO;
 import ru.trafficmarkering.dto.campaign.CampaignDTO;
@@ -17,12 +18,14 @@ import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignMaterial;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.CampaignTopic;
 import ru.trafficmarkering.model.campaign.MaterialKind;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.model.profile.CustomerProfile;
 import ru.trafficmarkering.repository.CampaignDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
+import ru.trafficmarkering.repository.GetterCampaignTopic;
 import ru.trafficmarkering.repository.GetterCustomerProfile;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.application.ApplicationService;
@@ -48,9 +51,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 class CampaignServiceImpl implements CampaignService {
 
-    private static final long MIN_BUDGET_KOPECKS = 1_000_000L;
-
     private final GetterCampaign getterCampaign;
+    private final GetterCampaignTopic getterCampaignTopic;
     private final SaverCampaign saverCampaign;
     private final CampaignDeleter campaignDeleter;
     private final GetterApplication getterApplication;
@@ -60,6 +62,7 @@ class CampaignServiceImpl implements CampaignService {
     private final ApplicationService applicationService;
     private final FileStorage fileStorage;
     private final WalletService walletService;
+    private final CampaignProperties campaignProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -217,7 +220,7 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setTitle(trimToNull(request.getTitle()));
         campaign.setDescription(trimToNull(request.getDescription()));
         campaign.setPhotoKey(validPhotoKey(request.getPhotoKey()));
-        campaign.setTopic(request.getTopic());
+        campaign.setTopic(topicOrNull(request.getTopic()));
         campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
         campaign.setBudgetKopecks(request.getBudgetKopecks());
         campaign.setMinPayoutKopecks(request.getMinPayoutKopecks());
@@ -231,6 +234,16 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setEndsAt(requireEndAfterStart(request.getStartsAt(), request.getEndsAt()));
         campaign.getMaterials().clear();
         campaign.getMaterials().addAll(toMaterials(request.getMaterials()));
+    }
+
+    private CampaignTopic topicOrNull(String code) {
+        String trimmed = trimToNull(code);
+        if (trimmed == null) {
+            return null;
+        }
+        return getterCampaignTopic.getByCode(trimmed)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Тематика не найдена: " + trimmed));
     }
 
     private List<Campaign> unfinishedDrafts(User customer) {
@@ -264,9 +277,10 @@ class CampaignServiceImpl implements CampaignService {
                     "Не заполнено: " + String.join(", ", missing)
                             + ". Без этого объявление можно сохранить только черновиком");
         }
-        if (budgetOf(campaign) < MIN_BUDGET_KOPECKS) {
+        long minBudgetKopecks = campaignProperties.minBudgetKopecks();
+        if (budgetOf(campaign) < minBudgetKopecks) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Минимальный бюджет объявления — " + MoneyUtil.formatRubles(MIN_BUDGET_KOPECKS));
+                    "Минимальный бюджет объявления — " + MoneyUtil.formatRubles(minBudgetKopecks));
         }
     }
 

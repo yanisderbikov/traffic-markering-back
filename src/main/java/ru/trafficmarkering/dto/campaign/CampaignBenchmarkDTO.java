@@ -10,7 +10,10 @@ public record CampaignBenchmarkDTO(
         long medianRatePerThousandKopecks,
         @Schema(description = "Медианный бюджет объявления, в копейках", example = "10000000")
         long medianBudgetKopecks,
-        @Schema(description = "Тематики со средними ставками за 1000 просмотров, в порядке показа")
+        @Schema(description = "Минимальный бюджет, с которым объявление можно запустить, в копейках", example = "1000000")
+        long minBudgetKopecks,
+        @Schema(description = "Самые популярные тематики, до 10, со средними ставками за 1000 просмотров, "
+                + "в порядке показа; остальные — поиском в /api/campaigns/topics")
         List<CampaignTopicDTO> topics
 ) {
 }

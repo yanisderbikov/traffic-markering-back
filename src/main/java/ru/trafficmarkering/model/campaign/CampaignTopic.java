@@ -1,38 +1,62 @@
 package ru.trafficmarkering.model.campaign;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.Instant;
+import java.util.Locale;
+
 /**
- * Тематика объявления и средняя ставка за 1000 просмотров по ней на рынке UGC-роликов.
- * Ставка ниже средней — креаторы берут такие задачи неохотно; заказчику об этом говорим в мастере.
+ * Тематика объявления. Базовые заведены миграцией вместе со средней ставкой за 1000 просмотров
+ * на рынке UGC-роликов: ставка ниже средней — креаторы берут такие задачи неохотно, заказчику
+ * об этом говорим в мастере. Остальные добавляют заказчики, если подходящей не нашлось, —
+ * средней ставки у них нет.
  */
-public enum CampaignTopic {
-    ENTERTAINMENT("Развлечения и юмор", 80_00L),
-    GAMING("Игры", 100_00L),
-    LIFESTYLE("Лайфстайл", 120_00L),
-    FOOD("Еда и рестораны", 120_00L),
-    BEAUTY_FASHION("Красота и мода", 150_00L),
-    SPORT_HEALTH("Спорт и здоровье", 150_00L),
-    TRAVEL("Путешествия", 150_00L),
-    APPS("Приложения и сервисы", 180_00L),
-    TECH("Технологии и гаджеты", 200_00L),
-    EDUCATION("Образование", 200_00L),
-    AUTO("Авто", 220_00L),
-    REAL_ESTATE("Недвижимость", 300_00L),
-    FINANCE("Финансы и инвестиции", 350_00L),
-    OTHER("Другое", 150_00L);
+@Entity
+@Table(name = "campaign_topic")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@ToString
+public class CampaignTopic {
 
-    private final String description;
-    private final long averageRatePerThousandKopecks;
+    /** Строковый ключ: у базовых — бывшее имя enum (TECH), у добавленных — случайный короткий номер */
+    @Id
+    @Column(length = 32)
+    private String code;
 
-    CampaignTopic(String description, long averageRatePerThousandKopecks) {
-        this.description = description;
-        this.averageRatePerThousandKopecks = averageRatePerThousandKopecks;
-    }
+    @Column(nullable = false, length = 64)
+    private String name;
 
-    public String getDescription() {
-        return description;
-    }
+    /** Ключ поиска и защиты от дублей, см. {@link #normalize(String)} */
+    @Column(name = "normalized_name", nullable = false, unique = true, length = 64)
+    private String normalizedName;
 
-    public long getAverageRatePerThousandKopecks() {
-        return averageRatePerThousandKopecks;
+    /** Средняя ставка за 1000 просмотров, в копейках; null — неизвестна */
+    @Column(name = "average_rate_per_thousand_kopecks")
+    private Long averageRatePerThousandKopecks;
+
+    /** Кто добавил; null — базовая тематика */
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    /** Регистр, «ё» и лишние пробелы не различаем: «Ёлки  и игрушки» и «елки и игрушки» — одна тематика. */
+    public static String normalize(String name) {
+        return name.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT).replace('ё', 'е');
     }
 }

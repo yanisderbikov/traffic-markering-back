@@ -11,7 +11,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
-import ru.trafficmarkering.model.campaign.CampaignTopic;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 
 import java.time.Instant;
@@ -38,8 +37,8 @@ public class CampaignCreateUpdateRequestDTO {
     @Schema(description = "Ключ загруженной фотографии из /api/files/campaign-photo/presign; обязателен для запуска")
     private String photoKey;
 
-    @Schema(description = "Тематика объявления; обязательна для запуска", example = "TECH")
-    private CampaignTopic topic;
+    @Schema(description = "Код тематики из /api/campaigns/topics; обязательна для запуска", example = "TECH")
+    private String topic;
 
     @Positive(message = "Ставка должна быть больше нуля")
     @Schema(description = "Ставка за 1000 просмотров, в копейках; обязательна для запуска", example = "35000")
