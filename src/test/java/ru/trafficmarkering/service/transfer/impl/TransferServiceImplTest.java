@@ -2,8 +2,10 @@ package ru.trafficmarkering.service.transfer.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.dto.rate.UsdtRateDTO;
 import ru.trafficmarkering.dto.transfer.TransferRejectRequestDTO;
 import ru.trafficmarkering.dto.transfer.TransferSentRequestDTO;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
@@ -25,10 +27,12 @@ import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.repository.SaverWallet;
 import ru.trafficmarkering.repository.SaverWalletTransaction;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.wallet.WalletService;
 import ru.trafficmarkering.service.wallet.impl.WalletLedgerTestSupport;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +40,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -56,11 +61,12 @@ class TransferServiceImplTest {
     private final WalletService walletService = mock(WalletService.class);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final FileStorage fileStorage = mock(FileStorage.class);
+    private final UsdtRateService usdtRateService = mock(UsdtRateService.class);
 
     private final TransferServiceImpl service = new TransferServiceImpl(
             WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction),
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage),
-            getterWalletTransaction, getterTransfer, saverTransfer, walletService, currentUserService);
+            getterWalletTransaction, getterTransfer, saverTransfer, walletService, currentUserService, usdtRateService);
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final User customer = User.builder().id(3L).username("customer@traffic.ru").name("Заказчик").role(Role.CUSTOMER).build();
@@ -77,6 +83,7 @@ class TransferServiceImplTest {
         when(currentUserService.require(Role.FINANCE_MANAGER)).thenReturn(finance);
         when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
         when(walletService.topUpTronAddress()).thenReturn(PLATFORM_TRON);
+        when(usdtRateService.current()).thenReturn(rate("86.76"));
         when(walletService.requireCustomer(3L)).thenReturn(customer);
         when(saverWallet.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
         when(saverWalletTransaction.save(any(WalletTransaction.class))).thenAnswer(inv -> {
@@ -99,6 +106,10 @@ class TransferServiceImplTest {
 
     private WalletOperationRequestDTO.WalletOperationRequestDTOBuilder operation(long amountKopecks) {
         return WalletOperationRequestDTO.builder().amountKopecks(amountKopecks).txId(" tx-1 ").proofKeys(PROOFS);
+    }
+
+    private UsdtRateDTO rate(String askPrice) {
+        return new UsdtRateDTO(new BigDecimal(askPrice), new BigDecimal(askPrice), Instant.now().toString(), "Rapira");
     }
 
     private WalletTransaction topUp(WalletTransactionStatus status) {
@@ -127,6 +138,84 @@ class TransferServiceImplTest {
         assertThat(detail.transfer().tronAddress()).isEqualTo(PLATFORM_TRON);
         assertThat(detail.transfer().proofs()).isEmpty();
         assertThat(detail.transfer().sentAt()).isNull();
+        assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
+        assertThat(Instant.parse(detail.transfer().expiresAt()))
+                .isBetween(Instant.now().plus(TransferServiceImpl.TOP_UP_TTL).minusSeconds(5),
+                        Instant.now().plus(TransferServiceImpl.TOP_UP_TTL));
+    }
+
+    @Test
+    void markTopUpPaidRefusesExpiredRequest() {
+        Transfer transfer = topUpTransfer(topUp(WalletTransactionStatus.PENDING));
+        transfer.setExpiresAt(Instant.now().minusSeconds(1));
+
+        assertThatThrownBy(() -> service.markTopUpPaid("TU000300", TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(transfer.getSentAt()).isNull();
+    }
+
+    @Test
+    void expireOverdueTopUpsClosesOnlyUnpaidRequests() {
+        WalletTransaction topUp = topUp(WalletTransactionStatus.PENDING);
+        Transfer transfer = topUpTransfer(topUp);
+        transfer.setExpiresAt(Instant.now().minusSeconds(1));
+        when(getterTransfer.getOverdue(eq(WalletTransactionType.TOP_UP), eq(WalletTransactionStatus.PENDING),
+                any(Instant.class))).thenReturn(List.of(transfer));
+
+        assertThat(service.expireOverdue()).isEqualTo(1);
+        assertThat(topUp.getStatus()).isEqualTo(WalletTransactionStatus.EXPIRED);
+        assertThat(transfer.getClosedAt()).isNotNull();
+        assertThat(customerWallet.balance()).isEqualTo(1_000_00L);
+
+        topUp.setStatus(WalletTransactionStatus.SENT);
+        assertThat(service.expireOverdue()).isZero();
+        assertThat(topUp.getStatus()).isEqualTo(WalletTransactionStatus.SENT);
+    }
+
+    @Test
+    void confirmTopUpStillCreditsExpiredRequest() {
+        topUpTransfer(topUp(WalletTransactionStatus.EXPIRED));
+
+        OperationDetailDTO detail = service.confirmTopUp("TU000300");
+
+        assertThat(detail.transaction().status()).isEqualTo("CONFIRMED");
+        assertThat(customerWallet.balance()).isEqualTo(1_800_00L);
+    }
+
+    @Test
+    void topUpKeepsRateFixedAtCreationWhenMarketMoves() {
+        service.requestTopUp(TopUpCreateRequestDTO.builder().amountKopecks(2_500_00L).build());
+        ArgumentCaptor<Transfer> saved = ArgumentCaptor.forClass(Transfer.class);
+        verify(saverTransfer).save(saved.capture());
+        Transfer transfer = saved.getValue();
+        WalletTransaction transaction = transfer.getTransaction();
+        when(getterWalletTransaction.getByPublicIdForUpdate(transaction.getPublicId())).thenReturn(Optional.of(transaction));
+        when(getterTransfer.getByTransactionId(transaction.getId())).thenReturn(Optional.of(transfer));
+        when(usdtRateService.current()).thenReturn(rate("95.10"));
+
+        OperationDetailDTO paid = service.markTopUpPaid(transaction.getPublicId(),
+                TopUpPaidRequestDTO.builder().proofKeys(PROOFS).build());
+
+        assertThat(paid.transfer().usdtRate()).isEqualByComparingTo("86.76");
+    }
+
+    @Test
+    void fixMissingUsdtRatesFixesCurrentRateOnUnsettledTransfers() {
+        when(getterTransfer.getWithoutUsdtRate(any())).thenReturn(List.of(payout));
+
+        assertThat(service.fixMissingUsdtRates()).isEqualTo(1);
+        assertThat(payout.getUsdtRate()).isEqualByComparingTo("86.76");
+        verify(saverTransfer).save(payout);
+    }
+
+    @Test
+    void fixMissingUsdtRatesDoesNotAskRateWhenNothingIsMissing() {
+        when(getterTransfer.getWithoutUsdtRate(any())).thenReturn(List.of());
+
+        assertThat(service.fixMissingUsdtRates()).isZero();
+        verify(usdtRateService, never()).current();
     }
 
     @Test
@@ -238,6 +327,30 @@ class TransferServiceImplTest {
         assertThat(detail.transaction().status()).isEqualTo("SENT");
         assertThat(detail.transaction().destination().label()).isEqualTo("TRON · " + TRON);
         assertThat(detail.transfer().tronAddress()).isEqualTo(TRON);
+        assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
+        assertThat(detail.transfer().expiresAt()).isNotNull();
+    }
+
+    @Test
+    void expireOverdueClosesUnconfirmedWithdrawalAndKeepsMoneyOut() {
+        WalletTransaction withdrawal = WalletTransaction.builder().id(500L).publicId("WD000500").wallet(customerWallet)
+                .type(WalletTransactionType.WITHDRAWAL).amountKopecks(-300_00L).balanceAfterKopecks(1_000_00L)
+                .status(WalletTransactionStatus.SENT).createdAt(Instant.now()).build();
+        Transfer transfer = Transfer.builder().id(9L).transaction(withdrawal).tronAddress(TRON)
+                .expiresAt(Instant.now().minusSeconds(1)).build();
+        when(getterWalletTransaction.getByPublicIdForUpdate("WD000500")).thenReturn(Optional.of(withdrawal));
+        when(getterTransfer.getByTransactionId(500L)).thenReturn(Optional.of(transfer));
+        when(getterTransfer.getOverdue(eq(WalletTransactionType.WITHDRAWAL), eq(WalletTransactionStatus.SENT),
+                any(Instant.class))).thenReturn(List.of(transfer));
+
+        assertThat(service.expireOverdue()).isEqualTo(1);
+        assertThat(withdrawal.getStatus()).isEqualTo(WalletTransactionStatus.EXPIRED);
+        assertThat(customerWallet.balance()).isEqualTo(1_000_00L);
+
+        service.reject("WD000500", TransferRejectRequestDTO.builder().reason("Перевод не дошёл").build());
+
+        assertThat(withdrawal.getStatus()).isEqualTo(WalletTransactionStatus.REJECTED);
+        assertThat(customerWallet.balance()).isEqualTo(1_300_00L);
     }
 
     @Test

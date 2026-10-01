@@ -24,18 +24,31 @@ import ru.trafficmarkering.repository.GetterTransfer;
 import ru.trafficmarkering.repository.GetterWalletTransaction;
 import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.transfer.TransferService;
 import ru.trafficmarkering.service.wallet.OperationReader;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.service.wallet.WalletService;
 
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
 class TransferServiceImpl implements TransferService {
+
+    static final Duration TOP_UP_TTL = Duration.ofHours(1);
+    static final Duration WITHDRAWAL_TTL = Duration.ofHours(1);
+
+    /** Заявки, по которым ещё могут ходить деньги: им нужен курс, даже если они созданы до его фиксации */
+    private static final Set<WalletTransactionStatus> UNSETTLED = EnumSet.of(
+            WalletTransactionStatus.PENDING, WalletTransactionStatus.SENT, WalletTransactionStatus.EXPIRED);
 
     private static final Comparator<WalletTransaction> OPEN_FIRST = Comparator
             .comparingInt((WalletTransaction transaction) -> transaction.getStatus().isOpen() ? 0 : 1)
@@ -48,6 +61,7 @@ class TransferServiceImpl implements TransferService {
     private final SaverTransfer saverTransfer;
     private final WalletService walletService;
     private final CurrentUserService currentUserService;
+    private final UsdtRateService usdtRateService;
 
     @Override
     @Transactional
@@ -58,10 +72,16 @@ class TransferServiceImpl implements TransferService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Адрес для пополнения ещё не настроен — напишите менеджеру финансов");
         }
+        BigDecimal usdtRate = usdtRateService.current().askPrice();
         Wallet wallet = ledger.walletOf(customer);
         WalletTransaction transaction = ledger.defer(wallet, WalletTransactionType.TOP_UP, request.getAmountKopecks(),
                 WalletTransactionStatus.PENDING, customer);
-        Transfer transfer = saverTransfer.save(Transfer.builder().transaction(transaction).tronAddress(address).build());
+        Transfer transfer = saverTransfer.save(Transfer.builder()
+                .transaction(transaction)
+                .tronAddress(address)
+                .usdtRate(usdtRate)
+                .expiresAt(Instant.now().plus(TOP_UP_TTL))
+                .build());
         return detail(transaction, transfer);
     }
 
@@ -76,6 +96,10 @@ class TransferServiceImpl implements TransferService {
                             + transaction.getStatus().getDescription().toLowerCase());
         }
         Transfer transfer = requireTransfer(transaction);
+        if (transfer.isExpired(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Время на оплату заявки вышло — создайте новую заявку на пополнение");
+        }
         transfer.attach(trimToNull(request.getTxId()), requireProofKeys(request.getProofKeys()));
         saverTransfer.save(transfer);
         transaction.setStatus(WalletTransactionStatus.SENT);
@@ -99,6 +123,46 @@ class TransferServiceImpl implements TransferService {
     }
 
     @Override
+    @Transactional
+    public int expireOverdue() {
+        Instant now = Instant.now();
+        return expireOverdue(WalletTransactionType.TOP_UP, WalletTransactionStatus.PENDING, now)
+                + expireOverdue(WalletTransactionType.WITHDRAWAL, WalletTransactionStatus.SENT, now);
+    }
+
+    @Override
+    @Transactional
+    public int fixMissingUsdtRates() {
+        List<Transfer> missing = getterTransfer.getWithoutUsdtRate(UNSETTLED);
+        if (missing.isEmpty()) {
+            return 0;
+        }
+        BigDecimal usdtRate = usdtRateService.current().askPrice();
+        for (Transfer transfer : missing) {
+            transfer.setUsdtRate(usdtRate);
+            saverTransfer.save(transfer);
+        }
+        return missing.size();
+    }
+
+    private int expireOverdue(WalletTransactionType type, WalletTransactionStatus waiting, Instant now) {
+        int expired = 0;
+        for (Transfer overdue : getterTransfer.getOverdue(type, waiting, now)) {
+            WalletTransaction transaction = getterWalletTransaction
+                    .getByPublicIdForUpdate(overdue.getTransaction().getPublicId())
+                    .orElse(null);
+            if (transaction == null || transaction.getStatus() != waiting) {
+                continue;
+            }
+            overdue.expire();
+            saverTransfer.save(overdue);
+            transaction.setStatus(WalletTransactionStatus.EXPIRED);
+            expired++;
+        }
+        return expired;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<OperationRowDTO> topUps() {
         currentUserService.require(Role.FINANCE_MANAGER);
@@ -115,7 +179,7 @@ class TransferServiceImpl implements TransferService {
         if (transaction.getType() != WalletTransactionType.TOP_UP) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Это не заявка на пополнение");
         }
-        if (!transaction.getStatus().isOpen()) {
+        if (!transaction.getStatus().isOpen() && transaction.getStatus() != WalletTransactionStatus.EXPIRED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Заявка уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
         }
@@ -132,10 +196,11 @@ class TransferServiceImpl implements TransferService {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
         User customer = walletService.requireCustomer(userId);
         String address = requireTronAddress(request.getTronAddress());
+        BigDecimal usdtRate = usdtRateService.current().askPrice();
         Wallet wallet = ledger.lockWallet(customer);
         WalletTransaction transaction = ledger.post(wallet, WalletTransactionType.WITHDRAWAL, -request.getAmountKopecks(),
                 WalletTransactionStatus.SENT, null, actor, trimToNull(request.getComment()));
-        return detail(transaction, sentTransfer(transaction, address, actor, request));
+        return detail(transaction, sentTransfer(transaction, address, usdtRate, actor, request));
     }
 
     @Override
@@ -173,7 +238,9 @@ class TransferServiceImpl implements TransferService {
     public OperationDetailDTO reject(String publicId, TransferRejectRequestDTO request) {
         User actor = currentUserService.require(Role.FINANCE_MANAGER);
         WalletTransaction transaction = requireExternal(publicId);
-        if (!transaction.getStatus().isOpen()) {
+        boolean expiredWithdrawal = transaction.getType() == WalletTransactionType.WITHDRAWAL
+                && transaction.getStatus() == WalletTransactionStatus.EXPIRED;
+        if (!transaction.getStatus().isOpen() && !expiredWithdrawal) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Операция уже закрыта: " + transaction.getStatus().getDescription().toLowerCase());
         }
@@ -188,9 +255,14 @@ class TransferServiceImpl implements TransferService {
         return detail(transaction, transfer);
     }
 
-    private Transfer sentTransfer(WalletTransaction transaction, String tronAddress, User actor,
+    private Transfer sentTransfer(WalletTransaction transaction, String tronAddress, BigDecimal usdtRate, User actor,
                                   WalletOperationRequestDTO request) {
-        Transfer transfer = Transfer.builder().transaction(transaction).tronAddress(tronAddress).build();
+        Transfer transfer = Transfer.builder()
+                .transaction(transaction)
+                .tronAddress(tronAddress)
+                .usdtRate(usdtRate)
+                .expiresAt(Instant.now().plus(WITHDRAWAL_TTL))
+                .build();
         transfer.send(actor, request.getTxId().trim(), requireProofKeys(request.getProofKeys()), null);
         return saverTransfer.save(transfer);
     }

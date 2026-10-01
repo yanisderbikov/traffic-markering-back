@@ -18,6 +18,10 @@ public interface TransferService {
 
     OperationDetailDTO cancelTopUp(String publicId);
 
+    int expireOverdue();
+
+    int fixMissingUsdtRates();
+
     List<OperationRowDTO> topUps();
 
     OperationDetailDTO confirmTopUp(String publicId);

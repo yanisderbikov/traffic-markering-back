@@ -36,6 +36,8 @@ public interface GetterApplication {
      */
     List<Application> getApproved();
 
+    List<Application> getAwaitingModeration();
+
     /**
      * Уже поданный ролик: один и тот же видос нельзя подать дважды.
      * Отклонённые не в счёт — их ролик снова свободен.

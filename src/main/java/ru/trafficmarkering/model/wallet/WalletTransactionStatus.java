@@ -6,7 +6,8 @@ public enum WalletTransactionStatus {
     SENT("Отправлена, ждёт подтверждения"),
     CONFIRMED("Подтверждена"),
     REJECTED("Отклонена"),
-    CANCELLED("Отменена");
+    CANCELLED("Отменена"),
+    EXPIRED("Просрочена");
 
     private final String description;
 

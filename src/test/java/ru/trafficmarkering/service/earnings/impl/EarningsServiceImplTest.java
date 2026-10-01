@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.earnings.CreatorWalletDTO;
 import ru.trafficmarkering.dto.earnings.PayoutCreateRequestDTO;
+import ru.trafficmarkering.dto.rate.UsdtRateDTO;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
@@ -18,6 +19,7 @@ import ru.trafficmarkering.model.fraud.FraudStatus;
 import ru.trafficmarkering.model.fraud.TrustLevel;
 import ru.trafficmarkering.repository.GetterViewSnapshot;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import ru.trafficmarkering.service.rate.UsdtRateService;
 import org.springframework.test.util.ReflectionTestUtils;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
@@ -39,6 +41,7 @@ import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.service.wallet.impl.WalletLedgerTestSupport;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -72,12 +75,13 @@ class EarningsServiceImplTest {
     private final GetterViewSnapshot getterViewSnapshot = mock(GetterViewSnapshot.class);
     private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
     private final FraudProperties fraudProperties = new FraudProperties();
+    private final UsdtRateService usdtRateService = mock(UsdtRateService.class);
 
     private final WalletLedger ledger = WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction);
     private final EarningsServiceImpl service = new EarningsServiceImpl(ledger,
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage), getterWalletTransaction,
             getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService,
-            getterViewSnapshot, creatorTrustService, fraudProperties);
+            getterViewSnapshot, creatorTrustService, fraudProperties, usdtRateService);
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final Wallet wallet = Wallet.builder().id(10L).user(creator).balanceKopecks(7_000_00L).build();
@@ -104,6 +108,8 @@ class EarningsServiceImplTest {
         when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
         // Базовые тесты — без окна удержания и с проверенным криатором; антифрод проверяется отдельно
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.TRUSTED);
+        when(usdtRateService.current()).thenReturn(new UsdtRateDTO(
+                new BigDecimal("86.76"), new BigDecimal("86.73"), Instant.now().toString(), "Rapira"));
         ReflectionTestUtils.setField(service, "holdDays", 0);
     }
 
@@ -123,6 +129,7 @@ class EarningsServiceImplTest {
         assertThat(detail.transaction().status()).isEqualTo("PENDING");
         assertThat(detail.transaction().amountKopecks()).isEqualTo(-5_000_00L);
         assertThat(detail.transfer().tronAddress()).isEqualTo(TRON);
+        assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
         assertThat(detail.transaction().source().label()).isEqualTo("Кошелёк криатора · Аня");
         assertThat(detail.transaction().destination().label()).isEqualTo("TRON · " + TRON);
         ArgumentCaptor<Transfer> saved = ArgumentCaptor.forClass(Transfer.class);
@@ -247,6 +254,45 @@ class EarningsServiceImplTest {
         wallet.setBalanceKopecks(0L);
 
         assertThat(service.myWallet().payoutAvailable()).isFalse();
+    }
+
+    @Test
+    void myWalletSkipsFrozenAndRejectedApplicationsInPending() {
+        Campaign campaign = campaign(3_000_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        Application suspicious = application(campaign, 400_00L, 0L);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        Application fraud = application(campaign, 300_00L, 0L);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application rejected = application(campaign, 200_00L, 0L);
+        rejected.setStatus(ApplicationStatus.REJECTED);
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(clean, suspicious, fraud, rejected));
+
+        assertThat(service.myWallet().pendingKopecks()).isEqualTo(1_000_00L);
+    }
+
+    @Test
+    void myWalletHidesPayoutAndPendingForBlockedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+        Campaign campaign = campaign(3_000_00L);
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application(campaign, 1_000_00L, 0L)));
+
+        CreatorWalletDTO dto = service.myWallet();
+
+        assertThat(dto.balanceKopecks()).isEqualTo(7_000_00L);
+        assertThat(dto.pendingKopecks()).isZero();
+        assertThat(dto.payoutAvailable()).isFalse();
+    }
+
+    @Test
+    void requestPayoutIsForbiddenForBlockedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+
+        assertThatThrownBy(() -> service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(1_000_00L).tronAddress(TRON).build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("заблокирован");
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
     }
 
     @Test

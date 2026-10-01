@@ -11,8 +11,6 @@ import ru.trafficmarkering.model.fraud.FraudStatus;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -48,8 +46,6 @@ public class FraudScorer {
     private static final Duration MAX_INTERVAL = Duration.ofHours(3);
     private static final Duration WARM_UP = Duration.ofHours(48);
     private static final Duration STALE_AFTER = Duration.ofDays(14);
-    private static final DateTimeFormatter DATE =
-            DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Moscow"));
 
     private final FraudProperties properties;
 
@@ -108,16 +104,21 @@ public class FraudScorer {
         }
         if (campaign != null && campaign.getCreatedAt() != null && publishedAt.isBefore(campaign.getCreatedAt())) {
             flags.add(new FraudFlag(OLD_VIDEO, "Ролик старше объявления", 50,
-                    "Ролик опубликован " + DATE.format(publishedAt)
-                            + ", объявление создано " + DATE.format(campaign.getCreatedAt())));
+                    "Ролик опубликован за " + gap(publishedAt, campaign.getCreatedAt()) + " до создания объявления"));
             return;
         }
         if (application.getCreatedAt() != null
                 && publishedAt.isBefore(application.getCreatedAt().minus(STALE_AFTER))) {
             flags.add(new FraudFlag(STALE_VIDEO, "Ролик опубликован задолго до отклика", 20,
-                    "Ролик опубликован " + DATE.format(publishedAt)
-                            + ", отклик подан " + DATE.format(application.getCreatedAt())));
+                    "Ролик опубликован за " + gap(publishedAt, application.getCreatedAt()) + " до отклика"));
         }
+    }
+
+    /** Промежуток без привязки к часовому поясу: в днях, а если меньше суток — в часах. */
+    private static String gap(Instant from, Instant to) {
+        Duration duration = Duration.between(from, to);
+        long days = duration.toDays();
+        return days > 0 ? days + " дн." : Math.max(1, duration.toHours()) + " ч.";
     }
 
     /** Площадка сама списала просмотры: она признала накрутку раньше нас. */

@@ -23,6 +23,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import ru.trafficmarkering.model.User;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,10 @@ public class Transfer {
 
     @Column(name = "tron_address", length = 64)
     private String tronAddress;
+
+    /** Курс USDT/RUB на момент создания заявки: по нему считается сумма в USDT, дальше не меняется */
+    @Column(name = "usdt_rate", precision = 19, scale = 6)
+    private BigDecimal usdtRate;
 
     @Column(name = "tx_id", length = 255)
     private String txId;
@@ -82,6 +87,9 @@ public class Transfer {
 
     @Column(name = "closed_at")
     private Instant closedAt;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -126,6 +134,14 @@ public class Transfer {
     }
 
     public void cancel() {
+        closedAt = Instant.now();
+    }
+
+    public boolean isExpired(Instant now) {
+        return expiresAt != null && !expiresAt.isAfter(now);
+    }
+
+    public void expire() {
         closedAt = Instant.now();
     }
 }

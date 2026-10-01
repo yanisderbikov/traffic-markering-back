@@ -30,6 +30,7 @@ import ru.trafficmarkering.service.wallet.OperationReader;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.service.wallet.WalletService;
 
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +125,10 @@ class WalletServiceImpl implements WalletService {
         Transfer transfer = getterTransfer.getByTransactionId(transaction.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Перевод не найден для операции " + transaction.getPublicId()));
+        if (transfer.isExpired(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Время на подтверждение вышло — если деньги не пришли, напишите менеджеру финансов");
+        }
         transfer.confirm();
         saverTransfer.save(transfer);
         transaction.setStatus(WalletTransactionStatus.CONFIRMED);

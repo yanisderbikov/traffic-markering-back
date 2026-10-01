@@ -190,6 +190,23 @@ class WalletServiceImplTest {
     }
 
     @Test
+    void confirmRefusesExpiredWithdrawal() {
+        when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
+        WalletTransaction withdrawal = sentWithdrawal();
+        Transfer transfer = Transfer.builder().id(70L).transaction(withdrawal).txId("tx")
+                .expiresAt(java.time.Instant.now().minusSeconds(1)).build();
+        when(getterWalletTransaction.getByPublicIdForUpdate("WD000007")).thenReturn(Optional.of(withdrawal));
+        when(getterTransfer.getByTransactionId(7L)).thenReturn(Optional.of(transfer));
+
+        assertThatThrownBy(() -> service.confirm("WD000007"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(withdrawal.getStatus()).isEqualTo(WalletTransactionStatus.SENT);
+        assertThat(transfer.getConfirmedAt()).isNull();
+    }
+
+    @Test
     void confirmLeavesTopUpsToFinance() {
         when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
         WalletTransaction topUp = WalletTransaction.builder().id(9L).publicId("TU000009").wallet(wallet).type(WalletTransactionType.TOP_UP)

@@ -91,6 +91,7 @@ class ApplicationServiceImplTest {
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
     private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User manager = User.builder().id(3L).name("Менеджер").role(Role.ADMIN).build();
 
     @Test
     void apply_rejectsVideoFromPlatformCampaignDoesNotAccept() {
@@ -274,10 +275,95 @@ class ApplicationServiceImplTest {
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.updateStatus(application.getId(),
-                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.APPROVED)));
+                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.APPROVED, null)));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void moderate_approvesPendingVideoAndStartsAccrual() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = pending(campaign);
+        when(currentUserService.require(Role.ADMIN)).thenReturn(manager);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ApplicationDTO moderated = service.moderate(application.getId(),
+                new ApplicationStatusUpdateRequestDTO(ApplicationStatus.APPROVED, null));
+
+        assertEquals("APPROVED", moderated.status());
+        assertEquals(manager, application.getModeratedBy());
+        assertTrue(application.isAccruable());
+        verify(campaignAccrualService).recalculate(campaign);
+    }
+
+    @Test
+    void moderate_requiresRejectionReason() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = pending(campaign);
+        when(currentUserService.require(Role.ADMIN)).thenReturn(manager);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.moderate(application.getId(),
+                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.REJECTED, "  ")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals(ApplicationStatus.PENDING, application.getStatus());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void moderate_keepsRejectionReasonForCreator() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = pending(campaign);
+        when(currentUserService.require(Role.ADMIN)).thenReturn(manager);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ApplicationDTO moderated = service.moderate(application.getId(),
+                new ApplicationStatusUpdateRequestDTO(ApplicationStatus.REJECTED, " Ролик не по брифу "));
+
+        assertEquals("REJECTED", moderated.status());
+        assertEquals("Ролик не по брифу", moderated.rejectionReason());
+    }
+
+    @Test
+    void moderate_refusesAlreadyDecidedApplication() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = pending(campaign);
+        application.setStatus(ApplicationStatus.APPROVED);
+        when(currentUserService.require(Role.ADMIN)).thenReturn(manager);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.moderate(application.getId(),
+                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.REJECTED, "Поздно")));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void updateStatus_customerRejectionNeedsReason() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = pending(campaign);
+        when(currentUserService.require(Role.CUSTOMER)).thenReturn(customer);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.updateStatus(application.getId(),
+                        new ApplicationStatusUpdateRequestDTO(ApplicationStatus.REJECTED, null)));
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verify(saverApplication, never()).save(any());
+    }
+
+    private Application pending(Campaign campaign) {
+        Application application = inProgress(campaign);
+        application.setPlatform(Platform.YOUTUBE_SHORTS);
+        application.setVideoUrl(YOUTUBE_URL);
+        application.setStatus(ApplicationStatus.PENDING);
+        return application;
     }
 
     private Application inProgress(Campaign campaign) {

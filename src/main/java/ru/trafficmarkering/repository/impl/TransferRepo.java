@@ -5,7 +5,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.trafficmarkering.model.wallet.Transfer;
+import ru.trafficmarkering.model.wallet.WalletTransactionStatus;
+import ru.trafficmarkering.model.wallet.WalletTransactionType;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,4 +21,13 @@ interface TransferRepo extends JpaRepository<Transfer, Long> {
 
     @Query("select t from Transfer t where t.transaction.id in :transactionIds")
     List<Transfer> findAllByTransactionIdIn(@Param("transactionIds") Collection<Long> transactionIds);
+
+    @Query("select t from Transfer t join fetch t.transaction tx "
+            + "where tx.type = :type and tx.status = :status and t.expiresAt <= :now")
+    List<Transfer> findOverdue(@Param("type") WalletTransactionType type,
+                               @Param("status") WalletTransactionStatus status,
+                               @Param("now") Instant now);
+
+    @Query("select t from Transfer t join t.transaction tx where t.usdtRate is null and tx.status in :statuses")
+    List<Transfer> findWithoutUsdtRate(@Param("statuses") Collection<WalletTransactionStatus> statuses);
 }

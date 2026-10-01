@@ -40,8 +40,6 @@ import ru.trafficmarkering.util.PublicIdGenerator;
 import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +64,9 @@ class ApplicationServiceImpl implements ApplicationService {
     private static final Set<ApplicationStatus> CUSTOMER_DECISIONS =
             EnumSet.of(ApplicationStatus.APPROVED, ApplicationStatus.REJECTED, ApplicationStatus.COMPLETED);
 
+    private static final Set<ApplicationStatus> MODERATION_DECISIONS =
+            EnumSet.of(ApplicationStatus.APPROVED, ApplicationStatus.REJECTED);
+
     private final GetterApplication getterApplication;
     private final SaverApplication saverApplication;
     private final ApplicationDeleter applicationDeleter;
@@ -79,9 +80,6 @@ class ApplicationServiceImpl implements ApplicationService {
     private final ShortLinkResolver shortLinkResolver;
     private final CreatorTrustService creatorTrustService;
     private final FraudCheckService fraudCheckService;
-
-    private static final DateTimeFormatter MOSCOW_DATE =
-            DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.of("Europe/Moscow"));
 
     @Override
     @Transactional
@@ -190,12 +188,50 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Криатор ещё не приложил ролик");
         }
 
-        application.setStatus(request.getStatus());
+        decide(application, request, customer);
+        return toDto(requireApplication(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ApplicationDTO> getModerationQueue() {
+        currentUserService.require(Role.ADMIN);
+        return toDtoList(getterApplication.getAwaitingModeration());
+    }
+
+    @Override
+    @Transactional
+    public ApplicationDTO moderate(UUID id, ApplicationStatusUpdateRequestDTO request) {
+        User manager = currentUserService.require(Role.ADMIN);
+        Application application = requireApplication(id);
+        if (!MODERATION_DECISIONS.contains(request.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "На модерации отклик можно только одобрить или отклонить");
+        }
+        if (application.getStatus() != ApplicationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отклик уже не ждёт модерации: " + application.getStatus().getDescription().toLowerCase());
+        }
+
+        decide(application, request, manager);
+        return toDto(requireApplication(id));
+    }
+
+    private void decide(Application application, ApplicationStatusUpdateRequestDTO request, User moderator) {
+        ApplicationStatus status = request.getStatus();
+        String reason = trimToNull(request.getReason());
+        if (status == ApplicationStatus.REJECTED && reason == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отказа: её увидит криатор");
+        }
+        if (application.getStatus() == ApplicationStatus.PENDING || status == ApplicationStatus.REJECTED) {
+            application.setModeratedAt(Instant.now());
+            application.setModeratedBy(moderator);
+        }
+        application.setRejectionReason(status == ApplicationStatus.REJECTED ? reason : null);
+        application.setStatus(status);
         saverApplication.save(application);
         // Статус решает, идут ли по отклику деньги, поэтому бюджет объявления пересчитываем целиком
-        campaignAccrualService.recalculate(campaign);
-
-        return toDto(requireApplication(id));
+        campaignAccrualService.recalculate(application.getCampaign());
     }
 
     @Override
@@ -322,11 +358,11 @@ class ApplicationServiceImpl implements ApplicationService {
         Instant now = Instant.now();
         if (!campaign.startedBy(now)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Объявление начнёт принимать отклики " + MOSCOW_DATE.format(campaign.getStartsAt()));
+                    "Объявление начнёт принимать отклики позже — даты приёма указаны на странице объявления");
         }
         if (campaign.endedBy(now)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Срок действия объявления истёк " + MOSCOW_DATE.format(campaign.getEndsAt()));
+                    "Срок действия объявления истёк");
         }
     }
 

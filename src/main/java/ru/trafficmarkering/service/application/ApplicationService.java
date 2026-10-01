@@ -34,10 +34,14 @@ public interface ApplicationService {
     List<ApplicationDTO> getByCampaignId(UUID campaignId, Long ownerId);
 
     /**
-     * Решение заказчика по отклику: APPROVED, REJECTED или COMPLETED.
+     * Решение заказчика по отклику: APPROVED, REJECTED (с причиной) или COMPLETED.
      * Начисления по объявлению пересчитываются целиком — статус меняет, кому идут деньги.
      */
     ApplicationDTO updateStatus(UUID id, ApplicationStatusUpdateRequestDTO request);
+
+    List<ApplicationDTO> getModerationQueue();
+
+    ApplicationDTO moderate(UUID id, ApplicationStatusUpdateRequestDTO request);
 
     /** Отозвать свой отклик или отказаться от работы; после решения заказчика отзывать уже поздно. */
     void delete(UUID id);

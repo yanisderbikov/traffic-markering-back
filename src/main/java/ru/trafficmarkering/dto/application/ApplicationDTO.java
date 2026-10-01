@@ -48,6 +48,8 @@ public record ApplicationDTO(
         @Schema(description = "Сработавшие правила; криатору не показываются") List<FraudFlagDTO> fraudFlags,
         @Schema(description = "Репутация криатора: NEW, TRUSTED, RESTRICTED, BLOCKED") String creatorTrustLevel,
         @Schema(description = "Человекочитаемая репутация", example = "Новичок") String creatorTrustLevelDescription,
+        @Schema(description = "Когда отклик прошёл модерацию, ISO-8601; null — ещё не проверен") String moderatedAt,
+        @Schema(description = "Причина отказа; есть только у REJECTED") String rejectionReason,
         String createdAt,
         String updatedAt
 ) {
@@ -99,6 +101,8 @@ public record ApplicationDTO(
                 application.fraudFlags().stream().map(FraudFlagDTO::from).toList(),
                 trustLevel.name(),
                 trustLevel.getDescription(),
+                application.getModeratedAt() != null ? application.getModeratedAt().toString() : null,
+                application.getRejectionReason(),
                 application.getCreatedAt() != null ? application.getCreatedAt().toString() : null,
                 application.getUpdatedAt() != null ? application.getUpdatedAt().toString() : null);
     }
@@ -111,7 +115,7 @@ public record ApplicationDTO(
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
                 fraudStatusDescription, null, List.of(), creatorTrustLevel, creatorTrustLevelDescription,
-                createdAt, updatedAt);
+                moderatedAt, rejectionReason, createdAt, updatedAt);
     }
 
     /** Короткая форма: объявление и криатор берутся из отклика (нужна открытая транзакция). */

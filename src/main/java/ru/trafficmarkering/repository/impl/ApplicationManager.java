@@ -105,6 +105,16 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     }
 
     @Override
+    public List<Application> getAwaitingModeration() {
+        try {
+            return applicationRepo.findByStatus(ApplicationStatus.PENDING);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
     public Optional<Application> getActiveByVideoKey(String videoKey) {
         if (videoKey == null) {
             return Optional.empty();

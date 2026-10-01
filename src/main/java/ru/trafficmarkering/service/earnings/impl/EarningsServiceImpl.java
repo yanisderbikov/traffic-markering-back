@@ -34,10 +34,12 @@ import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.earnings.EarningsService;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.wallet.OperationReader;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.util.PayoutCalculator;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -62,6 +64,7 @@ class EarningsServiceImpl implements EarningsService {
     private final GetterViewSnapshot getterViewSnapshot;
     private final CreatorTrustService creatorTrustService;
     private final FraudProperties fraudProperties;
+    private final UsdtRateService usdtRateService;
 
     /** Окно удержания в днях: в кошелёк уезжают только просмотры, снятые не позже чем N дней назад */
     @Value("${earnings.hold-days:7}")
@@ -86,12 +89,14 @@ class EarningsServiceImpl implements EarningsService {
                 }
             }
         }
-        long pending = getterApplication.getByCreatorId(creator.getId()).stream()
+        TrustLevel trust = creatorTrustService.levelOf(creator.getId());
+        long pending = trust.blocksCredit() ? 0L : getterApplication.getByCreatorId(creator.getId()).stream()
+                .filter(application -> application.isAccruable() && !application.fraudStatus().blocksCredit())
                 .mapToLong(Application::uncreditedKopecks)
                 .filter(delta -> delta > 0)
                 .sum();
         return new CreatorWalletDTO(creator.getId(), wallet.balance(), reserved, paidOut, earned, pending,
-                wallet.balance() > 0,
+                wallet.balance() > 0 && !trust.blocksCredit(),
                 wallet.getUpdatedAt() != null ? wallet.getUpdatedAt().toString() : null);
     }
 
@@ -117,18 +122,24 @@ class EarningsServiceImpl implements EarningsService {
     @Transactional
     public OperationDetailDTO requestPayout(PayoutCreateRequestDTO request) {
         User creator = currentUserService.require(Role.CREATOR);
+        if (creatorTrustService.levelOf(creator.getId()).blocksCredit()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Вывод недоступен: аккаунт заблокирован антифродом");
+        }
         long amount = request.getAmountKopecks();
         String address = request.getTronAddress().trim();
         if (!Transfer.isTronAddress(address)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Адрес не похож на кошелёк TRON (TRC-20): он начинается с T и состоит из 34 символов");
         }
+        BigDecimal usdtRate = usdtRateService.current().askPrice();
         Wallet wallet = ledger.lockWallet(creator);
         WalletTransaction transaction = ledger.post(wallet, WalletTransactionType.PAYOUT, -amount,
                 WalletTransactionStatus.PENDING, null, creator, "USDT TRC-20 → " + address);
         Transfer transfer = saverTransfer.save(Transfer.builder()
                 .transaction(transaction)
                 .tronAddress(address)
+                .usdtRate(usdtRate)
                 .build());
         return operationReader.detail(transaction, transfer);
     }

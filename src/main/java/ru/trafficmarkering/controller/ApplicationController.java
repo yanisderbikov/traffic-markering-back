@@ -70,7 +70,7 @@ public class ApplicationController {
     }
 
     @Operation(summary = "Решение по отклику",
-            description = "Заказчик объявления одобряет (APPROVED), отклоняет (REJECTED) или завершает (COMPLETED) отклик. "
+            description = "Заказчик объявления одобряет (APPROVED), отклоняет (REJECTED, причина обязательна) или завершает (COMPLETED) отклик. "
                     + "После смены статуса начисления по объявлению пересчитываются целиком",
             security = @SecurityRequirement(name = "Bearer"))
     @PatchMapping("/{id}/status")

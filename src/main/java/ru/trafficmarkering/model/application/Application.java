@@ -134,6 +134,17 @@ public class Application {
     @Column(name = "fraud_review_comment", columnDefinition = "TEXT")
     private String fraudReviewComment;
 
+    @Column(name = "moderated_at")
+    private Instant moderatedAt;
+
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "moderated_by")
+    private User moderatedBy;
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

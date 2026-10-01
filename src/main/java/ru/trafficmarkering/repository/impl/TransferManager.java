@@ -4,9 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.model.wallet.Transfer;
+import ru.trafficmarkering.model.wallet.WalletTransactionStatus;
+import ru.trafficmarkering.model.wallet.WalletTransactionType;
 import ru.trafficmarkering.repository.GetterTransfer;
 import ru.trafficmarkering.repository.SaverTransfer;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +41,26 @@ class TransferManager implements GetterTransfer, SaverTransfer {
         }
         try {
             return transferRepo.findAllByTransactionIdIn(transactionIds);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Transfer> getOverdue(WalletTransactionType type, WalletTransactionStatus status, Instant now) {
+        try {
+            return transferRepo.findOverdue(type, status, now);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Transfer> getWithoutUsdtRate(Collection<WalletTransactionStatus> statuses) {
+        try {
+            return transferRepo.findWithoutUsdtRate(statuses);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
