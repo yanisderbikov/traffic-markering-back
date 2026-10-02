@@ -179,13 +179,17 @@ class CampaignServiceImplTest {
     }
 
     private Campaign filledDraft(long budgetKopecks) {
+        return filledDraft(budgetKopecks, 1_000_00L);
+    }
+
+    private Campaign filledDraft(long budgetKopecks, long minPayoutKopecks) {
         Campaign draft = campaign(CampaignStatus.DRAFT, "Обзор приложения", Instant.now());
         draft.setDescription("Снять короткий ролик");
         draft.setPhotoKey("campaign-photos/cover.png");
         draft.setTopic(CampaignTopic.builder().code("TECH").name("Технологии и гаджеты").build());
         draft.setPlatforms(EnumSet.of(Platform.TIKTOK));
         draft.setRatePerThousandKopecks(350_00L);
-        draft.setMinPayoutKopecks(3_000_00L);
+        draft.setMinPayoutKopecks(minPayoutKopecks);
         draft.setBudgetKopecks(budgetKopecks);
         return draft;
     }
@@ -213,6 +217,52 @@ class CampaignServiceImplTest {
                 CampaignStatusUpdateRequestDTO.builder().status(CampaignStatus.ACTIVE).build());
 
         assertThat(launched.status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void launchRefusesPayoutThresholdAboveBudgetShare() {
+        Campaign draft = filledDraft(20_000_00L, 2_000_01L);
+
+        assertThatThrownBy(() -> service.updateStatus(draft.getId(),
+                CampaignStatusUpdateRequestDTO.builder().status(CampaignStatus.ACTIVE).build()))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getReason()).isEqualTo("Порог вывода — не больше 10% бюджета: до 2\u00A0000\u00A0₽");
+                });
+        verify(saverCampaign, never()).save(any());
+    }
+
+    @Test
+    void launchAcceptsPayoutThresholdEqualToBudgetShare() {
+        Campaign draft = filledDraft(20_000_00L, 2_000_00L);
+
+        CampaignDTO launched = service.updateStatus(draft.getId(),
+                CampaignStatusUpdateRequestDTO.builder().status(CampaignStatus.ACTIVE).build());
+
+        assertThat(launched.status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void launchedCampaignCannotShrinkBudgetBelowPayoutThresholdShare() {
+        Campaign active = filledDraft(20_000_00L, 2_000_00L);
+        active.setStatus(CampaignStatus.ACTIVE);
+        when(getterCampaignTopic.getByCode("TECH")).thenReturn(Optional.of(active.getTopic()));
+
+        assertThatThrownBy(() -> service.update(active.getId(), CampaignCreateUpdateRequestDTO.builder()
+                .title(active.getTitle())
+                .description(active.getDescription())
+                .photoKey(active.getPhotoKey())
+                .topic("TECH")
+                .platforms(EnumSet.of(Platform.TIKTOK))
+                .ratePerThousandKopecks(active.getRatePerThousandKopecks())
+                .budgetKopecks(15_000_00L)
+                .minPayoutKopecks(2_000_00L)
+                .build()))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getReason()).isEqualTo("Порог вывода — не больше 10% бюджета: до 1\u00A0500\u00A0₽");
+                });
+        verify(saverCampaign, never()).save(any());
     }
 
     @Test

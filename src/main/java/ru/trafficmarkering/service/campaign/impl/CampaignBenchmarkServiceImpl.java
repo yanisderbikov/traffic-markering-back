@@ -40,6 +40,7 @@ class CampaignBenchmarkServiceImpl implements CampaignBenchmarkService {
                 getterCampaign.getMedianRatePerThousandKopecks().orElse(DEFAULT_MEDIAN_RATE_PER_THOUSAND_KOPECKS),
                 getterCampaign.getMedianBudgetKopecks().orElse(DEFAULT_MEDIAN_BUDGET_KOPECKS),
                 campaignProperties.minBudgetKopecks(),
+                campaignProperties.getMaxPayoutBudgetPercent(),
                 campaignTopicService.getPopular());
     }
 

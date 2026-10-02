@@ -12,6 +12,8 @@ public record CampaignBenchmarkDTO(
         long medianBudgetKopecks,
         @Schema(description = "Минимальный бюджет, с которым объявление можно запустить, в копейках", example = "1000000")
         long minBudgetKopecks,
+        @Schema(description = "Порог вывода объявления — не больше этого процента от его бюджета", example = "10")
+        int maxPayoutBudgetPercent,
         @Schema(description = "Самые популярные тематики, до 10, со средними ставками за 1000 просмотров, "
                 + "в порядке показа; остальные — поиском в /api/campaigns/topics")
         List<CampaignTopicDTO> topics

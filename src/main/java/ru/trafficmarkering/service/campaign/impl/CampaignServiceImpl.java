@@ -282,6 +282,12 @@ class CampaignServiceImpl implements CampaignService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Минимальный бюджет объявления — " + MoneyUtil.formatRubles(minBudgetKopecks));
         }
+        long maxMinPayoutKopecks = campaignProperties.maxMinPayoutKopecks(budgetOf(campaign));
+        if (campaign.minPayout() > maxMinPayoutKopecks) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Порог вывода — не больше " + campaignProperties.getMaxPayoutBudgetPercent()
+                            + "% бюджета: до " + MoneyUtil.formatRubles(maxMinPayoutKopecks));
+        }
     }
 
     private long budgetOf(Campaign campaign) {
