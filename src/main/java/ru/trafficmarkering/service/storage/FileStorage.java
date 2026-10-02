@@ -7,4 +7,6 @@ public interface FileStorage {
     PresignedUpload presignUpload(String filename, String contentType, String keyPrefix);
 
     String presignedUrl(String key);
+
+    String presignedUrl(String key, String downloadName, boolean inline);
 }

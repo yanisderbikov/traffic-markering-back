@@ -1,0 +1,546 @@
+package ru.trafficmarkering.service.earnings.impl;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.dto.earnings.CreatorWalletDTO;
+import ru.trafficmarkering.dto.earnings.PayoutCreateRequestDTO;
+import ru.trafficmarkering.dto.rate.UsdtRateDTO;
+import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
+import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.config.CommissionProperties;
+import ru.trafficmarkering.config.FraudProperties;
+import ru.trafficmarkering.model.application.Application;
+import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
+import ru.trafficmarkering.model.application.ViewSource;
+import ru.trafficmarkering.model.fraud.FraudStatus;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+import ru.trafficmarkering.repository.GetterViewSnapshot;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
+import ru.trafficmarkering.service.rate.UsdtRateService;
+import org.springframework.test.util.ReflectionTestUtils;
+import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.wallet.Transfer;
+import ru.trafficmarkering.model.wallet.Wallet;
+import ru.trafficmarkering.model.wallet.WalletTransaction;
+import ru.trafficmarkering.model.wallet.WalletTransactionStatus;
+import ru.trafficmarkering.model.wallet.WalletTransactionType;
+import ru.trafficmarkering.repository.GetterApplication;
+import ru.trafficmarkering.repository.GetterTransfer;
+import ru.trafficmarkering.repository.GetterWallet;
+import ru.trafficmarkering.repository.GetterWalletTransaction;
+import ru.trafficmarkering.repository.SaverApplication;
+import ru.trafficmarkering.repository.SaverTransfer;
+import ru.trafficmarkering.repository.SaverWallet;
+import ru.trafficmarkering.repository.SaverWalletTransaction;
+import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.storage.FileStorage;
+import ru.trafficmarkering.service.wallet.WalletLedger;
+import ru.trafficmarkering.service.wallet.impl.WalletLedgerTestSupport;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class EarningsServiceImplTest {
+
+    private static final String TRON = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE";
+
+    private final GetterWallet getterWallet = mock(GetterWallet.class);
+    private final SaverWallet saverWallet = mock(SaverWallet.class);
+    private final GetterWalletTransaction getterWalletTransaction = mock(GetterWalletTransaction.class);
+    private final SaverWalletTransaction saverWalletTransaction = mock(SaverWalletTransaction.class);
+    private final GetterTransfer getterTransfer = mock(GetterTransfer.class);
+    private final SaverTransfer saverTransfer = mock(SaverTransfer.class);
+    private final GetterApplication getterApplication = mock(GetterApplication.class);
+    private final SaverApplication saverApplication = mock(SaverApplication.class);
+    private final CurrentUserService currentUserService = mock(CurrentUserService.class);
+    private final FileStorage fileStorage = mock(FileStorage.class);
+    private final GetterViewSnapshot getterViewSnapshot = mock(GetterViewSnapshot.class);
+    private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
+    private final FraudProperties fraudProperties = new FraudProperties();
+    private final UsdtRateService usdtRateService = mock(UsdtRateService.class);
+
+    private final WalletLedger ledger = WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction);
+    private final EarningsServiceImpl service = new EarningsServiceImpl(ledger,
+            WalletLedgerTestSupport.reader(getterTransfer, fileStorage), getterWalletTransaction,
+            getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService,
+            getterViewSnapshot, creatorTrustService, fraudProperties, usdtRateService, new CommissionProperties());
+
+    private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
+    private final Wallet wallet = Wallet.builder().id(10L).user(creator).balanceKopecks(7_000_00L).build();
+    private final Map<UUID, Application> lockable = new HashMap<>();
+
+    @BeforeEach
+    void setUp() {
+        when(saverWallet.save(any(Wallet.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(saverWalletTransaction.save(any(WalletTransaction.class))).thenAnswer(inv -> {
+            WalletTransaction transaction = inv.getArgument(0);
+            if (transaction.getId() == null) {
+                transaction.setId(100L);
+            }
+            return transaction;
+        });
+        when(saverTransfer.save(any(Transfer.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(saverApplication.save(any(Application.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(getterApplication.getByIdForUpdate(any()))
+                .thenAnswer(inv -> Optional.ofNullable(lockable.get(inv.<UUID>getArgument(0))));
+        when(getterWallet.getByUserId(1L)).thenReturn(Optional.of(wallet));
+        when(getterWallet.getByUserIdForUpdate(1L)).thenReturn(Optional.of(wallet));
+        when(getterWallet.getByIdForUpdate(10L)).thenReturn(Optional.of(wallet));
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
+        // Базовые тесты — без окна удержания и с проверенным криатором; антифрод проверяется отдельно
+        when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.TRUSTED);
+        when(usdtRateService.current()).thenReturn(new UsdtRateDTO(
+                new BigDecimal("86.76"), new BigDecimal("86.73"), Instant.now().toString(), "Rapira"));
+        ReflectionTestUtils.setField(service, "holdDays", 0);
+    }
+
+    private WalletTransaction payout(long amount, WalletTransactionStatus status) {
+        return WalletTransaction.builder().id(100L).publicId("PO000100").wallet(wallet).type(WalletTransactionType.PAYOUT)
+                .amountKopecks(-amount).balanceAfterKopecks(wallet.balance()).status(status)
+                .comment("USDT TRC-20 → " + TRON).createdAt(Instant.now()).build();
+    }
+
+    @Test
+    void requestPayoutReservesMoneyAndCreatesPendingRequest() {
+        OperationDetailDTO detail = service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(5_000_00L).tronAddress(" " + TRON + " ").build());
+
+        assertThat(wallet.balance()).isEqualTo(2_000_00L);
+        assertThat(detail.transaction().type()).isEqualTo("PAYOUT");
+        assertThat(detail.transaction().status()).isEqualTo("PENDING");
+        assertThat(detail.transaction().amountKopecks()).isEqualTo(-5_000_00L);
+        assertThat(detail.transfer().tronAddress()).isEqualTo(TRON);
+        assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
+        assertThat(detail.transfer().commissionKopecks()).isEqualTo(500_00L);
+        assertThat(detail.transfer().transferKopecks()).isEqualTo(4_500_00L);
+        assertThat(detail.transaction().source().label()).isEqualTo("Кошелёк криатора · Аня");
+        assertThat(detail.transaction().destination().label()).isEqualTo("TRON · " + TRON);
+        ArgumentCaptor<Transfer> saved = ArgumentCaptor.forClass(Transfer.class);
+        verify(saverTransfer).save(saved.capture());
+        assertThat(saved.getValue().getTransaction().getStatus()).isEqualTo(WalletTransactionStatus.PENDING);
+    }
+
+    @Test
+    void requestPayoutHasNoPlatformWideMinimum() {
+        OperationDetailDTO detail = service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(1_00L).tronAddress(TRON).build());
+
+        assertThat(detail.transaction().amountKopecks()).isEqualTo(-1_00L);
+        assertThat(wallet.balance()).isEqualTo(6_999_00L);
+    }
+
+    @Test
+    void requestPayoutRejectsNonTronAddress() {
+        assertThatThrownBy(() -> service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(5_000_00L).tronAddress("0x1234").build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("TRON");
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void requestPayoutRejectsMoreThanAvailable() {
+        assertThatThrownBy(() -> service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(7_000_01L).tronAddress(TRON).build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+    }
+
+    @Test
+    void cancelPayoutReturnsMoneyOnlyWhilePending() {
+        WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
+        wallet.setBalanceKopecks(2_000_00L);
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(pending));
+        when(getterTransfer.getByTransactionId(100L))
+                .thenReturn(Optional.of(Transfer.builder().transaction(pending).tronAddress(TRON).build()));
+
+        OperationDetailDTO detail = service.cancelPayout("PO000100");
+
+        assertThat(detail.transaction().status()).isEqualTo("CANCELLED");
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+
+        assertThatThrownBy(() -> service.cancelPayout("PO000100"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void confirmPayoutRequiresSentStatus() {
+        WalletTransaction pending = payout(5_000_00L, WalletTransactionStatus.PENDING);
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.confirmPayout("PO000100"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        pending.setStatus(WalletTransactionStatus.SENT);
+        Transfer transfer = Transfer.builder().transaction(pending).tronAddress(TRON).build();
+        when(getterTransfer.getByTransactionId(100L)).thenReturn(Optional.of(transfer));
+
+        OperationDetailDTO detail = service.confirmPayout("PO000100");
+
+        assertThat(detail.transaction().status()).isEqualTo("CONFIRMED");
+        assertThat(transfer.getConfirmedAt()).isNotNull();
+        assertThat(transfer.getClosedAt()).isNotNull();
+    }
+
+    @Test
+    void foreignOperationLooksMissing() {
+        User other = User.builder().id(2L).username("other@traffic.ru").name("Кто-то").role(Role.CREATOR).build();
+        WalletTransaction foreign = payout(5_000_00L, WalletTransactionStatus.PENDING);
+        foreign.setWallet(Wallet.builder().id(11L).user(other).balanceKopecks(0L).build());
+        when(getterWalletTransaction.getByPublicIdWithDetails("PO000100")).thenReturn(Optional.of(foreign));
+        when(getterWalletTransaction.getByPublicIdForUpdate("PO000100")).thenReturn(Optional.of(foreign));
+
+        assertThatThrownBy(() -> service.myOperation("PO000100"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThatThrownBy(() -> service.cancelPayout("PO000100"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void myWalletSplitsReservedPaidOutEarnedAndPending() {
+        when(getterWalletTransaction.getByWalletId(10L)).thenReturn(List.of(
+                WalletTransaction.builder().type(WalletTransactionType.EARNING).amountKopecks(9_000_00L)
+                        .status(WalletTransactionStatus.DONE).build(),
+                WalletTransaction.builder().type(WalletTransactionType.EARNING).amountKopecks(3_000_00L)
+                        .status(WalletTransactionStatus.DONE).build(),
+                payout(5_000_00L, WalletTransactionStatus.SENT),
+                payout(5_000_00L, WalletTransactionStatus.CONFIRMED),
+                payout(5_000_00L, WalletTransactionStatus.REJECTED)));
+        Campaign campaign = campaign(3_000_00L);
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(
+                application(campaign, 1_500_00L, 0L),
+                application(campaign, 700_00L, 700_00L),
+                application(campaign, 200_00L, 300_00L)));
+
+        CreatorWalletDTO dto = service.myWallet();
+
+        assertThat(dto.balanceKopecks()).isEqualTo(7_000_00L);
+        assertThat(dto.earnedKopecks()).isEqualTo(12_000_00L);
+        assertThat(dto.reservedKopecks()).isEqualTo(5_000_00L);
+        assertThat(dto.paidOutKopecks()).isEqualTo(5_000_00L);
+        assertThat(dto.pendingKopecks()).isEqualTo(1_500_00L);
+        assertThat(dto.payoutAvailable()).isTrue();
+    }
+
+    @Test
+    void myWalletOffersPayoutOnlyWithBalance() {
+        wallet.setBalanceKopecks(0L);
+
+        assertThat(service.myWallet().payoutAvailable()).isFalse();
+    }
+
+    @Test
+    void myWalletSkipsFrozenAndRejectedApplicationsInPending() {
+        Campaign campaign = campaign(3_000_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        Application suspicious = application(campaign, 400_00L, 0L);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        Application fraud = application(campaign, 300_00L, 0L);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application rejected = application(campaign, 200_00L, 0L);
+        rejected.setStatus(ApplicationStatus.REJECTED);
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(clean, suspicious, fraud, rejected));
+
+        assertThat(service.myWallet().pendingKopecks()).isEqualTo(1_000_00L);
+    }
+
+    @Test
+    void myWalletHidesPayoutAndPendingForBlockedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+        Campaign campaign = campaign(3_000_00L);
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application(campaign, 1_000_00L, 0L)));
+
+        CreatorWalletDTO dto = service.myWallet();
+
+        assertThat(dto.balanceKopecks()).isEqualTo(7_000_00L);
+        assertThat(dto.pendingKopecks()).isZero();
+        assertThat(dto.payoutAvailable()).isFalse();
+    }
+
+    @Test
+    void requestPayoutIsForbiddenForBlockedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+
+        assertThatThrownBy(() -> service.requestPayout(
+                PayoutCreateRequestDTO.builder().amountKopecks(1_000_00L).tronAddress(TRON).build()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("заблокирован");
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+    }
+
+    @Test
+    void creditAccruedMovesOnlyUncreditedDeltaIntoWallet() {
+        Campaign campaign = campaign(2_000_00L);
+        Application fresh = application(campaign, 1_200_00L, 0L);
+        Application partly = application(campaign, 800_00L, 500_00L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(fresh, partly));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(fresh, partly));
+
+        int credited = service.creditAccrued();
+
+        assertThat(credited).isEqualTo(2);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 1_200_00L + 300_00L);
+        assertThat(fresh.getCreditedKopecks()).isEqualTo(1_200_00L);
+        assertThat(partly.getCreditedKopecks()).isEqualTo(800_00L);
+        ArgumentCaptor<WalletTransaction> saved = ArgumentCaptor.forClass(WalletTransaction.class);
+        verify(saverWalletTransaction, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(transaction -> {
+            assertThat(transaction.getType()).isEqualTo(WalletTransactionType.EARNING);
+            assertThat(transaction.getStatus()).isEqualTo(WalletTransactionStatus.DONE);
+            assertThat(transaction.getCampaign()).isSameAs(campaign);
+        });
+    }
+
+    @Test
+    void creditAccruedSkipsApplicationsWithoutNewMoney() {
+        Campaign campaign = campaign(100_00L);
+        Application settled = application(campaign, 500_00L, 500_00L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(settled));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(settled));
+
+        assertThat(service.creditAccrued()).isZero();
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedTakesCreditedAmountFromLockedRowNotFromStaleList() {
+        Campaign campaign = campaign(100_00L);
+        Application stale = application(campaign, 500_00L, 0L);
+        Application locked = Application.builder().id(stale.getId()).campaign(campaign).creator(creator)
+                .status(ApplicationStatus.APPROVED).accruedKopecks(500_00L).creditedKopecks(500_00L).build();
+        when(getterApplication.getByIdForUpdate(stale.getId())).thenReturn(Optional.of(locked));
+        when(getterApplication.getCreditable()).thenReturn(List.of(stale));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(stale));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedSkipsApplicationDeletedBeforeLock() {
+        Campaign campaign = campaign(100_00L);
+        Application gone = application(campaign, 500_00L, 0L);
+        when(getterApplication.getByIdForUpdate(gone.getId())).thenReturn(Optional.empty());
+        when(getterApplication.getCreditable()).thenReturn(List.of(gone));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(gone));
+
+        assertThat(service.creditAccrued()).isZero();
+        verify(saverWalletTransaction, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedHoldsCampaignMoneyBelowItsThreshold() {
+        Campaign strict = campaign(3_000_00L);
+        Campaign lenient = campaign(1_000_00L);
+        Application heldOne = application(strict, 1_200_00L, 0L);
+        Application heldTwo = application(strict, 800_00L, 0L);
+        Application released = application(lenient, 1_500_00L, 0L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(heldOne, heldTwo, released));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(heldOne, heldTwo, released));
+
+        int credited = service.creditAccrued();
+
+        assertThat(credited).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 1_500_00L);
+        assertThat(released.getCreditedKopecks()).isEqualTo(1_500_00L);
+        assertThat(heldOne.getCreditedKopecks()).isZero();
+        assertThat(heldTwo.getCreditedKopecks()).isZero();
+        ArgumentCaptor<WalletTransaction> saved = ArgumentCaptor.forClass(WalletTransaction.class);
+        verify(saverWalletTransaction).save(saved.capture());
+        assertThat(saved.getValue().getCampaign()).isSameAs(lenient);
+    }
+
+    @Test
+    void creditAccruedSumsCreatorApplicationsAcrossCampaign() {
+        Campaign campaign = campaign(3_000_00L);
+        Application first = application(campaign, 1_600_00L, 0L);
+        Application second = application(campaign, 1_500_00L, 0L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(first, second));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(first, second));
+
+        assertThat(service.creditAccrued()).isEqualTo(2);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 3_100_00L);
+    }
+
+    @Test
+    void creditAccruedDoesNotTouchWalletWhenEverythingIsHeld() {
+        Campaign campaign = campaign(3_000_00L);
+        Application held = application(campaign, 2_999_99L, 0L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(held));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(held));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+        verify(getterWallet, never()).getByUserIdForUpdate(any());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void creditAccruedFreezesSuspiciousAndFraudApplications() {
+        Campaign campaign = campaign(100_00L);
+        Application suspicious = application(campaign, 1_000_00L, 0L);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        Application fraud = application(campaign, 1_000_00L, 0L);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application verified = application(campaign, 500_00L, 0L);
+        verified.setFraudStatus(FraudStatus.VERIFIED);
+        when(getterApplication.getCreditable()).thenReturn(List.of(suspicious, fraud, verified));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(suspicious, fraud, verified));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+        assertThat(suspicious.getCreditedKopecks()).isZero();
+        assertThat(fraud.getCreditedKopecks()).isZero();
+    }
+
+    @Test
+    void creditAccruedSkipsBlockedCreatorEntirely() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.BLOCKED);
+        Campaign campaign = campaign(100_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        when(getterApplication.getCreditable()).thenReturn(List.of(clean));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+        verify(getterWallet, never()).getByUserIdForUpdate(any());
+    }
+
+    @Test
+    void creditAccruedRequiresManualVerificationForRestrictedCreator() {
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.RESTRICTED);
+        Campaign campaign = campaign(100_00L);
+        Application clean = application(campaign, 1_000_00L, 0L);
+        Application verified = application(campaign, 300_00L, 0L);
+        verified.setFraudStatus(FraudStatus.VERIFIED);
+        when(getterApplication.getCreditable()).thenReturn(List.of(clean, verified));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(clean, verified));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 300_00L);
+        assertThat(clean.getCreditedKopecks()).isZero();
+    }
+
+    @Test
+    void creditAccruedPaysOnlyViewsOlderThanHoldWindow() {
+        // Ставка 100 ₽ за тысячу: неделю назад было 10 000 просмотров, сейчас 30 000 —
+        // созрело только 1 000 ₽, остальное подождёт
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 3_000_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 30_000L),
+                snapshot(application, now.minus(Duration.ofDays(3)), 20_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 10_000L),
+                snapshot(application, now.minus(Duration.ofDays(9)), 4_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 1_000_00L);
+        assertThat(application.getCreditedKopecks()).isEqualTo(1_000_00L);
+
+        // Следующей ночью замер трёхдневной давности ещё не созрел — нового зачисления нет
+        assertThat(service.creditAccrued()).isZero();
+    }
+
+    @Test
+    void creditAccruedHoldsEverythingWithoutMaturedSnapshot() {
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 3_000_00L, 0L);
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, Instant.now().minus(Duration.ofDays(2)), 30_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+    }
+
+    @Test
+    void creditAccruedUsesCurrentCountWhenPlatformRemovedViews() {
+        // Неделю назад было 10 000, площадка списала ботов до 6 000 — платим по 6 000
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 1_000_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 6_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 10_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 600_00L);
+    }
+
+    @Test
+    void creditAccruedCapsMaturedViewsForNewCreator() {
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        fraudProperties.setNewCreatorMaxPayableViews(5_000L);
+        when(creatorTrustService.levelOf(1L)).thenReturn(TrustLevel.NEW);
+        Campaign campaign = campaign(100_00L);
+        campaign.setRatePerThousandKopecks(100_00L);
+        Application application = application(campaign, 500_00L, 0L);
+        Instant now = Instant.now();
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 40_000L),
+                snapshot(application, now.minus(Duration.ofDays(8)), 20_000L)));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+    }
+
+    private ApplicationViewSnapshot snapshot(Application application, Instant capturedAt, long views) {
+        return ApplicationViewSnapshot.builder().application(application).capturedAt(capturedAt).views(views)
+                .source(ViewSource.YOUTUBE_API).build();
+    }
+
+    private Campaign campaign(long minPayoutKopecks) {
+        return Campaign.builder().id(UUID.randomUUID()).title("Ролик про кофе").minPayoutKopecks(minPayoutKopecks).build();
+    }
+
+    private Application application(Campaign campaign, long accruedKopecks, long creditedKopecks) {
+        Application application = Application.builder().id(UUID.randomUUID()).campaign(campaign).creator(creator)
+                .status(ApplicationStatus.APPROVED).accruedKopecks(accruedKopecks).creditedKopecks(creditedKopecks).build();
+        lockable.put(application.getId(), application);
+        return application;
+    }
+}

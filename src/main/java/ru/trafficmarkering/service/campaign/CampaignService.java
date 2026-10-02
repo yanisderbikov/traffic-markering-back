@@ -18,6 +18,8 @@ public interface CampaignService {
     /** Объявления текущего заказчика, новые сверху. */
     List<CampaignDTO> getMyCampaigns();
 
+    CampaignDTO startDraft(boolean restart);
+
     CampaignDTO create(CampaignCreateUpdateRequestDTO request);
 
     CampaignDTO getById(UUID id);

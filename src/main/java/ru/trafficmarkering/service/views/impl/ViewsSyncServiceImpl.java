@@ -3,71 +3,101 @@ package ru.trafficmarkering.service.views.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import ru.trafficmarkering.model.application.Application;
-import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.repository.GetterApplication;
-import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
+import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 import ru.trafficmarkering.service.views.ViewsSyncService;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * Догоняет просмотры по откликам в работе. Пока провайдер — заглушка, проход
- * получается холостым, но вся обвязка (что обновляем, когда пересчитываем деньги)
- * должна быть готова к моменту, когда счётчик появится.
- */
 @Service
 @RequiredArgsConstructor
 @Log4j2
 class ViewsSyncServiceImpl implements ViewsSyncService {
 
     private final GetterApplication getterApplication;
-    private final SaverApplication saverApplication;
-    private final ViewCountProvider viewCountProvider;
+    private final ViewCountProviders viewCountProviders;
+    private final ViewsRecorder viewsRecorder;
     private final CampaignAccrualService campaignAccrualService;
 
     @Override
-    @Transactional
     public int syncApproved() {
         List<Application> applications = getterApplication.getApproved();
-        // Объявления собираем в множество: у одного объявления обычно несколько откликов,
-        // а пересчёт бюджета в нём всё равно общий — гонять его на каждый отклик незачем
-        Map<UUID, Campaign> touched = new LinkedHashMap<>();
-        int updated = 0;
-
-        for (Application application : applications) {
-            Optional<Long> fetched = viewCountProvider.fetchViews(application.getPlatform(), application.getVideoUrl());
-            if (fetched.isEmpty()) {
-                continue;
-            }
-            long fresh = fetched.get();
-            if (fresh < 0) {
-                log.warn("Провайдер вернул отрицательные просмотры по отклику {}: {}", application.getPublicId(), fresh);
-                continue;
-            }
-            long current = application.getViews() != null ? application.getViews() : 0L;
-            if (fresh == current) {
-                continue;
-            }
-
-            application.setViews(fresh);
-            application.setViewsSyncedAt(Instant.now());
-            saverApplication.save(application);
-            touched.put(application.getCampaign().getId(), application.getCampaign());
-            updated++;
+        if (applications.isEmpty()) {
+            return 0;
         }
 
-        touched.values().forEach(campaignAccrualService::recalculate);
-        log.info("Синхронизация просмотров: проверено откликов {}, обновлено {}, пересчитано объявлений {}",
-                applications.size(), updated, touched.size());
-        return updated;
+        Map<GroupKey, List<Application>> groups = applications.stream()
+                .filter(application -> application.getPlatform() != null && application.getCreator() != null)
+                .collect(Collectors.groupingBy(
+                        application -> new GroupKey(application.getPlatform(), application.getCreator().getId())));
+
+        Instant capturedAt = Instant.now();
+        Set<UUID> touched = new LinkedHashSet<>();
+        int captured = 0;
+
+        for (Map.Entry<GroupKey, List<Application>> group : groups.entrySet()) {
+            Optional<ViewCountProvider> provider = viewCountProviders.forPlatform(group.getKey().platform());
+            if (provider.isEmpty()) {
+                continue;
+            }
+
+            List<String> urls = group.getValue().stream()
+                    .map(Application::getVideoUrl)
+                    .distinct()
+                    .toList();
+
+            Map<String, ViewCount> fetched;
+            try {
+                fetched = provider.get().fetchViews(group.getKey().creatorId(), urls);
+            } catch (Exception e) {
+                log.warn("Не удалось получить просмотры {} для криатора {}: {}",
+                        group.getKey().platform(), group.getKey().creatorId(), e.getMessage());
+                continue;
+            }
+
+            for (Application application : group.getValue()) {
+                ViewCount fresh = fetched.get(application.getVideoUrl());
+                if (fresh == null || fresh.total() < 0) {
+                    continue;
+                }
+                Optional<ViewsRecorder.Recorded> recorded = viewsRecorder.record(application.getId(), fresh,
+                        provider.get().source(), capturedAt);
+                if (recorded.isEmpty()) {
+                    continue;
+                }
+                captured++;
+                if (recorded.get().accrualAffected()) {
+                    touched.add(recorded.get().campaignId());
+                }
+            }
+        }
+
+        touched.forEach(this::recalculate);
+        log.info("Синхронизация просмотров: откликов {}, снимков {}, пересчитано объявлений {}",
+                applications.size(), captured, touched.size());
+        return captured;
+    }
+
+    private void recalculate(UUID campaignId) {
+        try {
+            campaignAccrualService.recalculate(campaignId);
+        } catch (RuntimeException e) {
+            log.warn("Не удалось пересчитать начисления объявления {} после синхронизации: {}",
+                    campaignId, e.getMessage());
+        }
+    }
+
+    private record GroupKey(Platform platform, Long creatorId) {
     }
 }

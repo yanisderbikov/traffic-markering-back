@@ -2,10 +2,12 @@ package ru.trafficmarkering.model.application;
 
 /**
  * Судьба отклика криатора. Начисления идут только по APPROVED и COMPLETED:
- * PENDING ещё не одобрен, REJECTED заказчик отклонил.
+ * IN_PROGRESS — оффер взят в работу, ролика ещё нет; PENDING ждёт модерации менеджером или заказчиком,
+ * REJECTED отклонён на модерации.
  */
 public enum ApplicationStatus {
-    PENDING("На рассмотрении"),
+    IN_PROGRESS("В работе"),
+    PENDING("На модерации"),
     APPROVED("Одобрен"),
     REJECTED("Отклонён"),
     COMPLETED("Завершён");

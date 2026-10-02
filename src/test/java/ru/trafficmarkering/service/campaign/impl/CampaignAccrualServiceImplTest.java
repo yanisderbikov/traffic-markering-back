@@ -1,18 +1,30 @@
 package ru.trafficmarkering.service.campaign.impl;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ru.trafficmarkering.config.FraudProperties;
+import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.fraud.FraudStatus;
+import ru.trafficmarkering.model.fraud.TrustLevel;
+import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.repository.GetterApplication;
+import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,9 +35,92 @@ class CampaignAccrualServiceImplTest {
     private final GetterApplication getterApplication = mock(GetterApplication.class);
     private final SaverApplication saverApplication = mock(SaverApplication.class);
     private final SaverCampaign saverCampaign = mock(SaverCampaign.class);
+    private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
+    private final FraudProperties fraudProperties = new FraudProperties();
+    private final GetterCampaign getterCampaign = mock(GetterCampaign.class);
 
     private final CampaignAccrualService service =
-            new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign);
+            new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign,
+                    creatorTrustService, fraudProperties, getterCampaign);
+
+    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+
+    @BeforeEach
+    void setUp() {
+        // По умолчанию криатор проверенный: потолок новичка проверяется отдельными тестами
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
+    }
+
+    @Test
+    void recalculate_zeroesConfirmedFraud() {
+        // Накрутка распознана: заказчик за ботов не платит, бюджет освобождается для следующих
+        Campaign campaign = campaign(350_00, 1_000_00);
+        Application fraud = application(ApplicationStatus.APPROVED, 2_000, 700_00);
+        fraud.setFraudStatus(FraudStatus.FRAUD);
+        Application honest = application(ApplicationStatus.APPROVED, 2_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(fraud, honest));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, fraud.getAccruedKopecks().longValue());
+        assertEquals(700_00L, honest.getAccruedKopecks().longValue());
+        assertEquals(700_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_suspiciousStillAccruesButFrozenLater() {
+        // Подозрение — не приговор: начисление считается, замораживается только зачисление в кошелёк
+        Campaign campaign = campaign(350_00, 100_000_00);
+        Application suspicious = application(ApplicationStatus.APPROVED, 2_000, 0);
+        suspicious.setFraudStatus(FraudStatus.SUSPICIOUS);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(suspicious));
+
+        service.recalculate(campaign);
+
+        assertEquals(700_00L, suspicious.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculateById_usesFreshlyLoadedCampaign() {
+        Campaign campaign = campaign(350_00, 1_000_00);
+        Application honest = application(ApplicationStatus.APPROVED, 2_000, 0);
+        when(getterCampaign.getById(campaign.getId())).thenReturn(Optional.of(campaign));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(honest));
+
+        service.recalculate(campaign.getId());
+
+        assertEquals(700_00L, campaign.getSpentKopecks().longValue());
+        verify(saverCampaign).save(campaign);
+    }
+
+    @Test
+    void recalculateById_ignoresDeletedCampaign() {
+        UUID deleted = UUID.randomUUID();
+        when(getterCampaign.getById(deleted)).thenReturn(Optional.empty());
+
+        service.recalculate(deleted);
+
+        verify(saverCampaign, never()).save(any());
+    }
+
+    @Test
+    void recalculate_capsNewCreatorPayableViews() {
+        // Новичку платят не больше потолка из настроек, проверенному — за всё
+        fraudProperties.setNewCreatorMaxPayableViews(10_000L);
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.NEW));
+        Campaign campaign = campaign(100_00, 100_000_00);
+        Application viral = application(ApplicationStatus.APPROVED, 250_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(viral));
+
+        service.recalculate(campaign);
+
+        assertEquals(1_000_00L, viral.getAccruedKopecks().longValue());
+
+        when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
+        service.recalculate(campaign);
+
+        assertEquals(25_000_00L, viral.getAccruedKopecks().longValue());
+    }
 
     @Test
     void recalculate_cutsLastAccrualByRemainingBudget() {
@@ -92,6 +187,67 @@ class CampaignAccrualServiceImplTest {
         verify(saverCampaign).save(campaign);
     }
 
+    @Test
+    void recalculate_skipsVideosBelowPaidViewsThreshold() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setMinPaidViews(1_000L);
+        Application belowThreshold = application(ApplicationStatus.APPROVED, 999, 300_00);
+        Application atThreshold = application(ApplicationStatus.APPROVED, 1_000, 0);
+        Application aboveThreshold = application(ApplicationStatus.APPROVED, 4_000, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(belowThreshold, atThreshold, aboveThreshold));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, belowThreshold.getAccruedKopecks().longValue());
+        assertEquals(350_00L, atThreshold.getAccruedKopecks().longValue());
+        assertEquals(1_400_00L, aboveThreshold.getAccruedKopecks().longValue());
+        assertEquals(1_750_00L, campaign.getSpentKopecks().longValue());
+        verify(saverApplication).save(belowThreshold);
+    }
+
+    @Test
+    void recalculate_withoutThresholdPaysEveryView() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        Application tiny = application(ApplicationStatus.APPROVED, 10, 0);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(tiny));
+
+        service.recalculate(campaign);
+
+        assertEquals(3_50L, tiny.getAccruedKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_paysOnlyRegionViews() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setViewRegion(ViewRegion.CIS);
+        Application mixed = application(ApplicationStatus.APPROVED, 2_000, 0);
+        mixed.setCountryViews(Map.of("RU", 1_000L, "US", 1_000L));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(mixed));
+
+        service.recalculate(campaign);
+
+        assertEquals(350_00L, mixed.getAccruedKopecks().longValue());
+        assertEquals(350_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_doesNotPayViewsWithoutGeography() {
+        Campaign campaign = campaign(350_00, 100_000_00);
+        campaign.setViewRegion(ViewRegion.CIS);
+        Application withoutGeography = application(ApplicationStatus.APPROVED, 5_000, 0);
+        Application withGeography = application(ApplicationStatus.APPROVED, 1_000, 0);
+        withGeography.setCountryViews(Map.of("KZ", 1_000L));
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(withoutGeography, withGeography));
+
+        service.recalculate(campaign);
+
+        assertEquals(0L, withoutGeography.getAccruedKopecks().longValue());
+        assertEquals(350_00L, withGeography.getAccruedKopecks().longValue());
+        assertEquals(350_00L, campaign.getSpentKopecks().longValue());
+    }
+
     private Campaign campaign(long ratePerThousandKopecks, long budgetKopecks) {
         return Campaign.builder()
                 .id(UUID.randomUUID())
@@ -104,6 +260,7 @@ class CampaignAccrualServiceImplTest {
     private Application application(ApplicationStatus status, long views, long accruedKopecks) {
         return Application.builder()
                 .id(UUID.randomUUID())
+                .creator(creator)
                 .status(status)
                 .views(views)
                 .accruedKopecks(accruedKopecks)

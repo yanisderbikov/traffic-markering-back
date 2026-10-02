@@ -6,9 +6,12 @@ import org.springframework.stereotype.Component;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.repository.CampaignDeleter;
+import ru.trafficmarkering.repository.CampaignSegmentStats;
+import ru.trafficmarkering.repository.CampaignTotals;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.SaverCampaign;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,7 +59,7 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
     @Override
     public List<Campaign> getActive() {
         try {
-            return campaignRepo.findByStatus(CampaignStatus.ACTIVE);
+            return campaignRepo.findByStatusWithinPeriod(CampaignStatus.ACTIVE, Instant.now());
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);
@@ -71,6 +74,56 @@ class CampaignManager implements GetterCampaign, SaverCampaign, CampaignDeleter 
             log.error(e);
             throw new RuntimeException("Database exception", e);
         }
+    }
+
+    @Override
+    public List<CampaignTotals> getTotalsByCustomer() {
+        try {
+            return campaignRepo.totalsByCustomer();
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Long> getMedianRatePerThousandKopecks() {
+        try {
+            return Optional.ofNullable(campaignRepo.medianRatePerThousandKopecks()).map(Math::round);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public Optional<Long> getMedianBudgetKopecks() {
+        try {
+            return Optional.ofNullable(campaignRepo.medianBudgetKopecks()).map(Math::round);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public CampaignSegmentStats getSegmentStats(String topicCode, String excludedPublicId, long rate, long budget) {
+        try {
+            CampaignSegmentRow row = campaignRepo.segmentStats(topicCode, excludedPublicId, rate, budget);
+            return new CampaignSegmentStats(
+                    orZero(row.getCampaigns()),
+                    row.getMedianRate() != null ? Math.round(row.getMedianRate()) : null,
+                    row.getMedianBudget() != null ? Math.round(row.getMedianBudget()) : null,
+                    orZero(row.getLowerRate()),
+                    orZero(row.getLowerBudget()));
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    private static long orZero(Long value) {
+        return value != null ? value : 0L;
     }
 
     @Override
