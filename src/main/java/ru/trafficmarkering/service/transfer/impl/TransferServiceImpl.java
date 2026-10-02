@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.controller.FileController;
 import ru.trafficmarkering.dto.transfer.TransferRejectRequestDTO;
 import ru.trafficmarkering.dto.transfer.TransferSentRequestDTO;
@@ -24,6 +25,7 @@ import ru.trafficmarkering.repository.GetterTransfer;
 import ru.trafficmarkering.repository.GetterWalletTransaction;
 import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.partner.ReferralRewardService;
 import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.transfer.TransferService;
 import ru.trafficmarkering.service.wallet.OperationReader;
@@ -62,6 +64,8 @@ class TransferServiceImpl implements TransferService {
     private final WalletService walletService;
     private final CurrentUserService currentUserService;
     private final UsdtRateService usdtRateService;
+    private final CommissionProperties commissionProperties;
+    private final ReferralRewardService referralRewardService;
 
     @Override
     @Transactional
@@ -80,6 +84,7 @@ class TransferServiceImpl implements TransferService {
                 .transaction(transaction)
                 .tronAddress(address)
                 .usdtRate(usdtRate)
+                .commissionKopecks(commissionProperties.commissionOf(request.getAmountKopecks()))
                 .expiresAt(Instant.now().plus(TOP_UP_TTL))
                 .build());
         return detail(transaction, transfer);
@@ -187,6 +192,7 @@ class TransferServiceImpl implements TransferService {
         ledger.settle(transaction, WalletTransactionStatus.CONFIRMED);
         transfer.confirm(actor);
         saverTransfer.save(transfer);
+        referralRewardService.reward(transaction, transfer);
         return detail(transaction, transfer);
     }
 
@@ -261,6 +267,7 @@ class TransferServiceImpl implements TransferService {
                 .transaction(transaction)
                 .tronAddress(tronAddress)
                 .usdtRate(usdtRate)
+                .commissionKopecks(commissionProperties.commissionOf(request.getAmountKopecks()))
                 .expiresAt(Instant.now().plus(WITHDRAWAL_TTL))
                 .build();
         transfer.send(actor, request.getTxId().trim(), requireProofKeys(request.getProofKeys()), null);

@@ -5,6 +5,8 @@ import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.profile.CustomerProfile;
 import ru.trafficmarkering.model.wallet.Wallet;
 
+import java.math.BigDecimal;
+
 @Schema(description = "Кошелёк заказчика: свободные деньги и сколько уже распределено по объявлениям")
 public record WalletDTO(
         @Schema(description = "ID пользователя-заказчика") Long userId,
@@ -15,6 +17,7 @@ public record WalletDTO(
         @Schema(description = "Сумма бюджетов всех объявлений заказчика, в копейках") Long allocatedKopecks,
         @Schema(description = "Уже начислено криаторам по всем объявлениям, в копейках") Long spentKopecks,
         @Schema(description = "Адрес TRON платформы для пополнения USDT (TRC-20); null — не настроен") String topUpTronAddress,
+        @Schema(description = "Комиссия платформы, %: при пополнении платится сверху суммы, при выводе удерживается", example = "10") BigDecimal commissionPercent,
         String updatedAt
 ) {
     public static WalletDTO from(Wallet wallet,
@@ -22,7 +25,8 @@ public record WalletDTO(
                                  CustomerProfile customerProfile,
                                  long allocatedKopecks,
                                  long spentKopecks,
-                                 String topUpTronAddress) {
+                                 String topUpTronAddress,
+                                 BigDecimal commissionPercent) {
         return new WalletDTO(
                 customer != null ? customer.getId() : null,
                 customer != null ? customer.getName() : null,
@@ -32,6 +36,7 @@ public record WalletDTO(
                 allocatedKopecks,
                 spentKopecks,
                 topUpTronAddress,
+                commissionPercent,
                 wallet.getUpdatedAt() != null ? wallet.getUpdatedAt().toString() : null);
     }
 }

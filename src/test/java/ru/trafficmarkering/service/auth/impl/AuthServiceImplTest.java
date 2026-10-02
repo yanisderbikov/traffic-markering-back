@@ -5,16 +5,20 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.dto.CabinetTabDTO;
+import ru.trafficmarkering.dto.CurrentUserDTO;
 import ru.trafficmarkering.dto.auth.AuthResponseDTO;
 import ru.trafficmarkering.dto.auth.RegisterRequestDTO;
 import ru.trafficmarkering.model.LoginCode;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.partner.Partner;
 import ru.trafficmarkering.repository.LoginCodeStore;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.auth.JwtTokenService;
 import ru.trafficmarkering.service.email.EmailService;
+import ru.trafficmarkering.service.partner.PartnerService;
 import ru.trafficmarkering.service.user.AccountProvisioningService;
 
 import java.time.Duration;
@@ -39,7 +43,9 @@ class AuthServiceImplTest {
     private LoginCodeStore loginCodeStore;
     private EmailService emailService;
     private JwtTokenService jwtTokenService;
+    private CurrentUserService currentUserService;
     private AccountProvisioningService accountProvisioningService;
+    private PartnerService partnerService;
     private AuthServiceImpl authService;
 
     @BeforeEach
@@ -48,9 +54,12 @@ class AuthServiceImplTest {
         loginCodeStore = mock(LoginCodeStore.class);
         emailService = mock(EmailService.class);
         jwtTokenService = mock(JwtTokenService.class);
+        currentUserService = mock(CurrentUserService.class);
         accountProvisioningService = mock(AccountProvisioningService.class);
+        partnerService = mock(PartnerService.class);
         authService = new AuthServiceImpl(userRepository, loginCodeStore, emailService, jwtTokenService,
-                mock(CurrentUserService.class), accountProvisioningService);
+                currentUserService, accountProvisioningService, partnerService);
+        when(partnerService.findByCode(any())).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(loginCodeStore.save(any(LoginCode.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -180,6 +189,50 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void registerRemembersPartnerWhoInvitedCustomer() {
+        Partner partner = Partner.builder().id(5L).code("K7Q2M9XA").build();
+        when(partnerService.findByCode(" k7q2m9xa ")).thenReturn(Optional.of(partner));
+        when(userRepository.findByUsername(EMAIL)).thenReturn(Optional.empty());
+        when(loginCodeStore.getLatestActive(EMAIL)).thenReturn(Optional.empty());
+
+        authService.register(RegisterRequestDTO.builder().email(EMAIL).name("Аня").role(Role.CUSTOMER)
+                .referralCode(" k7q2m9xa ").build());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getReferredBy()).isSameAs(partner);
+    }
+
+    @Test
+    void registerIgnoresInvitationForCreator() {
+        when(partnerService.findByCode("K7Q2M9XA"))
+                .thenReturn(Optional.of(Partner.builder().id(5L).code("K7Q2M9XA").build()));
+        when(userRepository.findByUsername(EMAIL)).thenReturn(Optional.empty());
+        when(loginCodeStore.getLatestActive(EMAIL)).thenReturn(Optional.empty());
+
+        authService.register(RegisterRequestDTO.builder().email(EMAIL).name("Аня").role(Role.CREATOR)
+                .referralCode("K7Q2M9XA").build());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getReferredBy()).isNull();
+    }
+
+    @Test
+    void registerWithUnknownInvitationStillCreatesCustomer() {
+        when(userRepository.findByUsername(EMAIL)).thenReturn(Optional.empty());
+        when(loginCodeStore.getLatestActive(EMAIL)).thenReturn(Optional.empty());
+
+        authService.register(RegisterRequestDTO.builder().email(EMAIL).name("Аня").role(Role.CUSTOMER)
+                .referralCode("NOPE").build());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getReferredBy()).isNull();
+        verify(emailService).sendEmail(eq(EMAIL), anyString(), anyString());
+    }
+
+    @Test
     void registerRejectsStaffEmailEvenIfUnverified() {
         User staff = User.builder().id(7L).username(EMAIL).name("Финансист").role(Role.FINANCE_MANAGER).build();
         when(userRepository.findByUsername(EMAIL)).thenReturn(Optional.of(staff));
@@ -216,6 +269,35 @@ class AuthServiceImplTest {
         assertThat(stale.getName()).isEqualTo("Аня");
         assertThat(stale.getRole()).isEqualTo(Role.CREATOR);
         verify(emailService).sendEmail(eq(EMAIL), anyString(), anyString());
+    }
+
+    @Test
+    void meReturnsTabsOfUserRoleInMenuOrder() {
+        when(currentUserService.require()).thenReturn(verifiedUser(Role.CUSTOMER));
+
+        CurrentUserDTO me = authService.me();
+
+        assertThat(me.role()).isEqualTo("CUSTOMER");
+        assertThat(me.tabs()).extracting(CabinetTabDTO::key)
+                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "PROFILE");
+        assertThat(me.tabs().get(0).path()).isEqualTo("/app");
+        assertThat(me.tabs().get(0).exact()).isTrue();
+        assertThat(me.tabs().get(1).label()).isEqualTo("Мои кампании");
+        assertThat(me.tabs().get(1).shortLabel()).isEqualTo("Кампании");
+        assertThat(me.tabs().get(1).icon()).isEqualTo("briefcase");
+    }
+
+    @Test
+    void meAddsReferralTabForPartnerBeforeProfile() {
+        User partner = verifiedUser(Role.CUSTOMER);
+        when(currentUserService.require()).thenReturn(partner);
+        when(partnerService.isPartner(partner)).thenReturn(true);
+
+        CurrentUserDTO me = authService.me();
+
+        assertThat(me.tabs()).extracting(CabinetTabDTO::key)
+                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "REFERRAL", "PROFILE");
+        assertThat(me.tabs().get(3).path()).isEqualTo("/app/referral");
     }
 
     @Test

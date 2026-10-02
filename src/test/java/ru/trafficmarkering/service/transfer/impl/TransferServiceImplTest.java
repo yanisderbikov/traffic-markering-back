@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.dto.rate.UsdtRateDTO;
 import ru.trafficmarkering.dto.transfer.TransferRejectRequestDTO;
 import ru.trafficmarkering.dto.transfer.TransferSentRequestDTO;
@@ -27,6 +28,7 @@ import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.repository.SaverWallet;
 import ru.trafficmarkering.repository.SaverWalletTransaction;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.partner.ReferralRewardService;
 import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.wallet.WalletService;
@@ -62,11 +64,13 @@ class TransferServiceImplTest {
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final FileStorage fileStorage = mock(FileStorage.class);
     private final UsdtRateService usdtRateService = mock(UsdtRateService.class);
+    private final ReferralRewardService referralRewardService = mock(ReferralRewardService.class);
 
     private final TransferServiceImpl service = new TransferServiceImpl(
             WalletLedgerTestSupport.ledger(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction),
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage),
-            getterWalletTransaction, getterTransfer, saverTransfer, walletService, currentUserService, usdtRateService);
+            getterWalletTransaction, getterTransfer, saverTransfer, walletService, currentUserService, usdtRateService,
+            new CommissionProperties(), referralRewardService);
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final User customer = User.builder().id(3L).username("customer@traffic.ru").name("Заказчик").role(Role.CUSTOMER).build();
@@ -139,6 +143,8 @@ class TransferServiceImplTest {
         assertThat(detail.transfer().proofs()).isEmpty();
         assertThat(detail.transfer().sentAt()).isNull();
         assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
+        assertThat(detail.transfer().commissionKopecks()).isEqualTo(250_00L);
+        assertThat(detail.transfer().transferKopecks()).isEqualTo(2_750_00L);
         assertThat(Instant.parse(detail.transfer().expiresAt()))
                 .isBetween(Instant.now().plus(TransferServiceImpl.TOP_UP_TTL).minusSeconds(5),
                         Instant.now().plus(TransferServiceImpl.TOP_UP_TTL));
@@ -301,12 +307,35 @@ class TransferServiceImplTest {
         assertThat(detail.transaction().balanceAfterKopecks()).isEqualTo(1_800_00L);
         assertThat(detail.transfer().processedByName()).isEqualTo("Маша");
         assertThat(transfer.getConfirmedAt()).isNotNull();
+        verify(referralRewardService).reward(topUp, transfer);
 
         assertThatThrownBy(() -> service.confirmTopUp("TU000300"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
         assertThat(customerWallet.balance()).isEqualTo(1_800_00L);
+    }
+
+    @Test
+    void confirmTopUpCreditsAmountWithoutCommission() {
+        WalletTransaction topUp = topUp(WalletTransactionStatus.SENT);
+        Transfer transfer = topUpTransfer(topUp);
+        transfer.setCommissionKopecks(80_00L);
+
+        OperationDetailDTO detail = service.confirmTopUp("TU000300");
+
+        assertThat(customerWallet.balance()).isEqualTo(1_800_00L);
+        assertThat(detail.transfer().commissionKopecks()).isEqualTo(80_00L);
+        assertThat(detail.transfer().transferKopecks()).isEqualTo(880_00L);
+    }
+
+    @Test
+    void rejectedTopUpBringsNoPartnerReward() {
+        topUpTransfer(topUp(WalletTransactionStatus.SENT));
+
+        service.reject("TU000300", TransferRejectRequestDTO.builder().reason("Не пришло").build());
+
+        verify(referralRewardService, never()).reward(any(), any());
     }
 
     @Test
@@ -329,6 +358,8 @@ class TransferServiceImplTest {
         assertThat(detail.transfer().tronAddress()).isEqualTo(TRON);
         assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
         assertThat(detail.transfer().expiresAt()).isNotNull();
+        assertThat(detail.transfer().commissionKopecks()).isEqualTo(40_00L);
+        assertThat(detail.transfer().transferKopecks()).isEqualTo(360_00L);
     }
 
     @Test

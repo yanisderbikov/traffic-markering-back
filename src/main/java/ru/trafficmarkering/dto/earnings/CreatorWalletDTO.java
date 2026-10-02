@@ -2,6 +2,8 @@ package ru.trafficmarkering.dto.earnings;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.math.BigDecimal;
+
 @Schema(description = "Кошелёк криатора: сколько доступно к выводу и что уже было")
 public record CreatorWalletDTO(
         Long userId,
@@ -11,6 +13,7 @@ public record CreatorWalletDTO(
         @Schema(description = "Всего зачислено в кошелёк за просмотры, в копейках") Long earnedKopecks,
         @Schema(description = "Начислено по откликам, но ещё не в кошельке: ждёт порога вывода объявления или ночного зачисления, в копейках") Long pendingKopecks,
         @Schema(description = "Есть ли доступные деньги на заявку") boolean payoutAvailable,
+        @Schema(description = "Комиссия платформы с вывода, %: удерживается из суммы заявки", example = "10") BigDecimal commissionPercent,
         String updatedAt
 ) {
 }

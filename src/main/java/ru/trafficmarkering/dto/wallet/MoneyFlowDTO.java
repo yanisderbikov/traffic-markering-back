@@ -20,6 +20,7 @@ public record MoneyFlowDTO(FlowPointDTO source, FlowPointDTO destination) {
             case EARNING -> new MoneyFlowDTO(FlowPointDTO.campaign(transaction.getCampaign()),
                     FlowPointDTO.creatorWallet(owner));
             case PAYOUT -> new MoneyFlowDTO(FlowPointDTO.creatorWallet(owner), FlowPointDTO.tron(tronAddress));
+            case REFERRAL_REWARD -> new MoneyFlowDTO(FlowPointDTO.partnerProgram(), FlowPointDTO.customerWallet(owner));
         };
     }
 }

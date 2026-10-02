@@ -53,6 +53,7 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/files/transfer-proof/**").hasAnyRole("FINANCE_MANAGER", "CUSTOMER")
                     .requestMatchers("/api/wallet/**").hasRole("CUSTOMER")
                     .requestMatchers("/api/earnings/**").hasRole("CREATOR")
+                    .requestMatchers("/api/partner/**").hasRole("CUSTOMER")
                     // ── Пользовательские роли ──
                     .requestMatchers("/api/campaigns/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/files/**").hasAnyRole("CUSTOMER", "ADMIN")

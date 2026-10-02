@@ -11,6 +11,7 @@ import ru.trafficmarkering.dto.rate.UsdtRateDTO;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.config.FraudProperties;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
@@ -81,7 +82,7 @@ class EarningsServiceImplTest {
     private final EarningsServiceImpl service = new EarningsServiceImpl(ledger,
             WalletLedgerTestSupport.reader(getterTransfer, fileStorage), getterWalletTransaction,
             getterTransfer, saverTransfer, getterApplication, saverApplication, currentUserService,
-            getterViewSnapshot, creatorTrustService, fraudProperties, usdtRateService);
+            getterViewSnapshot, creatorTrustService, fraudProperties, usdtRateService, new CommissionProperties());
 
     private final User creator = User.builder().id(1L).username("anna@traffic.ru").name("Аня").role(Role.CREATOR).build();
     private final Wallet wallet = Wallet.builder().id(10L).user(creator).balanceKopecks(7_000_00L).build();
@@ -130,6 +131,8 @@ class EarningsServiceImplTest {
         assertThat(detail.transaction().amountKopecks()).isEqualTo(-5_000_00L);
         assertThat(detail.transfer().tronAddress()).isEqualTo(TRON);
         assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
+        assertThat(detail.transfer().commissionKopecks()).isEqualTo(500_00L);
+        assertThat(detail.transfer().transferKopecks()).isEqualTo(4_500_00L);
         assertThat(detail.transaction().source().label()).isEqualTo("Кошелёк криатора · Аня");
         assertThat(detail.transaction().destination().label()).isEqualTo("TRON · " + TRON);
         ArgumentCaptor<Transfer> saved = ArgumentCaptor.forClass(Transfer.class);

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.dto.wallet.OperationRowDTO;
 import ru.trafficmarkering.dto.wallet.WalletDTO;
@@ -26,6 +27,7 @@ import ru.trafficmarkering.repository.SaverWallet;
 import ru.trafficmarkering.repository.SaverWalletTransaction;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.partner.ReferralRewardService;
 import ru.trafficmarkering.service.storage.FileStorage;
 
 import java.util.List;
@@ -50,6 +52,7 @@ class WalletServiceImplTest {
     private final GetterCustomerProfile getterCustomerProfile = mock(GetterCustomerProfile.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
+    private final ReferralRewardService referralRewardService = mock(ReferralRewardService.class);
 
     private final GetterTransfer getterTransfer = mock(GetterTransfer.class);
     private final SaverTransfer saverTransfer = mock(SaverTransfer.class);
@@ -80,7 +83,8 @@ class WalletServiceImplTest {
                 new WalletLedgerImpl(getterWallet, saverWallet, getterWalletTransaction, saverWalletTransaction),
                 new OperationReaderImpl(getterTransfer, fileStorage),
                 getterWallet, getterWalletTransaction, getterTransfer, saverTransfer, getterCampaign,
-                getterCustomerProfile, userRepository, currentUserService, topUpTronAddress);
+                getterCustomerProfile, userRepository, currentUserService, new CommissionProperties(),
+                referralRewardService, topUpTronAddress);
     }
 
     @Test
@@ -182,6 +186,7 @@ class WalletServiceImplTest {
         assertThat(transfer.getConfirmedAt()).isNotNull();
         assertThat(transfer.getClosedAt()).isNotNull();
         assertThat(wallet.balance()).isEqualTo(1_000_00L);
+        verify(referralRewardService).reward(withdrawal, transfer);
 
         assertThatThrownBy(() -> service.confirm("WD000007"))
                 .isInstanceOf(ResponseStatusException.class)
@@ -204,6 +209,7 @@ class WalletServiceImplTest {
                 .isEqualTo(HttpStatus.CONFLICT);
         assertThat(withdrawal.getStatus()).isEqualTo(WalletTransactionStatus.SENT);
         assertThat(transfer.getConfirmedAt()).isNull();
+        verify(referralRewardService, never()).reward(any(), any());
     }
 
     @Test

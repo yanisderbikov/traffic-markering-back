@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.dto.wallet.OperationDetailDTO;
 import ru.trafficmarkering.dto.wallet.OperationRowDTO;
 import ru.trafficmarkering.dto.wallet.WalletDTO;
@@ -26,6 +27,7 @@ import ru.trafficmarkering.repository.GetterWalletTransaction;
 import ru.trafficmarkering.repository.SaverTransfer;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.partner.ReferralRewardService;
 import ru.trafficmarkering.service.wallet.OperationReader;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.service.wallet.WalletService;
@@ -54,6 +56,8 @@ class WalletServiceImpl implements WalletService {
     private final GetterCustomerProfile getterCustomerProfile;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final CommissionProperties commissionProperties;
+    private final ReferralRewardService referralRewardService;
     private final String topUpTronAddress;
 
     WalletServiceImpl(WalletLedger ledger,
@@ -66,6 +70,8 @@ class WalletServiceImpl implements WalletService {
                       GetterCustomerProfile getterCustomerProfile,
                       UserRepository userRepository,
                       CurrentUserService currentUserService,
+                      CommissionProperties commissionProperties,
+                      ReferralRewardService referralRewardService,
                       @Value("${wallet.top-up-tron-address}") String topUpTronAddress) {
         this.ledger = ledger;
         this.operationReader = operationReader;
@@ -77,6 +83,8 @@ class WalletServiceImpl implements WalletService {
         this.getterCustomerProfile = getterCustomerProfile;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
+        this.commissionProperties = commissionProperties;
+        this.referralRewardService = referralRewardService;
         this.topUpTronAddress = requireTronOrNull(trimToNull(topUpTronAddress));
     }
 
@@ -132,6 +140,7 @@ class WalletServiceImpl implements WalletService {
         transfer.confirm();
         saverTransfer.save(transfer);
         transaction.setStatus(WalletTransactionStatus.CONFIRMED);
+        referralRewardService.reward(transaction, transfer);
         return operationReader.detail(transaction, transfer);
     }
 
@@ -157,7 +166,8 @@ class WalletServiceImpl implements WalletService {
                     return WalletDTO.from(wallet, wallet.getUser(), profiles.get(userId),
                             total != null ? total.budget() : 0L,
                             total != null ? total.spent() : 0L,
-                            topUpTronAddress);
+                            topUpTronAddress,
+                            commissionProperties.getPercent());
                 })
                 .toList();
     }
@@ -252,7 +262,8 @@ class WalletServiceImpl implements WalletService {
                 .mapToLong(campaign -> campaign.getSpentKopecks() != null ? campaign.getSpentKopecks() : 0L)
                 .sum();
         CustomerProfile profile = getterCustomerProfile.getByUserId(customer.getId()).orElse(null);
-        return WalletDTO.from(wallet, customer, profile, allocated, spent, topUpTronAddress);
+        return WalletDTO.from(wallet, customer, profile, allocated, spent, topUpTronAddress,
+                commissionProperties.getPercent());
     }
 
     private String trimToNull(String value) {

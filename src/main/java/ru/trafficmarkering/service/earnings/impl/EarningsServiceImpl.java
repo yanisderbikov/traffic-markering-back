@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.config.CommissionProperties;
 import ru.trafficmarkering.config.FraudProperties;
 import ru.trafficmarkering.dto.earnings.CreatorWalletDTO;
 import ru.trafficmarkering.dto.earnings.PayoutCreateRequestDTO;
@@ -65,6 +66,7 @@ class EarningsServiceImpl implements EarningsService {
     private final CreatorTrustService creatorTrustService;
     private final FraudProperties fraudProperties;
     private final UsdtRateService usdtRateService;
+    private final CommissionProperties commissionProperties;
 
     /** Окно удержания в днях: в кошелёк уезжают только просмотры, снятые не позже чем N дней назад */
     @Value("${earnings.hold-days:7}")
@@ -97,6 +99,7 @@ class EarningsServiceImpl implements EarningsService {
                 .sum();
         return new CreatorWalletDTO(creator.getId(), wallet.balance(), reserved, paidOut, earned, pending,
                 wallet.balance() > 0 && !trust.blocksCredit(),
+                commissionProperties.getPercent(),
                 wallet.getUpdatedAt() != null ? wallet.getUpdatedAt().toString() : null);
     }
 
@@ -140,6 +143,7 @@ class EarningsServiceImpl implements EarningsService {
                 .transaction(transaction)
                 .tronAddress(address)
                 .usdtRate(usdtRate)
+                .commissionKopecks(commissionProperties.commissionOf(amount))
                 .build());
         return operationReader.detail(transaction, transfer);
     }

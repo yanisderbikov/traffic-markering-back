@@ -6,7 +6,8 @@ public enum WalletTransactionType {
     ALLOCATION("Резерв под объявление"),
     RELEASE("Возврат из объявления"),
     EARNING("Начисление за просмотры"),
-    PAYOUT("Выплата USDT (TRC-20)");
+    PAYOUT("Выплата USDT (TRC-20)"),
+    REFERRAL_REWARD("Партнёрское вознаграждение");
 
     private final String description;
 
@@ -23,6 +24,10 @@ public enum WalletTransactionType {
     }
 
     public boolean settlesOnConfirm() {
+        return this == TOP_UP;
+    }
+
+    public boolean chargesCommissionOnTop() {
         return this == TOP_UP;
     }
 }

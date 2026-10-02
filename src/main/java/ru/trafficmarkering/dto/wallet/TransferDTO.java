@@ -12,6 +12,8 @@ import java.util.function.Function;
 public record TransferDTO(
         @Schema(description = "Адрес кошелька TRON, куда ушли USDT; null для пополнения") String tronAddress,
         @Schema(description = "Курс USDT/RUB, зафиксированный при создании заявки; null у заявок, созданных до фиксации курса") BigDecimal usdtRate,
+        @Schema(description = "Комиссия платформы, в копейках: у пополнения платится сверху, у выводов удерживается из суммы") Long commissionKopecks,
+        @Schema(description = "Сколько в рублях уходит переводом USDT: у пополнения сумма с комиссией, у выводов — за вычетом комиссии") Long transferKopecks,
         @Schema(description = "Номер (хеш) транзакции в сети TRON") String txId,
         @Schema(description = "Комментарий финансиста") String financeComment,
         @Schema(description = "Почему операция отклонена; null — не отклонена") String rejectReason,
@@ -33,6 +35,8 @@ public record TransferDTO(
         return new TransferDTO(
                 transfer.getTronAddress(),
                 transfer.getUsdtRate(),
+                transfer.commission(),
+                transfer.transferKopecks(),
                 transfer.getTxId(),
                 transfer.getFinanceComment(),
                 transfer.getRejectReason(),

@@ -57,6 +57,10 @@ public class Transfer {
     @Column(name = "usdt_rate", precision = 19, scale = 6)
     private BigDecimal usdtRate;
 
+    @Builder.Default
+    @Column(name = "commission_kopecks", nullable = false)
+    private Long commissionKopecks = 0L;
+
     @Column(name = "tx_id", length = 255)
     private String txId;
 
@@ -101,6 +105,15 @@ public class Transfer {
 
     public static boolean isTronAddress(String value) {
         return value != null && TRON_ADDRESS.matcher(value).matches();
+    }
+
+    public long commission() {
+        return commissionKopecks != null ? commissionKopecks : 0L;
+    }
+
+    public long transferKopecks() {
+        long amount = Math.abs(transaction.amount());
+        return transaction.getType().chargesCommissionOnTop() ? amount + commission() : amount - commission();
     }
 
     public void send(User actor, String txId, List<String> proofKeys, String comment) {

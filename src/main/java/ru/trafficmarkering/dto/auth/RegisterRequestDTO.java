@@ -35,4 +35,9 @@ public class RegisterRequestDTO {
     @Schema(description = "Роль: CUSTOMER (заказчик) или CREATOR (криатор)",
             requiredMode = Schema.RequiredMode.REQUIRED, example = "CREATOR")
     private Role role;
+
+    @Size(max = 64)
+    @Schema(description = "Код приглашения партнёра из ссылки; неизвестный код не мешает регистрации",
+            example = "K7Q2M9XA")
+    private String referralCode;
 }

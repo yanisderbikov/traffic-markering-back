@@ -63,7 +63,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Текущий пользователь",
-            description = "Кто пришёл с токеном: id, логин, имя и роль",
+            description = "Кто пришёл с токеном: id, логин, имя, роль и вкладки кабинета, доступные этой роли",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/me")
     public ResponseEntity<CurrentUserDTO> me() {

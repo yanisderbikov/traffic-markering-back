@@ -9,6 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.CurrentUserDTO;
 import ru.trafficmarkering.dto.auth.AuthResponseDTO;
 import ru.trafficmarkering.dto.auth.RegisterRequestDTO;
+import ru.trafficmarkering.model.CabinetTab;
 import ru.trafficmarkering.model.LoginCode;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
@@ -19,11 +20,14 @@ import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.auth.JwtTokenService;
 import ru.trafficmarkering.service.email.EmailService;
 import ru.trafficmarkering.service.email.EmailTemplate;
+import ru.trafficmarkering.service.partner.PartnerService;
 import ru.trafficmarkering.service.user.AccountProvisioningService;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +44,7 @@ class AuthServiceImpl implements AuthService {
     private final JwtTokenService jwtTokenService;
     private final CurrentUserService currentUserService;
     private final AccountProvisioningService accountProvisioningService;
+    private final PartnerService partnerService;
 
     @Override
     @Transactional
@@ -66,6 +71,9 @@ class AuthServiceImpl implements AuthService {
         }
         user.setName(name);
         user.setRole(role);
+        user.setReferredBy(role == Role.CUSTOMER
+                ? partnerService.findByCode(request.getReferralCode()).orElse(null)
+                : null);
         User saved = userRepository.save(user);
         accountProvisioningService.provision(saved);
 
@@ -124,7 +132,17 @@ class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public CurrentUserDTO me() {
-        return CurrentUserDTO.from(currentUserService.require());
+        User user = currentUserService.require();
+        return CurrentUserDTO.from(user, tabsOf(user));
+    }
+
+    private Set<CabinetTab> tabsOf(User user) {
+        Set<CabinetTab> tabs = EnumSet.noneOf(CabinetTab.class);
+        tabs.addAll(user.getRole().tabs());
+        if (partnerService.isPartner(user)) {
+            tabs.add(CabinetTab.REFERRAL);
+        }
+        return tabs;
     }
 
     private void sendCode(String email) {

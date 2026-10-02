@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Schema(description = "Одна сторона движения денег: откуда они ушли или куда пришли")
 public record FlowPointDTO(
-        @Schema(description = "EXTERNAL, CUSTOMER_WALLET, CAMPAIGN, CREATOR_WALLET или TRON") String kind,
+        @Schema(description = "EXTERNAL, CUSTOMER_WALLET, CAMPAIGN, CREATOR_WALLET, TRON или PARTNER_PROGRAM") String kind,
         @Schema(description = "Подпись для человека", example = "Кошелёк заказчика · Иван") String label,
         @Schema(description = "Владелец кошелька, если сторона — кошелёк") Long userId,
         @Schema(description = "Объявление, если сторона — бюджет объявления") UUID campaignId,
@@ -32,6 +32,10 @@ public record FlowPointDTO(
         }
         return new FlowPointDTO("CAMPAIGN", "Объявление «" + campaign.displayTitle() + "»", null,
                 campaign.getId(), campaign.getPublicId());
+    }
+
+    public static FlowPointDTO partnerProgram() {
+        return new FlowPointDTO("PARTNER_PROGRAM", "Партнёрская программа offer", null, null, null);
     }
 
     public static FlowPointDTO tron(String address) {

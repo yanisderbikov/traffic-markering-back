@@ -10,7 +10,7 @@ import java.util.UUID;
 @Schema(description = "Операция по кошельку; сумма со знаком относительно свободных средств")
 public record WalletTransactionDTO(
         @Schema(description = "Публичный номер операции для ссылок", example = "K7Q2M9XA") String publicId,
-        @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT") String type,
+        @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT, REFERRAL_REWARD") String type,
         @Schema(description = "Человекочитаемый тип", example = "Пополнение") String typeDescription,
         @Schema(description = "Сумма в копейках: плюс — деньги пришли в кошелёк, минус — ушли") Long amountKopecks,
         @Schema(description = "Свободный остаток после операции, в копейках") Long balanceAfterKopecks,

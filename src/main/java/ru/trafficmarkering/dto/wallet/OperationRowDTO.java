@@ -9,7 +9,7 @@ import ru.trafficmarkering.model.wallet.WalletTransactionType;
 @Schema(description = "Строка списка операций: суть, откуда → куда и статус; подробности — отдельной ручкой по publicId")
 public record OperationRowDTO(
         @Schema(description = "Публичный номер операции для ссылок", example = "K7Q2M9XA") String publicId,
-        @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT") String type,
+        @Schema(description = "Тип: TOP_UP, WITHDRAWAL, ALLOCATION, RELEASE, EARNING, PAYOUT, REFERRAL_REWARD") String type,
         @Schema(description = "Что за операция", example = "Начисление за просмотры") String title,
         @Schema(description = "Уточнение: объявление или комментарий; может быть null") String subtitle,
         @Schema(description = "Сумма в копейках со знаком относительно кошелька") Long amountKopecks,
