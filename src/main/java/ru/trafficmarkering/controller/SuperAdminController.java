@@ -13,11 +13,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.admin.AdminUserDTO;
 import ru.trafficmarkering.dto.admin.AssignRoleRequestDTO;
 import ru.trafficmarkering.dto.admin.PlatformDashboardDTO;
+import ru.trafficmarkering.dto.admin.PlatformSeriesDTO;
 import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.repository.SeriesStep;
 import ru.trafficmarkering.service.admin.PlatformDashboardService;
 import ru.trafficmarkering.service.admin.SuperAdminService;
 
@@ -37,6 +40,13 @@ public class SuperAdminController {
     @GetMapping("/dashboard")
     public ResponseEntity<PlatformDashboardDTO> dashboard(@RequestParam(required = false) Integer days) {
         return ResponseEntity.ok(platformDashboardService.dashboard(days));
+    }
+
+    @GetMapping("/dashboard/series")
+    public ResponseEntity<PlatformSeriesDTO> dashboardSeries(@RequestParam(required = false) Integer days,
+                                                             @RequestParam SeriesStep step,
+                                                             @RequestParam(required = false) String tz) {
+        return ResponseEntity.ok(platformDashboardService.series(days, step, tz));
     }
 
     @GetMapping("/users")
@@ -63,6 +73,12 @@ public class SuperAdminController {
                 .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
                 .body(Map.of("message", message.isBlank() ? "Некорректный запрос" : message));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, String>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("message", "Некорректный параметр " + e.getName() + ": " + e.getValue()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
