@@ -26,13 +26,14 @@ import static org.mockito.Mockito.when;
 class SuperAdminServiceImplTest {
 
     private static final String SUPER_ADMIN = "boss@traffic.ru";
+    private static final String SECOND_SUPER_ADMIN = "deputy@traffic.ru";
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final CurrentUserService currentUserService = mock(CurrentUserService.class);
     private final AccountProvisioningService accountProvisioningService = mock(AccountProvisioningService.class);
 
     private final SuperAdminServiceImpl service = new SuperAdminServiceImpl(userRepository, currentUserService,
-            accountProvisioningService, " Boss@Traffic.RU ");
+            accountProvisioningService, " Boss@Traffic.RU , Deputy@traffic.ru,");
 
     @BeforeEach
     void setUp() {
@@ -96,6 +97,9 @@ class SuperAdminServiceImplTest {
     @Test
     void assignRoleRefusesToTouchSuperAdminFromEnv() {
         assertThatThrownBy(() -> service.assignRole(request(SUPER_ADMIN, null, Role.CUSTOMER)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("SUPER_ADMIN_EMAIL");
+        assertThatThrownBy(() -> service.assignRole(request(SECOND_SUPER_ADMIN, null, Role.ADMIN)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("SUPER_ADMIN_EMAIL");
         verify(userRepository, never()).save(any());

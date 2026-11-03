@@ -21,7 +21,10 @@ import org.hibernate.annotations.CreationTimestamp;
 import ru.trafficmarkering.model.partner.Partner;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
@@ -61,5 +64,16 @@ public class User {
 
     public static String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** Список почт через запятую: нормализует каждую, пустые отбрасывает. */
+    public static Set<String> normalizeEmails(String emails) {
+        if (emails == null) {
+            return Set.of();
+        }
+        return Arrays.stream(emails.split(","))
+                .map(User::normalizeEmail)
+                .filter(email -> !email.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

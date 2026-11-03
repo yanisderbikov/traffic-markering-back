@@ -86,7 +86,7 @@ docker compose up --build
 | `POSTGRES_URL` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | подключение к базе |
 | `JWT_SECRET` | секрет подписи JWT; в проде — не короче 32 байт |
 | `JWT_EXPIRATION_SECONDS` | срок жизни токена, по умолчанию неделя |
-| `SUPER_ADMIN_EMAIL` | почта супер-админа: на старте учётка с ней получает роль `SUPER_ADMIN`, все прочие `SUPER_ADMIN` понижаются до `ADMIN`; пусто = супер-админа нет |
+| `SUPER_ADMIN_EMAIL` | почты супер-админов через запятую: на старте учётки с ними получают роль `SUPER_ADMIN`, все прочие `SUPER_ADMIN` понижаются до `ADMIN`; пусто = супер-админа нет |
 | `EARNINGS_ENABLED` / `EARNINGS_CRON` / `EARNINGS_ZONE` | ночное начисление в кошельки криаторов: рубильник, cron Spring (по умолчанию `0 0 3 * * *`) и зона (`Europe/Moscow`) |
 | `TOP_UP_TRON_ADDRESS` | адрес TRON платформы для пополнений USDT (TRC-20); показывается заказчику в кошельке, пусто = не показывается |
 | `EMAIL_NOTISEND_API_KEY` / `EMAIL_NOTISEND_EMAIL_ADDRESS` / `EMAIL_NOTISEND_FROM_NAME` | NotiSend: через него уходят коды входа; пустой ключ = письма не шлём, код виден в логе |
@@ -163,8 +163,8 @@ util/                         чистые функции без Spring
 пропускает всех, чья роль подразумевает нужную.
 
 `SUPER_ADMIN` **не назначается через API**: единственный источник — `SUPER_ADMIN_EMAIL`.
-`SuperAdminBootstrap` на старте заводит учётку с этой почтой (или поднимает существующую)
-и понижает до `ADMIN` всех остальных с ролью `SUPER_ADMIN`. Остальные служебные роли
+`SuperAdminBootstrap` на старте заводит учётку на каждую почту из списка через запятую (или
+поднимает существующую) и понижает до `ADMIN` всех остальных с ролью `SUPER_ADMIN`. Остальные служебные роли
 (`FINANCE_MANAGER`, `ADMIN`) супер-админ раздаёт скрытой ручкой — она помечена `@Hidden`
 и в Swagger/сгенерированный клиент не попадает:
 
@@ -173,7 +173,7 @@ GET  /api/superadmin/users                          → все учётки с �
 POST /api/superadmin/users  {email, name?, role}    → создать учётку с ролью или сменить роль существующей
 ```
 
-Назначить можно `CUSTOMER`, `CREATOR`, `FINANCE_MANAGER` или `ADMIN`; почту из
+Назначить можно `CUSTOMER`, `CREATOR`, `FINANCE_MANAGER` или `ADMIN`; почты из
 `SUPER_ADMIN_EMAIL` ручка не трогает. Учётка заводится сразу (при необходимости с профилем
 и кошельком — `AccountProvisioningService`), человек входит по коду с почты как все.
 

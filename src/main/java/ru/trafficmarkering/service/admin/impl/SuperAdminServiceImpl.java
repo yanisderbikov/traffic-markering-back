@@ -15,6 +15,7 @@ import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.user.AccountProvisioningService;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,16 +24,16 @@ class SuperAdminServiceImpl implements SuperAdminService {
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final AccountProvisioningService accountProvisioningService;
-    private final String superAdminEmail;
+    private final Set<String> superAdminEmails;
 
     SuperAdminServiceImpl(UserRepository userRepository,
                           CurrentUserService currentUserService,
                           AccountProvisioningService accountProvisioningService,
-                          @Value("${app.super-admin.email}") String superAdminEmail) {
+                          @Value("${app.super-admin.email}") String superAdminEmails) {
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.accountProvisioningService = accountProvisioningService;
-        this.superAdminEmail = User.normalizeEmail(superAdminEmail);
+        this.superAdminEmails = User.normalizeEmails(superAdminEmails);
     }
 
     @Override
@@ -50,7 +51,7 @@ class SuperAdminServiceImpl implements SuperAdminService {
         currentUserService.require(Role.SUPER_ADMIN);
         Role role = requireAssignable(request.getRole());
         String email = User.normalizeEmail(request.getEmail());
-        if (email.equals(superAdminEmail)) {
+        if (superAdminEmails.contains(email)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Супер-админ задаётся переменной окружения SUPER_ADMIN_EMAIL, его роль здесь не меняется");
         }
