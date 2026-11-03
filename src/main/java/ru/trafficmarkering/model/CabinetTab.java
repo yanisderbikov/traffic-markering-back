@@ -2,6 +2,7 @@ package ru.trafficmarkering.model;
 
 public enum CabinetTab {
     OVERVIEW("/app", "Обзор", "Обзор", "chart", true),
+    DASHBOARD("/app/admin/dashboard", "Аналитика", "Аналитика", "chart", false),
     BOARD("/app/board", "Офферы", "Офферы", "grid", false),
     CAMPAIGNS("/app/campaigns", "Мои кампании", "Кампании", "briefcase", false),
     APPLICATIONS("/app/applications", "Мои работы", "Работы", "briefcase", false),

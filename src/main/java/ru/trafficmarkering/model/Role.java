@@ -8,6 +8,7 @@ import static ru.trafficmarkering.model.CabinetTab.BOARD;
 import static ru.trafficmarkering.model.CabinetTab.CAMPAIGNS;
 import static ru.trafficmarkering.model.CabinetTab.CREATOR_TRUST;
 import static ru.trafficmarkering.model.CabinetTab.CUSTOMER_WALLETS;
+import static ru.trafficmarkering.model.CabinetTab.DASHBOARD;
 import static ru.trafficmarkering.model.CabinetTab.EARNINGS;
 import static ru.trafficmarkering.model.CabinetTab.FRAUD;
 import static ru.trafficmarkering.model.CabinetTab.MODERATION;
@@ -58,8 +59,8 @@ public enum Role {
             case FINANCE_MANAGER -> EnumSet.of(OVERVIEW, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS, OPERATIONS);
             case ADMIN -> EnumSet.of(OVERVIEW, BOARD, CAMPAIGNS, APPLICATIONS, WALLET, EARNINGS,
                     MODERATION, FRAUD, CREATOR_TRUST, PROFILE, SOCIALS);
-            case SUPER_ADMIN -> EnumSet.of(OVERVIEW, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS, OPERATIONS,
-                    MODERATION, FRAUD, CREATOR_TRUST, USERS);
+            case SUPER_ADMIN -> EnumSet.of(OVERVIEW, DASHBOARD, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS,
+                    OPERATIONS, MODERATION, FRAUD, CREATOR_TRUST, USERS);
             case SERVICE -> EnumSet.noneOf(CabinetTab.class);
         };
     }

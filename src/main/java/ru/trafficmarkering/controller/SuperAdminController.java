@@ -11,11 +11,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.admin.AdminUserDTO;
 import ru.trafficmarkering.dto.admin.AssignRoleRequestDTO;
+import ru.trafficmarkering.dto.admin.PlatformDashboardDTO;
 import ru.trafficmarkering.model.Role;
+import ru.trafficmarkering.service.admin.PlatformDashboardService;
 import ru.trafficmarkering.service.admin.SuperAdminService;
 
 import java.util.List;
@@ -29,6 +32,12 @@ import java.util.stream.Collectors;
 public class SuperAdminController {
 
     private final SuperAdminService superAdminService;
+    private final PlatformDashboardService platformDashboardService;
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<PlatformDashboardDTO> dashboard(@RequestParam(required = false) Integer days) {
+        return ResponseEntity.ok(platformDashboardService.dashboard(days));
+    }
 
     @GetMapping("/users")
     public ResponseEntity<List<AdminUserDTO>> adminUsers() {

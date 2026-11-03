@@ -35,6 +35,7 @@ class RoleTest {
     void superAdminTabsAreOnlyPlatformManagement() {
         assertThat(Role.SUPER_ADMIN.tabs()).containsExactly(
                 CabinetTab.OVERVIEW,
+                CabinetTab.DASHBOARD,
                 CabinetTab.CUSTOMER_WALLETS,
                 CabinetTab.TOP_UPS,
                 CabinetTab.PAYOUTS,
@@ -49,6 +50,13 @@ class RoleTest {
     void usersTabBelongsOnlyToSuperAdmin() {
         for (Role role : Role.values()) {
             assertThat(role.tabs().contains(CabinetTab.USERS)).isEqualTo(role == Role.SUPER_ADMIN);
+        }
+    }
+
+    @Test
+    void dashboardTabBelongsOnlyToSuperAdmin() {
+        for (Role role : Role.values()) {
+            assertThat(role.tabs().contains(CabinetTab.DASHBOARD)).isEqualTo(role == Role.SUPER_ADMIN);
         }
     }
 
