@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.email.impl;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -14,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 @Log4j2
 @Component
+@ConditionalOnExpression("'${email.service.url:}'.isBlank()")
 class NotiSendEmailService implements EmailService {
 
     private static final String NOTISEND_BASE_URL = "https://api.notisend.ru/v1";
