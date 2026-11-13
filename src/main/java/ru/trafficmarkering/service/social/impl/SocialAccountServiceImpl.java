@@ -10,18 +10,22 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.trafficmarkering.dto.social.SocialAccountDTO;
 import ru.trafficmarkering.dto.social.SocialAuthorizeResponseDTO;
+import ru.trafficmarkering.dto.social.SocialModeDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.social.SocialAccount;
 import ru.trafficmarkering.model.social.SocialAccountStatus;
+import ru.trafficmarkering.model.social.SocialLinkMethod;
 import ru.trafficmarkering.repository.GetterSocialAccount;
 import ru.trafficmarkering.repository.SaverSocialAccount;
 import ru.trafficmarkering.repository.SocialAccountDeleter;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.scrape.ScrapeCreatorsApi;
 import ru.trafficmarkering.service.social.OAuthStateService;
 import ru.trafficmarkering.service.social.SocialAccountData;
 import ru.trafficmarkering.service.social.SocialAccountService;
+import ru.trafficmarkering.service.social.SocialIntegration;
 import ru.trafficmarkering.service.social.SocialOAuthProvider;
 import ru.trafficmarkering.util.TokenCipher;
 
@@ -43,6 +47,8 @@ class SocialAccountServiceImpl implements SocialAccountService {
     private final UserRepository userRepository;
     private final OAuthStateService oAuthStateService;
     private final TokenCipher tokenCipher;
+    private final SocialIntegration socialIntegration;
+    private final ScrapeCreatorsApi scrapeCreatorsApi;
     private final String backUrl;
     private final String frontUrl;
 
@@ -54,6 +60,8 @@ class SocialAccountServiceImpl implements SocialAccountService {
                              UserRepository userRepository,
                              OAuthStateService oAuthStateService,
                              TokenCipher tokenCipher,
+                             SocialIntegration socialIntegration,
+                             ScrapeCreatorsApi scrapeCreatorsApi,
                              @Value("${url.back}") String backUrl,
                              @Value("${app.front.url}") String frontUrl) {
         this.providers = providers.stream()
@@ -65,8 +73,19 @@ class SocialAccountServiceImpl implements SocialAccountService {
         this.userRepository = userRepository;
         this.oAuthStateService = oAuthStateService;
         this.tokenCipher = tokenCipher;
+        this.socialIntegration = socialIntegration;
+        this.scrapeCreatorsApi = scrapeCreatorsApi;
         this.backUrl = trimTrailingSlash(backUrl);
         this.frontUrl = trimTrailingSlash(frontUrl);
+    }
+
+    @Override
+    public SocialModeDTO mode() {
+        if (socialIntegration.scrape()) {
+            return new SocialModeDTO(SocialLinkMethod.SCRAPE.name(), scrapeCreatorsApi.isConfigured());
+        }
+        boolean anyConfigured = providers.values().stream().anyMatch(SocialOAuthProvider::isConfigured);
+        return new SocialModeDTO(SocialLinkMethod.OAUTH.name(), anyConfigured);
     }
 
     @Override
@@ -81,6 +100,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
     @Override
     public SocialAuthorizeResponseDTO authorize(String platformSlug) {
         User user = currentUserService.require(Role.CREATOR);
+        requireOAuthMode();
         SocialOAuthProvider provider = requireProvider(platformSlug);
         String state = oAuthStateService.issue(user.getId(), provider.platform());
         return new SocialAuthorizeResponseDTO(
@@ -91,6 +111,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
     @Override
     @Transactional
     public SocialAccountDTO connect(String platformSlug, String code, String state) {
+        requireOAuthMode();
         SocialOAuthProvider provider = requireProvider(platformSlug);
         if (!StringUtils.hasText(code)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Площадка не вернула код подтверждения");
@@ -110,6 +131,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
                         .user(user)
                         .platform(provider.platform())
                         .externalId(data.externalId())
+                        .linkMethod(SocialLinkMethod.OAUTH)
                         .build());
 
         if (!account.getUser().getId().equals(user.getId())) {
@@ -147,13 +169,21 @@ class SocialAccountServiceImpl implements SocialAccountService {
 
     @Override
     public String frontRedirect(String platformSlug, String status, String message) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontUrl + "/app/profile/socials")
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontUrl + "/app/profile")
                 .queryParam("social", platformSlug)
                 .queryParam("status", status);
         if (StringUtils.hasText(message)) {
             builder.queryParam("message", message);
         }
         return builder.encode().toUriString();
+    }
+
+    /** Под флагом ScrapeCreators вход через площадку закрыт: аккаунты подтверждаются кодом в описании. */
+    private void requireOAuthMode() {
+        if (socialIntegration.scrape()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Подключение через вход на площадке отключено: привяжите аккаунт по нику и коду в описании профиля");
+        }
     }
 
     private SocialOAuthProvider requireProvider(String platformSlug) {

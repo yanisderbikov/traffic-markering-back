@@ -36,6 +36,7 @@ import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
 import ru.trafficmarkering.service.http.ShortLinkResolver;
+import ru.trafficmarkering.service.social.SocialVideoOwnership;
 import ru.trafficmarkering.util.PublicIdGenerator;
 import ru.trafficmarkering.util.VideoUrls;
 
@@ -80,6 +81,7 @@ class ApplicationServiceImpl implements ApplicationService {
     private final ShortLinkResolver shortLinkResolver;
     private final CreatorTrustService creatorTrustService;
     private final FraudCheckService fraudCheckService;
+    private final SocialVideoOwnership socialVideoOwnership;
 
     @Override
     @Transactional
@@ -330,7 +332,8 @@ class ApplicationServiceImpl implements ApplicationService {
 
     /**
      * Ролик к отклику: площадка из ссылки, аккаунт этой площадки в профиле, короткая ссылка
-     * развёрнута до полной, тот же ролик нигде больше не подан. После этого отклик ждёт решения заказчика.
+     * развёрнута до полной, тот же ролик нигде больше не подан, а под флагом ScrapeCreators ещё и
+     * выложен с привязанного аккаунта. После этого отклик ждёт решения заказчика.
      */
     private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl) {
         Platform platform = requirePlatform(rawVideoUrl);
@@ -339,6 +342,7 @@ class ApplicationServiceImpl implements ApplicationService {
         String videoUrl = resolveVideoUrl(platform, rawVideoUrl);
         String videoKey = VideoUrls.videoKey(platform, videoUrl);
         requireVideoNotSubmitted(videoKey, creator);
+        socialVideoOwnership.requireOwnedBy(creator, platform, videoUrl);
 
         application.setPlatform(platform);
         application.setVideoUrl(videoUrl);

@@ -17,8 +17,7 @@ public enum CabinetTab {
     CREATOR_TRUST("/app/admin/fraud/creators", "Репутация креаторов", "Репутация", "users", false),
     USERS("/app/admin/users", "Пользователи", "Люди", "users", false),
     REFERRAL("/app/referral", "Рефералка", "Рефералка", "gift", false),
-    PROFILE("/app/profile", "Профиль", "Профиль", "user", true),
-    SOCIALS("/app/profile/socials", "Соцсети", "Соцсети", "link", false);
+    PROFILE("/app/profile", "Профиль", "Профиль", "user", true);
 
     private final String path;
     private final String label;

@@ -29,6 +29,7 @@ import ru.trafficmarkering.model.fraud.TrustLevel;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
 import ru.trafficmarkering.service.http.ShortLinkResolver;
+import ru.trafficmarkering.service.social.SocialVideoOwnership;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -65,11 +66,12 @@ class ApplicationServiceImplTest {
     private final ShortLinkResolver shortLinkResolver = new ShortLinkResolver();
     private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
     private final FraudCheckService fraudCheckService = mock(FraudCheckService.class);
+    private final SocialVideoOwnership socialVideoOwnership = mock(SocialVideoOwnership.class);
 
     private final ApplicationServiceImpl service = new ApplicationServiceImpl(
             getterApplication, saverApplication, applicationDeleter, getterCampaign, getterCreatorProfile,
             getterSocialAccount, currentUserService, campaignAccrualService, getterViewSnapshot,
-            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService);
+            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService, socialVideoOwnership);
 
     {
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.NEW);

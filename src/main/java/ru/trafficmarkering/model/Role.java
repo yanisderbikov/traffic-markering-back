@@ -16,7 +16,6 @@ import static ru.trafficmarkering.model.CabinetTab.OPERATIONS;
 import static ru.trafficmarkering.model.CabinetTab.OVERVIEW;
 import static ru.trafficmarkering.model.CabinetTab.PAYOUTS;
 import static ru.trafficmarkering.model.CabinetTab.PROFILE;
-import static ru.trafficmarkering.model.CabinetTab.SOCIALS;
 import static ru.trafficmarkering.model.CabinetTab.TOP_UPS;
 import static ru.trafficmarkering.model.CabinetTab.USERS;
 import static ru.trafficmarkering.model.CabinetTab.WALLET;
@@ -55,10 +54,10 @@ public enum Role {
     public Set<CabinetTab> tabs() {
         return switch (this) {
             case CUSTOMER -> EnumSet.of(OVERVIEW, CAMPAIGNS, WALLET, PROFILE);
-            case CREATOR -> EnumSet.of(OVERVIEW, BOARD, APPLICATIONS, EARNINGS, PROFILE, SOCIALS);
+            case CREATOR -> EnumSet.of(OVERVIEW, BOARD, APPLICATIONS, EARNINGS, PROFILE);
             case FINANCE_MANAGER -> EnumSet.of(OVERVIEW, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS, OPERATIONS);
             case ADMIN -> EnumSet.of(OVERVIEW, BOARD, CAMPAIGNS, APPLICATIONS, WALLET, EARNINGS,
-                    MODERATION, FRAUD, CREATOR_TRUST, PROFILE, SOCIALS);
+                    MODERATION, FRAUD, CREATOR_TRUST, PROFILE);
             case SUPER_ADMIN -> EnumSet.of(OVERVIEW, DASHBOARD, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS,
                     OPERATIONS, MODERATION, FRAUD, CREATOR_TRUST, USERS);
             case SERVICE -> EnumSet.noneOf(CabinetTab.class);

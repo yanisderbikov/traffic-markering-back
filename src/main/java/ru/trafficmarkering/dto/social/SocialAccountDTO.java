@@ -15,10 +15,11 @@ public record SocialAccountDTO(
         String displayName,
         String avatarUrl,
         Long followers,
-        @Schema(description = "ACTIVE — токен живой, EXPIRED — нужна повторная привязка") String status,
+        @Schema(description = "ACTIVE — аккаунт в работе, EXPIRED — нужна повторная привязка") String status,
         @Schema(description = "Когда аккаунт привязали, ISO-8601") String connectedAt,
         @Schema(description = "До какого момента живёт токен, ISO-8601") String tokenExpiresAt,
-        @Schema(description = "Отдаёт ли привязанный аккаунт географию просмотров (YouTube с доступом к аналитике); для других площадок false") Boolean reportsViewGeography
+        @Schema(description = "Отдаёт ли привязанный аккаунт географию просмотров (YouTube с доступом к аналитике); для других площадок false") Boolean reportsViewGeography,
+        @Schema(description = "Как привязан: OAUTH — вход на площадке, SCRAPE — код в описании профиля", example = "SCRAPE") String linkMethod
 ) {
     public static SocialAccountDTO from(SocialAccount account) {
         return new SocialAccountDTO(
@@ -33,6 +34,7 @@ public record SocialAccountDTO(
                 account.getStatus() != null ? account.getStatus().name() : null,
                 account.getConnectedAt() != null ? account.getConnectedAt().toString() : null,
                 account.getTokenExpiresAt() != null ? account.getTokenExpiresAt().toString() : null,
-                account.reportsViewGeography());
+                account.reportsViewGeography(),
+                account.getLinkMethod() != null ? account.getLinkMethod().name() : null);
     }
 }

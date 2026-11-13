@@ -2,11 +2,14 @@ package ru.trafficmarkering.service.social;
 
 import ru.trafficmarkering.dto.social.SocialAccountDTO;
 import ru.trafficmarkering.dto.social.SocialAuthorizeResponseDTO;
+import ru.trafficmarkering.dto.social.SocialModeDTO;
 
 import java.util.List;
 import java.util.UUID;
 
 public interface SocialAccountService {
+
+    SocialModeDTO mode();
 
     List<SocialAccountDTO> listMine();
 

@@ -16,6 +16,7 @@ import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
+import ru.trafficmarkering.service.social.SocialIntegration;
 import ru.trafficmarkering.service.views.ViewCount;
 import ru.trafficmarkering.service.views.ViewCountProvider;
 
@@ -44,7 +45,7 @@ class ViewsSyncServiceImplTest {
     private final ViewCountProvider provider = mock(ViewCountProvider.class);
 
     private final ViewsSyncServiceImpl service = new ViewsSyncServiceImpl(getterApplication,
-            new ViewCountProviders(List.of(provider)),
+            new ViewCountProviders(List.of(provider), new SocialIntegration(false)),
             new ViewsRecorder(getterApplication, saverApplication, saverViewSnapshot, fraudCheckService),
             campaignAccrualService);
 

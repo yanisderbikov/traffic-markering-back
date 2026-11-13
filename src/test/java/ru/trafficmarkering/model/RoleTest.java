@@ -77,7 +77,7 @@ class RoleTest {
                 CabinetTab.OVERVIEW, CabinetTab.CAMPAIGNS, CabinetTab.WALLET, CabinetTab.PROFILE);
         assertThat(Role.CREATOR.tabs()).containsExactly(
                 CabinetTab.OVERVIEW, CabinetTab.BOARD, CabinetTab.APPLICATIONS, CabinetTab.EARNINGS,
-                CabinetTab.PROFILE, CabinetTab.SOCIALS);
+                CabinetTab.PROFILE);
     }
 
     @Test

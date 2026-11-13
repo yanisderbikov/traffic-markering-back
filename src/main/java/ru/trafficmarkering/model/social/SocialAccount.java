@@ -58,7 +58,7 @@ public class SocialAccount {
     private Long followers;
 
     @ToString.Exclude
-    @Column(name = "access_token", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "access_token", columnDefinition = "TEXT")
     private String accessToken;
 
     @ToString.Exclude
@@ -74,6 +74,11 @@ public class SocialAccount {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private SocialAccountStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "link_method", nullable = false, length = 16)
+    @Builder.Default
+    private SocialLinkMethod linkMethod = SocialLinkMethod.OAUTH;
 
     @CreationTimestamp
     @Column(name = "connected_at", updatable = false)

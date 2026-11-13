@@ -2,7 +2,7 @@ package ru.trafficmarkering.service.email.impl;
 
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -16,11 +16,12 @@ import java.util.UUID;
 
 /**
  * Отправка через anyforms-email-service: письмо ставится в его очередь, доставляет Postbox.
- * Включается, когда задан EMAIL_SERVICE_URL; иначе работает {@link NotiSendEmailService}.
+ * Включается флагом REMOTE_EMAIL_SERVICE_ENABLED; иначе работает {@link NotiSendEmailService}.
+ * Под флагом без EMAIL_SERVICE_URL или EMAIL_SERVICE_TOKEN бэк не стартует: молча уйти на NotiSend хуже.
  */
 @Log4j2
 @Component
-@ConditionalOnExpression("!'${email.service.url:}'.isBlank()")
+@ConditionalOnProperty(name = "email.remote.enabled", havingValue = "true")
 class AnyformsEmailService implements EmailService {
 
     private static final String CLIENT_ID = "traffic-markering-back";
@@ -32,6 +33,10 @@ class AnyformsEmailService implements EmailService {
 
     AnyformsEmailService(@Value("${email.service.url}") String baseUrl,
                          @Value("${email.service.token}") String token) {
+        if (baseUrl == null || baseUrl.isBlank() || token == null || token.isBlank()) {
+            throw new IllegalStateException(
+                    "REMOTE_EMAIL_SERVICE_ENABLED=true, но EMAIL_SERVICE_URL или EMAIL_SERVICE_TOKEN не заданы");
+        }
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
         factory.setReadTimeout(READ_TIMEOUT_MS);
@@ -41,6 +46,7 @@ class AnyformsEmailService implements EmailService {
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .defaultHeader("X-Client-Id", CLIENT_ID)
                 .build();
+        log.info("Письма уходят через anyforms-email-service: {}", baseUrl);
     }
 
     @Override
