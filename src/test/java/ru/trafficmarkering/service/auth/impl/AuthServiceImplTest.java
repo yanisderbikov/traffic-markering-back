@@ -58,7 +58,8 @@ class AuthServiceImplTest {
         accountProvisioningService = mock(AccountProvisioningService.class);
         partnerService = mock(PartnerService.class);
         authService = new AuthServiceImpl(userRepository, loginCodeStore, emailService, jwtTokenService,
-                currentUserService, accountProvisioningService, partnerService);
+                currentUserService, accountProvisioningService, partnerService,
+                mock(ru.trafficmarkering.service.storage.FileStorage.class));
         when(partnerService.findByCode(any())).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(loginCodeStore.save(any(LoginCode.class))).thenAnswer(inv -> inv.getArgument(0));

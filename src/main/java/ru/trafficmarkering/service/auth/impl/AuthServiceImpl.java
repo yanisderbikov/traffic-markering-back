@@ -17,6 +17,7 @@ import ru.trafficmarkering.repository.LoginCodeStore;
 import ru.trafficmarkering.repository.UserRepository;
 import ru.trafficmarkering.service.auth.AuthService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.auth.JwtTokenService;
 import ru.trafficmarkering.service.email.EmailService;
 import ru.trafficmarkering.service.email.EmailTemplate;
@@ -45,6 +46,7 @@ class AuthServiceImpl implements AuthService {
     private final CurrentUserService currentUserService;
     private final AccountProvisioningService accountProvisioningService;
     private final PartnerService partnerService;
+    private final FileStorage fileStorage;
 
     @Override
     @Transactional
@@ -133,7 +135,7 @@ class AuthServiceImpl implements AuthService {
     @Transactional(readOnly = true)
     public CurrentUserDTO me() {
         User user = currentUserService.require();
-        return CurrentUserDTO.from(user, tabsOf(user));
+        return CurrentUserDTO.from(user, tabsOf(user), fileStorage.presignedUrl(user.getAvatarKey()));
     }
 
     private Set<CabinetTab> tabsOf(User user) {

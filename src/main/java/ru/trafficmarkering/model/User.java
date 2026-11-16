@@ -53,6 +53,10 @@ public class User {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
+    /** Ключ аватарки в хранилище; null — аватарки нет, в кабинете показывается буква имени. */
+    @Column(name = "avatar_key")
+    private String avatarKey;
+
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "referred_by")

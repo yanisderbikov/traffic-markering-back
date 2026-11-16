@@ -8,16 +8,23 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.dto.file.PresignUploadRequestDTO;
+import ru.trafficmarkering.dto.file.PresignUploadResponseDTO;
+import ru.trafficmarkering.dto.profile.AvatarDTO;
+import ru.trafficmarkering.dto.profile.AvatarRequestDTO;
 import ru.trafficmarkering.dto.profile.CreatorProfileDTO;
 import ru.trafficmarkering.dto.profile.CreatorProfileRequestDTO;
 import ru.trafficmarkering.dto.profile.CustomerProfileDTO;
 import ru.trafficmarkering.dto.profile.CustomerProfileRequestDTO;
+import ru.trafficmarkering.service.profile.AvatarService;
 import ru.trafficmarkering.service.profile.CreatorProfileService;
 import ru.trafficmarkering.service.profile.CustomerProfileService;
 
@@ -32,6 +39,32 @@ public class ProfileController {
 
     private final CreatorProfileService creatorProfileService;
     private final CustomerProfileService customerProfileService;
+    private final AvatarService avatarService;
+
+    @Operation(summary = "Ссылка на загрузку аватарки",
+            description = "Presigned PUT-ссылка: картинка отправляется в хранилище напрямую, с тем же Content-Type. "
+                    + "Полученный key передаётся в PUT /api/profile/avatar",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/avatar/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignAvatar(@Valid @RequestBody PresignUploadRequestDTO request) {
+        return ResponseEntity.ok(avatarService.presign(request.getFilename(), request.getContentType()));
+    }
+
+    @Operation(summary = "Сохранить аватарку",
+            description = "Привязывает загруженную картинку к учётной записи; прежняя аватарка заменяется",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PutMapping("/avatar")
+    public ResponseEntity<AvatarDTO> setAvatar(@Valid @RequestBody AvatarRequestDTO request) {
+        return ResponseEntity.ok(avatarService.set(request.key()));
+    }
+
+    @Operation(summary = "Убрать аватарку",
+            description = "В кабинете снова показывается первая буква имени",
+            security = @SecurityRequirement(name = "Bearer"))
+    @DeleteMapping("/avatar")
+    public ResponseEntity<AvatarDTO> removeAvatar() {
+        return ResponseEntity.ok(avatarService.remove());
+    }
 
     @Operation(summary = "Мой профиль криатора",
             description = "Профиль текущего криатора; если его почему-то нет — заводится пустой, а не 404",
