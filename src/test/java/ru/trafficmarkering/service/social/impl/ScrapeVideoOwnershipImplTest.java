@@ -79,6 +79,18 @@ class ScrapeVideoOwnershipImplTest {
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
     }
 
+    /** Свой ScrapeCreators отвечает 400 на ссылку, которую не может прочитать: это ошибка криатора, а не сбой. */
+    @Test
+    void unreadableLinkIsRejected() {
+        when(api.video(Platform.INSTAGRAM, URL)).thenThrow(new ScrapeCreatorsException(400, "not a link to a post"));
+
+        assertThatThrownBy(() -> ownership(true).requireOwnedBy(creator, Platform.INSTAGRAM, URL))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getReason()).contains("ссылку на сам ролик");
+                });
+    }
+
     @Test
     void oauthModeSkipsCheck() {
         ownership(false).requireOwnedBy(creator, Platform.INSTAGRAM, URL);

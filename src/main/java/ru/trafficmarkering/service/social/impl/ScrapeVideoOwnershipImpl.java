@@ -44,6 +44,11 @@ class ScrapeVideoOwnershipImpl implements SocialVideoOwnership {
         try {
             video = scrapeCreatorsApi.video(platform, videoUrl);
         } catch (ScrapeCreatorsException e) {
+            if (e.badInput()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Не разобрали ссылку на ролик " + platform.getDescription()
+                                + ": вставьте ссылку на сам ролик, а не на профиль, клип или подборку");
+            }
             if (e.notFound() || e.status() == 422) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Не открыли ролик по ссылке: проверьте, что он опубликован и доступен всем");

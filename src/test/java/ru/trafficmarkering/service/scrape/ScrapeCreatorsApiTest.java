@@ -31,7 +31,7 @@ class ScrapeCreatorsApiTest {
         ScrapeProfile profile = api.profile(Platform.TIKTOK, new ProfileRef(ProfileRef.Kind.HANDLE, "stoolpresidente"));
 
         assertThat(profile).isEqualTo(new ScrapeProfile("6659752019493208069", "stoolpresidente", "Dave Portnoy",
-                "https://cdn/720.jpeg", 4100000L, "El Presidente OFFER-7KQ2PX", false));
+                "https://cdn/720.jpeg", 4100000L, "El Presidente OFFER-7KQ2PX", ScrapeProfile.Privacy.PUBLIC));
     }
 
     @Test
@@ -76,7 +76,7 @@ class ScrapeCreatorsApiTest {
         assertThat(profile.externalId()).isEqualTo("2700692569");
         assertThat(profile.followers()).isEqualTo(24555L);
         assertThat(profile.avatarUrl()).isEqualTo("https://cdn/hd.jpg");
-        assertThat(profile.privateAccount()).isTrue();
+        assertThat(profile.privacy()).isEqualTo(ScrapeProfile.Privacy.PRIVATE);
         assertThat(video).isEqualTo(new ScrapeVideo("21393171", "jane", 425901L, 22926L, 299L, null, null,
                 Instant.ofEpochSecond(1750272151)));
     }
@@ -107,9 +107,40 @@ class ScrapeCreatorsApiTest {
         ScrapeVideo video = api.video(Platform.YOUTUBE_SHORTS, url);
 
         assertThat(channel).isEqualTo(new ScrapeProfile("UCxcTeAKWJca6XyJ37_ZoKIQ", "ThePatMcAfeeShow",
-                "The Pat McAfee Show", "https://yt3/large", 2750000L, "Код OFFER-7KQ2PX", false));
+                "The Pat McAfee Show", "https://yt3/large", 2750000L, "Код OFFER-7KQ2PX", ScrapeProfile.Privacy.PUBLIC));
         assertThat(video).isEqualTo(new ScrapeVideo("UCWH3hing1Qb4LnkRfQdxsxQ", "afroballer8906",
                 372864L, 4043L, 358L, null, null, Instant.parse("2019-02-22T11:19:54Z")));
+    }
+
+    /** Свой ScrapeCreators не отдаёт is_private, когда embed профиля пуст: закрыт профиль или нет — неизвестно. */
+    @Test
+    void instagramPrivacyIsUnknownWithoutFlag() {
+        when(client.get("/v1/instagram/profile", Map.of("handle", "open"))).thenReturn(Map.of(
+                "success", true,
+                "data", Map.of("user", Map.of("id", "1", "username", "open", "is_private", false))));
+        when(client.get("/v1/instagram/profile", Map.of("handle", "hidden"))).thenReturn(Map.of(
+                "success", true,
+                "data", Map.of("user", Map.of("id", "2", "username", "hidden", "biography", "OFFER-7KQ2PX"))));
+
+        assertThat(api.profile(Platform.INSTAGRAM, new ProfileRef(ProfileRef.Kind.HANDLE, "open")).privacy())
+                .isEqualTo(ScrapeProfile.Privacy.PUBLIC);
+        assertThat(api.profile(Platform.INSTAGRAM, new ProfileRef(ProfileRef.Kind.HANDLE, "hidden")).privacy())
+                .isEqualTo(ScrapeProfile.Privacy.UNKNOWN);
+    }
+
+    @Test
+    void tiktokPrivacyFromEitherFlag() {
+        when(client.get("/v1/tiktok/profile", Map.of("handle", "secret"))).thenReturn(Map.of(
+                "success", true,
+                "user", Map.of("id", "1", "privateAccount", false, "secret", true)));
+        when(client.get("/v1/tiktok/profile", Map.of("handle", "bare"))).thenReturn(Map.of(
+                "success", true,
+                "user", Map.of("id", "2")));
+
+        assertThat(api.profile(Platform.TIKTOK, new ProfileRef(ProfileRef.Kind.HANDLE, "secret")).privacy())
+                .isEqualTo(ScrapeProfile.Privacy.PRIVATE);
+        assertThat(api.profile(Platform.TIKTOK, new ProfileRef(ProfileRef.Kind.HANDLE, "bare")).privacy())
+                .isEqualTo(ScrapeProfile.Privacy.UNKNOWN);
     }
 
     @Test

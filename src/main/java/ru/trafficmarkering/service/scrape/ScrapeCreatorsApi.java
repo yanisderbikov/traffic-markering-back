@@ -65,7 +65,7 @@ public class ScrapeCreatorsApi {
                 firstText(user, "avatarMedium", "avatarLarger", "avatarThumb"),
                 JsonNode.number(stats, "followerCount"),
                 JsonNode.text(user, "signature"),
-                isTrue(user.get("privateAccount")) || isTrue(user.get("secret")));
+                privacy(user.get("privateAccount"), user.get("secret")));
     }
 
     private ScrapeVideo tiktokVideo(String videoUrl) {
@@ -101,7 +101,7 @@ public class ScrapeCreatorsApi {
                 firstText(user, "profile_pic_url_hd", "profile_pic_url"),
                 JsonNode.number(JsonNode.object(user, "edge_followed_by"), "count"),
                 JsonNode.text(user, "biography"),
-                isTrue(user.get("is_private")));
+                privacy(user.get("is_private")));
     }
 
     /**
@@ -150,7 +150,7 @@ public class ScrapeCreatorsApi {
                 lastSource(JsonNode.object(JsonNode.object(response, "avatar"), "image")),
                 JsonNode.number(response, "subscriberCount"),
                 JsonNode.text(response, "description"),
-                false);
+                ScrapeProfile.Privacy.PUBLIC);
     }
 
     private ScrapeVideo youtubeVideo(String videoUrl) {
@@ -223,8 +223,30 @@ public class ScrapeCreatorsApi {
         return null;
     }
 
-    private static boolean isTrue(Object value) {
-        return Boolean.TRUE.equals(value) || "true".equals(value) || Integer.valueOf(1).equals(value);
+    /** Хоть один признак true — закрыт; все признаки false — открыт; признаков в ответе нет — неизвестно. */
+    private static ScrapeProfile.Privacy privacy(Object... flags) {
+        boolean known = false;
+        for (Object flag : flags) {
+            Boolean value = flag(flag);
+            if (Boolean.TRUE.equals(value)) {
+                return ScrapeProfile.Privacy.PRIVATE;
+            }
+            known |= value != null;
+        }
+        return known ? ScrapeProfile.Privacy.PUBLIC : ScrapeProfile.Privacy.UNKNOWN;
+    }
+
+    private static Boolean flag(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if ("true".equals(value) || Integer.valueOf(1).equals(value)) {
+            return true;
+        }
+        if ("false".equals(value) || Integer.valueOf(0).equals(value)) {
+            return false;
+        }
+        return null;
     }
 
     private static Instant epochSeconds(Long seconds) {

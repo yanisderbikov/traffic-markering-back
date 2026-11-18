@@ -12,6 +12,15 @@ public record ScrapeProfile(
         String avatarUrl,
         Long followers,
         String bio,
-        boolean privateAccount
+        Privacy privacy
 ) {
+
+    /**
+     * Закрыт ли профиль. UNKNOWN — ответ без признака закрытости: свой ScrapeCreators не отдаёт is_private
+     * Instagram, когда публичный embed профиля пуст (профиль закрыт, встраивание выключено или Instagram
+     * не показал виджет). Настоящий ScrapeCreators признак отдаёт всегда.
+     */
+    public enum Privacy {
+        PUBLIC, PRIVATE, UNKNOWN
+    }
 }

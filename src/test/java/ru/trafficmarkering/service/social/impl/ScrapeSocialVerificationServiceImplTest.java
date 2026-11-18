@@ -30,6 +30,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static ru.trafficmarkering.service.scrape.ScrapeProfile.Privacy.PRIVATE;
+import static ru.trafficmarkering.service.scrape.ScrapeProfile.Privacy.PUBLIC;
+import static ru.trafficmarkering.service.scrape.ScrapeProfile.Privacy.UNKNOWN;
 
 class ScrapeSocialVerificationServiceImplTest {
 
@@ -49,8 +52,8 @@ class ScrapeSocialVerificationServiceImplTest {
                 getterSocialAccount, saverSocialAccount, codes);
     }
 
-    private static ScrapeProfile profile(String bio, boolean privateAccount) {
-        return new ScrapeProfile("tt-1", "creator", "Creator", "https://cdn/a.jpg", 1500L, bio, privateAccount);
+    private static ScrapeProfile profile(String bio, ScrapeProfile.Privacy privacy) {
+        return new ScrapeProfile("tt-1", "creator", "Creator", "https://cdn/a.jpg", 1500L, bio, privacy);
     }
 
     @BeforeEach
@@ -63,7 +66,7 @@ class ScrapeSocialVerificationServiceImplTest {
 
     @Test
     void start_returnsStableCodeForProfile() {
-        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("просто описание", false));
+        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("просто описание", PUBLIC));
 
         SocialVerificationDTO first = service(true).start("tiktok", "@creator");
         SocialVerificationDTO second = service(true).start("tiktok", "https://www.tiktok.com/@creator");
@@ -77,7 +80,7 @@ class ScrapeSocialVerificationServiceImplTest {
     @Test
     void confirm_linksAccountWhenCodeIsInBio() {
         String typedByHand = code.toLowerCase().replace("-", " ");
-        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("Блогер 🎬 " + typedByHand, false));
+        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("Блогер 🎬 " + typedByHand, PUBLIC));
 
         SocialAccountDTO linked = service(true).confirm("tiktok", "creator");
 
@@ -89,7 +92,7 @@ class ScrapeSocialVerificationServiceImplTest {
 
     @Test
     void confirm_withoutCodeIsRejected() {
-        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("нет кода", false));
+        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile("нет кода", PUBLIC));
 
         assertThatThrownBy(() -> service(true).confirm("tiktok", "creator"))
                 .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
@@ -101,12 +104,12 @@ class ScrapeSocialVerificationServiceImplTest {
 
     @Test
     void confirm_rejectsPrivateProfileAndForeignLink() {
-        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile(code, true));
+        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile(code, PRIVATE));
         assertThatThrownBy(() -> service(true).confirm("tiktok", "creator"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
 
-        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile(code, false));
+        when(api.profile(Platform.TIKTOK, REF)).thenReturn(profile(code, PUBLIC));
         User other = User.builder().id(99L).role(Role.CREATOR).build();
         when(getterSocialAccount.getByPlatformAndExternalId(Platform.TIKTOK, "tt-1")).thenReturn(Optional.of(
                 SocialAccount.builder().user(other).platform(Platform.TIKTOK).externalId("tt-1")
@@ -117,9 +120,35 @@ class ScrapeSocialVerificationServiceImplTest {
         verify(saverSocialAccount, never()).save(any());
     }
 
+    /** Свой ScrapeCreators не знает, закрыт ли Instagram без embed: код не выдаём и не принимаем, подсказываем. */
+    @Test
+    void unknownPrivacyIsRejectedWithHint() {
+        when(api.profile(Platform.INSTAGRAM, REF)).thenReturn(profile(code, UNKNOWN));
+
+        assertThatThrownBy(() -> service(true).start("instagram", "creator"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getReason()).contains("@creator", "встраивание");
+                });
+        assertThatThrownBy(() -> service(true).confirm("instagram", "creator"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(saverSocialAccount, never()).save(any());
+    }
+
     @Test
     void unknownProfileIs404() {
         when(api.profile(Platform.TIKTOK, REF)).thenThrow(new ScrapeCreatorsException(404, "not_found"));
+
+        assertThatThrownBy(() -> service(true).start("tiktok", "creator"))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    /** Свой ScrapeCreators отвечает 400 на ник не по правилам площадки — такого аккаунта нет, а не сбой. */
+    @Test
+    void rejectedHandleIs404() {
+        when(api.profile(Platform.TIKTOK, REF)).thenThrow(new ScrapeCreatorsException(400, "not a TikTok username"));
 
         assertThatThrownBy(() -> service(true).start("tiktok", "creator"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,

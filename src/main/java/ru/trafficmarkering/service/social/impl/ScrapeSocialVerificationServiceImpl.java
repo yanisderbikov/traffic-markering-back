@@ -46,7 +46,7 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         Platform platform = SocialPlatforms.require(platformSlug);
         ProfileRef ref = requireRef(platform, account);
         ScrapeProfile profile = lookup(platform, ref);
-        Optional<SocialAccount> existing = requireLinkable(platform, profile, user);
+        Optional<SocialAccount> existing = requireLinkable(platform, ref, profile, user);
 
         String code = verificationCodes.codeFor(user.getId(), platform, profile.externalId());
         return new SocialVerificationDTO(
@@ -71,7 +71,7 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         Platform platform = SocialPlatforms.require(platformSlug);
         ProfileRef ref = requireRef(platform, account);
         ScrapeProfile profile = lookup(platform, ref);
-        Optional<SocialAccount> existing = requireLinkable(platform, profile, user);
+        Optional<SocialAccount> existing = requireLinkable(platform, ref, profile, user);
 
         String code = verificationCodes.codeFor(user.getId(), platform, profile.externalId());
         if (!VerificationCodes.present(profile.bio(), code)) {
@@ -127,7 +127,7 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         try {
             return scrapeCreatorsApi.profile(platform, ref);
         } catch (ScrapeCreatorsException e) {
-            if (e.notFound()) {
+            if (e.notFound() || e.badInput()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Не нашли аккаунт " + ref.label() + " в " + platform.getDescription()
                                 + " — проверьте ник или ссылку");
@@ -137,11 +137,19 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         }
     }
 
-    /** Закрытый профиль не годится: его ролики и просмотры не видны. Чужая привязка — конфликт. */
-    private Optional<SocialAccount> requireLinkable(Platform platform, ScrapeProfile profile, User user) {
-        if (profile.privateAccount()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+    /**
+     * Закрытый профиль не годится: его ролики и просмотры не видны. Профиль, про который не понять, открыт ли он,
+     * тоже: у Instagram это значит, что публичный embed пуст, а из таких же embed берутся ролики — их просмотры
+     * мы не увидим. Чужая привязка — конфликт.
+     */
+    private Optional<SocialAccount> requireLinkable(Platform platform, ProfileRef ref, ScrapeProfile profile, User user) {
+        switch (profile.privacy()) {
+            case PRIVATE -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Профиль закрыт: откройте его, иначе мы не увидим просмотры роликов");
+            case UNKNOWN -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    unknownPrivacyHint(platform, profile, ref));
+            case PUBLIC -> {
+            }
         }
         Optional<SocialAccount> existing = getterSocialAccount.getByPlatformAndExternalId(platform, profile.externalId());
         if (existing.isPresent() && !existing.get().getUser().getId().equals(user.getId())) {
@@ -149,6 +157,16 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
                     "Этот аккаунт уже привязан к другому криатору");
         }
         return existing;
+    }
+
+    private static String unknownPrivacyHint(Platform platform, ScrapeProfile profile, ProfileRef ref) {
+        if (platform == Platform.INSTAGRAM) {
+            return "Не видим публикации " + name(profile, ref) + " в Instagram: профиль закрыт или в нём запрещено "
+                    + "встраивание. Откройте профиль, разрешите встраивание публикаций и профиля в настройках Instagram "
+                    + "и проверьте ещё раз — если всё уже так, попробуйте через пару минут";
+        }
+        return "Не поняли, открыт ли профиль " + name(profile, ref) + " в " + platform.getDescription()
+                + ". Проверьте, что он открыт, и попробуйте ещё раз через пару минут";
     }
 
     private static String name(ScrapeProfile profile, ProfileRef ref) {
