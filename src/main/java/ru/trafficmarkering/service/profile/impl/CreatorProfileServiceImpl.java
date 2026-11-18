@@ -39,10 +39,10 @@ class CreatorProfileServiceImpl implements CreatorProfileService {
         CreatorProfile profile = getOrCreate(user);
         profile.setDisplayName(trimToNull(request.getDisplayName()));
         profile.setBio(trimToNull(request.getBio()));
-        profile.setTelegram(trimToNull(request.getTelegram()));
-        profile.setInstagram(trimToNull(request.getInstagram()));
-        profile.setTiktok(trimToNull(request.getTiktok()));
-        profile.setYoutubeShorts(trimToNull(request.getYoutubeShorts()));
+        // Telegram приходит только с регистрации; форма профиля его не шлёт и стирать не должна.
+        if (request.getTelegram() != null) {
+            profile.setTelegram(trimToNull(request.getTelegram()));
+        }
         return CreatorProfileDTO.from(saverCreatorProfile.save(profile), user);
     }
 

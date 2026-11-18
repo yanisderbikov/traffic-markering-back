@@ -16,7 +16,7 @@ import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.service.auth.JwtTokenService;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
 
 /**
  * Единая точка разбора токенов: JWT пользователя и общий межсервисный секрет.
@@ -58,7 +58,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(String principal, Role role) {
-        var authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        List<SimpleGrantedAuthority> authorities = role.implied().stream()
+                .map(implied -> new SimpleGrantedAuthority("ROLE_" + implied.name()))
+                .toList();
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, authorities));
     }

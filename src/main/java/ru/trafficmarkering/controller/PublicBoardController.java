@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.campaign.CampaignBoardDTO;
 import ru.trafficmarkering.dto.campaign.CampaignDTO;
+import ru.trafficmarkering.dto.campaign.CampaignSegmentDTO;
 import ru.trafficmarkering.dto.profile.CreatorProfileDTO;
+import ru.trafficmarkering.service.campaign.CampaignBenchmarkService;
 import ru.trafficmarkering.service.campaign.CampaignBoardService;
 import ru.trafficmarkering.service.profile.CreatorProfileService;
 
@@ -26,6 +28,7 @@ import java.util.Map;
 public class PublicBoardController {
 
     private final CampaignBoardService campaignBoardService;
+    private final CampaignBenchmarkService campaignBenchmarkService;
     private final CreatorProfileService creatorProfileService;
 
     @Operation(summary = "Доска объявлений",
@@ -40,6 +43,15 @@ public class PublicBoardController {
     @GetMapping("/campaigns/{publicId}")
     public ResponseEntity<CampaignDTO> boardCampaign(@PathVariable("publicId") String publicId) {
         return ResponseEntity.ok(campaignBoardService.getByPublicId(publicId));
+    }
+
+    @Operation(summary = "Объявление в своём сегменте",
+            description = "Сегмент — тематика объявления. Ставка и бюджет против других запущенных объявлений "
+                    + "тематики: медианы, на сколько процентов выше или ниже и у какой доли объявлений меньше. "
+                    + "Пока других объявлений меньше трёх, сравнения нет — только средняя рыночная ставка по тематике")
+    @GetMapping("/campaigns/{publicId}/segment")
+    public ResponseEntity<CampaignSegmentDTO> boardCampaignSegment(@PathVariable("publicId") String publicId) {
+        return ResponseEntity.ok(campaignBenchmarkService.getSegment(publicId));
     }
 
     @Operation(summary = "Профиль криатора",

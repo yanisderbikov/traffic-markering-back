@@ -22,18 +22,6 @@ public class CreatorProfileRequestDTO {
     private String bio;
 
     @Size(max = 255)
-    @Schema(description = "Telegram для связи", example = "@anya")
+    @Schema(description = "Telegram для связи; null — оставить как есть", example = "@anya")
     private String telegram;
-
-    @Size(max = 255)
-    @Schema(description = "Ссылка или ник в Instagram")
-    private String instagram;
-
-    @Size(max = 255)
-    @Schema(description = "Ссылка или ник в TikTok")
-    private String tiktok;
-
-    @Size(max = 255)
-    @Schema(description = "Ссылка на канал YouTube Shorts")
-    private String youtubeShorts;
 }

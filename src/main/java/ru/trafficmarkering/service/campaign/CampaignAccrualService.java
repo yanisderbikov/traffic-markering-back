@@ -2,6 +2,8 @@ package ru.trafficmarkering.service.campaign;
 
 import ru.trafficmarkering.model.campaign.Campaign;
 
+import java.util.UUID;
+
 public interface CampaignAccrualService {
 
     /**
@@ -12,4 +14,6 @@ public interface CampaignAccrualService {
      * Зовётся при любом изменении просмотров, статуса отклика, ставки или бюджета.
      */
     void recalculate(Campaign campaign);
+
+    void recalculate(UUID campaignId);
 }
