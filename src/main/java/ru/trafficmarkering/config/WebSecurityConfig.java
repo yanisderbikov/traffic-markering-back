@@ -61,6 +61,9 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/profile/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
                     .requestMatchers("/api/social/**").hasAnyRole("CREATOR", "ADMIN")
                     .requestMatchers("/api/auth/me").authenticated()
+                    // ── Видео-студия: любой вошедший пользователь; вебхук Telegram проверяет свой секрет сам ──
+                    .requestMatchers("/api/studio/**").authenticated()
+                    .requestMatchers(HttpMethod.POST, "/api/telegram/webhook").permitAll()
                     .anyRequest().permitAll()
             )
             // Точка входа заведена ради актуатора: ему нужен 401 с JSON-телом, а не пустой 403.

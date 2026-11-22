@@ -43,7 +43,8 @@ class RoleTest {
                 CabinetTab.MODERATION,
                 CabinetTab.FRAUD,
                 CabinetTab.CREATOR_TRUST,
-                CabinetTab.USERS);
+                CabinetTab.USERS,
+                CabinetTab.STUDIO);
     }
 
     @Test
@@ -74,10 +75,10 @@ class RoleTest {
     @Test
     void customerAndCreatorSeeOnlyTheirOwnCabinet() {
         assertThat(Role.CUSTOMER.tabs()).containsExactly(
-                CabinetTab.OVERVIEW, CabinetTab.CAMPAIGNS, CabinetTab.WALLET, CabinetTab.PROFILE);
+                CabinetTab.OVERVIEW, CabinetTab.CAMPAIGNS, CabinetTab.WALLET, CabinetTab.STUDIO, CabinetTab.PROFILE);
         assertThat(Role.CREATOR.tabs()).containsExactly(
                 CabinetTab.OVERVIEW, CabinetTab.BOARD, CabinetTab.APPLICATIONS, CabinetTab.EARNINGS,
-                CabinetTab.PROFILE);
+                CabinetTab.STUDIO, CabinetTab.PROFILE);
     }
 
     @Test

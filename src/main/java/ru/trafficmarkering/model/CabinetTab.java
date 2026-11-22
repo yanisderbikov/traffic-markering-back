@@ -16,6 +16,7 @@ public enum CabinetTab {
     FRAUD("/app/admin/fraud", "Антифрод", "Антифрод", "shield", true),
     CREATOR_TRUST("/app/admin/fraud/creators", "Репутация креаторов", "Репутация", "users", false),
     USERS("/app/admin/users", "Пользователи", "Люди", "users", false),
+    STUDIO("/app/studio", "Видео-студия", "Студия", "play", false),
     REFERRAL("/app/referral", "Рефералка", "Рефералка", "gift", false),
     PROFILE("/app/profile", "Профиль", "Профиль", "user", true);
 

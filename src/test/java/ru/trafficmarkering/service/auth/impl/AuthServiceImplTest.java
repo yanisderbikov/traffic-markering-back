@@ -280,7 +280,7 @@ class AuthServiceImplTest {
 
         assertThat(me.role()).isEqualTo("CUSTOMER");
         assertThat(me.tabs()).extracting(CabinetTabDTO::key)
-                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "PROFILE");
+                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "STUDIO", "PROFILE");
         assertThat(me.tabs().get(0).path()).isEqualTo("/app");
         assertThat(me.tabs().get(0).exact()).isTrue();
         assertThat(me.tabs().get(1).label()).isEqualTo("Мои кампании");
@@ -297,8 +297,8 @@ class AuthServiceImplTest {
         CurrentUserDTO me = authService.me();
 
         assertThat(me.tabs()).extracting(CabinetTabDTO::key)
-                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "REFERRAL", "PROFILE");
-        assertThat(me.tabs().get(3).path()).isEqualTo("/app/referral");
+                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "STUDIO", "REFERRAL", "PROFILE");
+        assertThat(me.tabs().get(4).path()).isEqualTo("/app/referral");
     }
 
     @Test
