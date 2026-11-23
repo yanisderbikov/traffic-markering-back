@@ -65,7 +65,9 @@ public class StudioService {
 
     public static final int MAX_TEMPLATES = 30;
     public static final int MAX_OWN_ASSETS = 60;
-    private static final Duration LINK_TTL = Duration.ofMinutes(10);
+    private static final Duration LINK_TTL = Duration.ofMinutes(30);
+    /** Код живёт полчаса; пока осталось больше этого запаса — отдаём тот же, чтобы вкладки не перебивали друг друга */
+    private static final Duration LINK_REUSE_MARGIN = Duration.ofMinutes(10);
     private static final Set<StudioJobStatus> ACTIVE = EnumSet.of(StudioJobStatus.QUEUED, StudioJobStatus.RUNNING);
     private static final Set<String> VIDEO_TYPES = Set.of("video/mp4", "video/quicktime", "video/webm", "video/x-matroska");
     private static final Set<String> IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
@@ -656,6 +658,11 @@ public class StudioService {
             throw new StudioException(HttpStatus.SERVICE_UNAVAILABLE, "Telegram-бот ещё не подключён.");
         }
         StudioProfile profile = profile(user.getId());
+        if (profile.getLinkCode() != null && profile.getLinkCodeExpiresAt() != null
+                && profile.getLinkCodeExpiresAt().isAfter(Instant.now().plus(LINK_REUSE_MARGIN))) {
+            return new StudioTelegramLinkDTO("https://t.me/" + username + "?start=" + profile.getLinkCode(),
+                    profile.getLinkCodeExpiresAt());
+        }
         byte[] raw = new byte[16];
         RANDOM.nextBytes(raw);
         String code = "link_" + HexFormat.of().formatHex(raw);

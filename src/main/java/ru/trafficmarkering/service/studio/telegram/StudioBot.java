@@ -114,7 +114,7 @@ public class StudioBot {
 
     public StudioBot(TelegramClient client, StudioService studio, StudioNotifier notifier, StudioStorage storage,
                      StudioProfileRepository profiles, StudioChatDraftRepository drafts, StudioJobRepository jobs,
-                     UserRepository users, StudioProperties properties, @Value("${app.front.url}") String frontUrl) {
+                     UserRepository users, StudioProperties properties, @Value("${studio.site-url}") String frontUrl) {
         this.client = client;
         this.studio = studio;
         this.notifier = notifier;
