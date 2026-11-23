@@ -19,6 +19,7 @@ import ru.trafficmarkering.service.auth.AuthService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.auth.JwtTokenService;
+import ru.trafficmarkering.service.auth.telegram.TelegramIdentity;
 import ru.trafficmarkering.service.email.EmailService;
 import ru.trafficmarkering.service.email.EmailTemplate;
 import ru.trafficmarkering.service.partner.PartnerService;
@@ -99,6 +100,66 @@ class AuthServiceImpl implements AuthService {
         String email = User.normalizeEmail(rawEmail);
         String code = rawCode == null ? "" : rawCode.trim();
 
+        consumeCode(email, code);
+
+        User user = userRepository.findByUsername(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Аккаунт с этой почтой не найден. Зарегистрируйтесь."));
+        if (user.getVerifiedAt() == null) {
+            user.setVerifiedAt(Instant.now());
+            user = userRepository.save(user);
+        }
+
+        return issue(user);
+    }
+
+    @Override
+    @Transactional
+    public void requestEmailLink(String rawEmail) {
+        User user = currentUserService.require();
+        String email = User.normalizeEmail(rawEmail);
+        checkEmailFree(user, email);
+        sendCode(email);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponseDTO confirmEmailLink(String rawEmail, String rawCode) {
+        User user = currentUserService.require();
+        String email = User.normalizeEmail(rawEmail);
+        checkEmailFree(user, email);
+        consumeCode(email, rawCode == null ? "" : rawCode.trim());
+        user.setUsername(email);
+        user = userRepository.save(user);
+        log.info("К учётке {} добавлена почта, вход теперь и по почте", user.getId());
+        return issue(user);
+    }
+
+    /** Почту можно добавить только учётке из Telegram и только свободную — иначе две учётки на одну почту */
+    private void checkEmailFree(User user, String email) {
+        if (!TelegramIdentity.telegramOnly(user)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У этой учётки уже есть почта.");
+        }
+        if (email.startsWith(TelegramIdentity.LOGIN_PREFIX) || userRepository.existsByUsername(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Эта почта уже зарегистрирована в Offer. Войдите по ней и привяжите Telegram в «Видео-студии».");
+        }
+    }
+
+    private AuthResponseDTO issue(User user) {
+        String token = jwtTokenService.createToken(user.getUsername(), user.getRole(), user.getName());
+        return new AuthResponseDTO(token, user.getRole().name(),
+                TelegramIdentity.telegramOnly(user) ? null : user.getUsername(), user.getName());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CurrentUserDTO me() {
+        User user = currentUserService.require();
+        return CurrentUserDTO.from(user, tabsOf(user), fileStorage.presignedUrl(user.getAvatarKey()));
+    }
+
+    private void consumeCode(String email, String code) {
         LoginCode loginCode = loginCodeStore.getLatestActive(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Код не найден. Запросите новый."));
@@ -118,24 +179,6 @@ class AuthServiceImpl implements AuthService {
 
         loginCode.setUsed(true);
         loginCodeStore.save(loginCode);
-
-        User user = userRepository.findByUsername(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Аккаунт с этой почтой не найден. Зарегистрируйтесь."));
-        if (user.getVerifiedAt() == null) {
-            user.setVerifiedAt(Instant.now());
-            user = userRepository.save(user);
-        }
-
-        String token = jwtTokenService.createToken(user.getUsername(), user.getRole(), user.getName());
-        return new AuthResponseDTO(token, user.getRole().name(), user.getUsername(), user.getName());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public CurrentUserDTO me() {
-        User user = currentUserService.require();
-        return CurrentUserDTO.from(user, tabsOf(user), fileStorage.presignedUrl(user.getAvatarKey()));
     }
 
     private Set<CabinetTab> tabsOf(User user) {

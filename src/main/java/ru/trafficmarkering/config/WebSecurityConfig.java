@@ -42,7 +42,8 @@ public class WebSecurityConfig {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // ── Доска объявлений и карточки: видны всем, даже неавторизованным ──
                     .requestMatchers("/api/public/**").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/request-code", "/api/auth/verify").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/request-code", "/api/auth/verify",
+                            "/api/auth/telegram/start", "/api/auth/telegram/poll").permitAll()
                     // ── Межсервисные ручки: общий секрет SERVICE_JWT_TOKEN ──
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
@@ -60,7 +61,7 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/applications/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
                     .requestMatchers("/api/profile/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
                     .requestMatchers("/api/social/**").hasAnyRole("CREATOR", "ADMIN")
-                    .requestMatchers("/api/auth/me").authenticated()
+                    .requestMatchers("/api/auth/me", "/api/auth/telegram/attach", "/api/auth/email").authenticated()
                     // ── Видео-студия: любой вошедший пользователь; вебхук Telegram проверяет свой секрет сам ──
                     .requestMatchers("/api/studio/**").authenticated()
                     .requestMatchers(HttpMethod.POST, "/api/telegram/webhook").permitAll()

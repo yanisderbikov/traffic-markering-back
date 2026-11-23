@@ -19,6 +19,7 @@ import ru.trafficmarkering.repository.StudioChatDraftRepository;
 import ru.trafficmarkering.repository.StudioJobRepository;
 import ru.trafficmarkering.repository.StudioProfileRepository;
 import ru.trafficmarkering.repository.UserRepository;
+import ru.trafficmarkering.service.auth.telegram.TelegramAuthService;
 import ru.trafficmarkering.service.studio.StudioException;
 import ru.trafficmarkering.service.studio.StudioService;
 import ru.trafficmarkering.service.studio.StudioSettings;
@@ -99,6 +100,7 @@ public class StudioBot {
     private final UserRepository users;
     private final StudioProperties properties;
     private final String studioUrl;
+    private final TelegramAuthBot authBot;
     private final Map<Long, Boolean> seenUpdates = Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, Boolean> eldest) {
@@ -114,7 +116,9 @@ public class StudioBot {
 
     public StudioBot(TelegramClient client, StudioService studio, StudioNotifier notifier, StudioStorage storage,
                      StudioProfileRepository profiles, StudioChatDraftRepository drafts, StudioJobRepository jobs,
-                     UserRepository users, StudioProperties properties, @Value("${studio.site-url}") String frontUrl) {
+                     UserRepository users, StudioProperties properties, @Value("${studio.site-url}") String frontUrl,
+                     TelegramAuthBot authBot) {
+        this.authBot = authBot;
         this.client = client;
         this.studio = studio;
         this.notifier = notifier;
@@ -178,6 +182,14 @@ public class StudioBot {
             argument = space < 0 ? "" : text.substring(space + 1).strip();
         }
 
+        if ("/start".equals(command) && argument.startsWith(TelegramAuthService.START_PREFIX)) {
+            authBot.openFromSite(chatId, message.path("from"), argument);
+            return;
+        }
+        if ("/login".equals(command)) {
+            authBot.login(chatId, message.path("from"), null);
+            return;
+        }
         if ("/start".equals(command) && argument.startsWith("link_")) {
             link(chatId, telegramId, tgUsername, argument);
             return;
@@ -188,9 +200,8 @@ public class StudioBot {
         }
         Optional<User> user = userOf(telegramId);
         if (user.isEmpty()) {
-            reply(chatId, "Это бот видео-студии <b>offer</b>.\n\nЧтобы монтировать ролики здесь и видеть их в кабинете, "
-                    + "привяжите Telegram: откройте «Видео-студию» на сайте и нажмите «Привязать Telegram».",
-                    keyboard(List.of(List.of(urlButton("Открыть видео-студию", studioUrl)))));
+            // Незнакомый Telegram: предлагаем войти в аккаунт с почтой или завести новый
+            authBot.login(chatId, message.path("from"), null);
             return;
         }
         User owner = user.get();
@@ -238,8 +249,10 @@ public class StudioBot {
                 + "• Без автошаблона бот предложит быстрые режимы и ваши шаблоны.\n"
                 + "• Подпись <code>/choose</code> к видео — выбрать режим разово.\n\n"
                 + "/jobs — очередь и прогресс\n/latest — последний ролик\n/history — история\n/cancel — снять ожидающее видео\n\n"
+                + "/login — войти на сайт без почты\n\n"
                 + "Сегодня осталось задач: " + remainingText(owner) + ". Большие исходники, баннеры и фоны — на сайте.",
-                keyboard(List.of(List.of(urlButton("Открыть видео-студию", studioUrl)))));
+                keyboard(List.of(List.of(button("🔐 Войти на сайт", TelegramAuthBot.LOGIN_CALLBACK),
+                        urlButton("Видео-студия", studioUrl)))));
     }
 
     private String remainingText(User owner) {
@@ -544,9 +557,12 @@ public class StudioBot {
         JsonNode message = callback.path("message");
         long chatId = message.path("chat").path("id").asLong(telegramId);
         Long messageId = message.has("message_id") ? message.get("message_id").asLong() : null;
+        if (authBot.onCallback(callbackId, data, callback.path("from"), chatId, messageId)) {
+            return;
+        }
         Optional<User> user = userOf(telegramId);
         if (user.isEmpty()) {
-            client.answerCallback(callbackId, "Сначала привяжите Telegram на сайте");
+            client.answerCallback(callbackId, "Сначала войдите: отправьте /login");
             return;
         }
         User owner = user.get();

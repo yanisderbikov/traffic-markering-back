@@ -13,4 +13,10 @@ public interface AuthService {
     AuthResponseDTO verify(String email, String code);
 
     CurrentUserDTO me();
+
+    /** Код на почту, которую добавляют к учётке, заведённой через Telegram */
+    void requestEmailLink(String email);
+
+    /** Подтверждает почту: она становится логином учётки. Ответ — новый токен */
+    AuthResponseDTO confirmEmailLink(String email, String code);
 }

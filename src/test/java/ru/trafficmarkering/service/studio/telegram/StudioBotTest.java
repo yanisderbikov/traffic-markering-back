@@ -19,6 +19,7 @@ import ru.trafficmarkering.repository.StudioChatDraftRepository;
 import ru.trafficmarkering.repository.StudioJobRepository;
 import ru.trafficmarkering.repository.StudioProfileRepository;
 import ru.trafficmarkering.repository.UserRepository;
+import ru.trafficmarkering.service.auth.telegram.TelegramAuthService;
 import ru.trafficmarkering.service.studio.StudioService;
 import ru.trafficmarkering.service.studio.StudioStorage;
 
@@ -50,6 +51,7 @@ class StudioBotTest {
     @Mock private StudioChatDraftRepository drafts;
     @Mock private StudioJobRepository jobs;
     @Mock private UserRepository users;
+    @Mock private ru.trafficmarkering.service.auth.telegram.TelegramAuthService authService;
 
     private StudioBot bot;
     private final User user = User.builder().id(7L).role(Role.CREATOR).name("Аня").username("anya@example.com").build();
@@ -57,7 +59,7 @@ class StudioBotTest {
     @BeforeEach
     void setUp() {
         bot = new StudioBot(client, studio, notifier, storage, profiles, drafts, jobs, users, new StudioProperties(),
-                "https://dev.getoffer.now");
+                "https://dev.getoffer.now", new TelegramAuthBot(client, authService));
         when(users.findById(7L)).thenReturn(Optional.of(user));
         when(drafts.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -75,12 +77,35 @@ class StudioBotTest {
     }
 
     @Test
-    void unlinkedUserGetsSiteButton() throws Exception {
+    void unlinkedUserIsOfferedLoginOrRegistration() throws Exception {
         when(profiles.findByTelegramId(555L)).thenReturn(Optional.empty());
+        when(authService.openFromBot(any())).thenReturn(new TelegramAuthService.BotStep(
+                TelegramAuthService.Step.CHOOSE_ACCOUNT, "abc", null, null, null, null));
         bot.handle(message("\"text\":\"/jobs\""));
         ArgumentCaptor<Object> markup = ArgumentCaptor.forClass(Object.class);
-        verify(client).sendMessage(eq(555L), contains("привяжите Telegram"), markup.capture(), isNull());
-        assertThat(markup.getValue().toString()).contains("https://dev.getoffer.now/app/studio");
+        verify(client).sendMessage(eq(555L), contains("не привязан"), markup.capture(), isNull());
+        assertThat(markup.getValue().toString()).contains("au:abc:have", "au:abc:cr", "au:abc:cu")
+                .doesNotContain("au:abc:no");
+    }
+
+    @Test
+    void startFromSiteAsksConfirmationForLinkedAccount() throws Exception {
+        when(authService.openFromSite(eq("abc"), any())).thenReturn(new TelegramAuthService.BotStep(
+                TelegramAuthService.Step.CONFIRM_LOGIN, "abc", user, null, null, "Chrome, macOS"));
+        bot.handle(message("\"text\":\"/start auth_abc\""));
+        ArgumentCaptor<Object> markup = ArgumentCaptor.forClass(Object.class);
+        verify(client).sendMessage(eq(555L), contains("Chrome, macOS"), markup.capture(), isNull());
+        assertThat(markup.getValue().toString()).contains("au:abc:ok", "au:abc:no");
+    }
+
+    @Test
+    void foreignTelegramCannotPressLoginButton() throws Exception {
+        when(authService.decide(eq("abc"), eq("ok"), any())).thenReturn(new TelegramAuthService.BotStep(
+                TelegramAuthService.Step.FOREIGN, null, null, null, null, null));
+        bot.handle(json.readTree("{\"update_id\":2,\"callback_query\":{\"id\":\"cb\",\"data\":\"au:abc:ok\","
+                + "\"from\":{\"id\":999},\"message\":{\"message_id\":3,\"chat\":{\"id\":999}}}}"));
+        verify(client).answerCallback(eq("cb"), contains("другого"));
+        verify(client, never()).editMessage(anyLong(), anyLong(), any(), any());
     }
 
     @Test

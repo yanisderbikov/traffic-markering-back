@@ -100,7 +100,8 @@ public class StudioBotInfo {
                     "allowed_updates", List.of("message", "callback_query"),
                     "max_connections", 20));
             client.call("setMyCommands", Map.of("commands", List.of(
-                    Map.of("command", "start", "description", "Начать и привязать аккаунт"),
+                    Map.of("command", "start", "description", "Начать"),
+                    Map.of("command", "login", "description", "Войти на сайт или создать аккаунт"),
                     Map.of("command", "jobs", "description", "Очередь и прогресс"),
                     Map.of("command", "latest", "description", "Последний готовый ролик"),
                     Map.of("command", "history", "description", "История роликов"),

@@ -22,6 +22,15 @@ import ru.trafficmarkering.dto.auth.RegisterRequestDTO;
 import ru.trafficmarkering.dto.auth.RequestCodeDTO;
 import ru.trafficmarkering.dto.auth.VerifyCodeDTO;
 import ru.trafficmarkering.service.auth.AuthService;
+import ru.trafficmarkering.service.auth.CurrentUserService;
+import ru.trafficmarkering.service.auth.telegram.TelegramAuthService;
+import ru.trafficmarkering.dto.auth.EmailCodeDTO;
+import ru.trafficmarkering.dto.auth.TelegramAuthPollDTO;
+import ru.trafficmarkering.dto.auth.TelegramAuthSecretDTO;
+import ru.trafficmarkering.dto.auth.TelegramAuthStartDTO;
+import ru.trafficmarkering.dto.auth.TelegramAuthStartRequestDTO;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,12 +38,15 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Вход по коду с почты: register или request-code → письмо → verify → JWT")
+@Tag(name = "Auth", description = "Вход по коду с почты (register или request-code → письмо → verify → JWT) "
+        + "или через Telegram-бота (telegram/start → бот → telegram/poll → JWT)")
 public class AuthController {
 
     private static final Map<String, String> CODE_SENT = Map.of("message", "Код отправлен на почту");
 
     private final AuthService authService;
+    private final TelegramAuthService telegramAuthService;
+    private final CurrentUserService currentUserService;
 
     @Operation(summary = "Регистрация",
             description = "Роль — CUSTOMER (заказчик) или CREATOR (криатор). Заводится учётка с пустым профилем "
@@ -68,6 +80,63 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<CurrentUserDTO> me() {
         return ResponseEntity.ok(authService.me());
+    }
+
+    @Operation(summary = "Вход через Telegram: начать",
+            description = "Отдаёт ссылку в бота и секрет. Браузер открывает ссылку и опрашивает /telegram/poll. "
+                    + "Роль передают только со страницы регистрации — для новой учётки")
+    @PostMapping("/telegram/start")
+    public ResponseEntity<TelegramAuthStartDTO> telegramStart(
+            @Valid @RequestBody(required = false) TelegramAuthStartRequestDTO request,
+            @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent) {
+        TelegramAuthStartRequestDTO body = request == null ? new TelegramAuthStartRequestDTO(null, null) : request;
+        return ResponseEntity.ok(telegramAuthService.start(body.role(), body.referralCode(), describeClient(userAgent)));
+    }
+
+    @Operation(summary = "Вход через Telegram: результат",
+            description = "PENDING — ждём бота, DONE — в ответе токен (выдаётся один раз), "
+                    + "NEED_EMAIL — войдите по почте и вызовите /telegram/attach, CANCELLED, EXPIRED")
+    @PostMapping("/telegram/poll")
+    public ResponseEntity<TelegramAuthPollDTO> telegramPoll(@Valid @RequestBody TelegramAuthSecretDTO request) {
+        return ResponseEntity.ok(telegramAuthService.poll(request.secret()));
+    }
+
+    @Operation(summary = "Привязать Telegram после входа по почте",
+            description = "Для ответа NEED_EMAIL: человек подтвердил Telegram в боте, но учётки у него не было "
+                    + "под этим Telegram — после входа по почте он привязывается к ней",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/telegram/attach")
+    public ResponseEntity<Map<String, String>> telegramAttach(@Valid @RequestBody TelegramAuthSecretDTO request) {
+        String telegram = telegramAuthService.attach(request.secret(), currentUserService.require());
+        return ResponseEntity.ok(Map.of("message", "Telegram привязан", "telegram", telegram == null ? "" : telegram));
+    }
+
+    @Operation(summary = "Добавить почту к учётке из Telegram",
+            description = "Без code — отправляет письмо с кодом; с code — подтверждает, почта становится логином "
+                    + "и в ответе новый токен. 409 — почта занята или у учётки уже есть почта",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/email")
+    public ResponseEntity<?> addEmail(@Valid @RequestBody EmailCodeDTO request) {
+        if (request.code() == null || request.code().isBlank()) {
+            authService.requestEmailLink(request.email());
+            return ResponseEntity.ok(CODE_SENT);
+        }
+        return ResponseEntity.ok(authService.confirmEmailLink(request.email(), request.code()));
+    }
+
+    /** Коротко, чем входят: показываем в боте, чтобы человек узнал свою попытку */
+    static String describeClient(String userAgent) {
+        if (userAgent == null || userAgent.isBlank()) {
+            return null;
+        }
+        String ua = userAgent;
+        String browser = ua.contains("YaBrowser") ? "Яндекс Браузер" : ua.contains("Edg/") ? "Edge"
+                : ua.contains("OPR/") ? "Opera" : ua.contains("Firefox/") ? "Firefox"
+                : ua.contains("Chrome/") ? "Chrome" : ua.contains("Safari/") ? "Safari" : "браузер";
+        String os = ua.contains("iPhone") || ua.contains("iPad") ? "iOS" : ua.contains("Android") ? "Android"
+                : ua.contains("Mac OS X") ? "macOS" : ua.contains("Windows") ? "Windows"
+                : ua.contains("Linux") ? "Linux" : null;
+        return os == null ? browser : browser + ", " + os;
     }
 
     @ExceptionHandler(ResponseStatusException.class)

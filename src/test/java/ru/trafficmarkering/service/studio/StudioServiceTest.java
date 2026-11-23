@@ -53,6 +53,7 @@ class StudioServiceTest {
     @Mock private FileStorage fileStorage;
     @Mock private StudioBotInfo botInfo;
     @Mock private StudioRendererHealth health;
+    @Mock private ru.trafficmarkering.repository.UserRepository users;
 
     private StudioService service;
     private User user;
@@ -62,9 +63,10 @@ class StudioServiceTest {
     void setUp() {
         StudioProperties properties = new StudioProperties();
         service = new StudioService(jobs, assets, templates, profiles, storage, fileStorage, properties, botInfo, health,
-                new ObjectMapper(), "https://back.example");
+                new ObjectMapper(), "https://back.example", users, new ru.trafficmarkering.service.auth.telegram.TelegramIdentity(profiles, users));
         user = User.builder().id(7L).role(Role.CREATOR).name("Аня").username("anya@example.com").build();
         profile = StudioProfile.builder().userId(7L).build();
+        when(users.findById(7L)).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(profile));
         when(profiles.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(jobs.save(any())).thenAnswer(inv -> inv.getArgument(0));

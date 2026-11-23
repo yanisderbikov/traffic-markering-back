@@ -1,5 +1,8 @@
 package ru.trafficmarkering.service.studio;
 
+import ru.trafficmarkering.repository.UserRepository;
+import ru.trafficmarkering.service.auth.telegram.TelegramIdentity;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,11 +87,16 @@ public class StudioService {
     private final StudioRendererHealth rendererHealth;
     private final ObjectMapper json;
     private final String backUrl;
+    private final UserRepository users;
+    private final TelegramIdentity telegramIdentity;
 
     public StudioService(StudioJobRepository jobs, StudioAssetRepository assets, StudioTemplateRepository templates,
                          StudioProfileRepository profiles, StudioStorage storage, FileStorage fileStorage,
                          StudioProperties properties, StudioBotInfo botInfo, StudioRendererHealth rendererHealth,
-                         ObjectMapper json, @Value("${url.back}") String backUrl) {
+                         ObjectMapper json, @Value("${url.back}") String backUrl,
+                         UserRepository users, TelegramIdentity telegramIdentity) {
+        this.users = users;
+        this.telegramIdentity = telegramIdentity;
         this.jobs = jobs;
         this.assets = assets;
         this.templates = templates;
@@ -675,11 +683,7 @@ public class StudioService {
 
     @Transactional
     public void unlinkTelegram(User user) {
-        StudioProfile profile = profile(user.getId());
-        profile.setTelegramId(null);
-        profile.setTelegramUsername(null);
-        profile.setTelegramLinkedAt(null);
-        profiles.save(profile);
+        telegramIdentity.detach(user);
     }
 
     /**
@@ -692,20 +696,13 @@ public class StudioService {
         StudioProfile profile = profiles.findByLinkCode(code)
                 .filter(p -> p.getLinkCodeExpiresAt() != null && p.getLinkCodeExpiresAt().isAfter(Instant.now()))
                 .orElseThrow(() -> new StudioException("Ссылка устарела. Откройте «Видео-студию» на сайте и нажмите «Привязать Telegram» ещё раз."));
-        profiles.findByTelegramId(telegramId)
-                .filter(other -> !other.getUserId().equals(profile.getUserId()))
-                .ifPresent(other -> {
-                    other.setTelegramId(null);
-                    other.setTelegramUsername(null);
-                    other.setTelegramLinkedAt(null);
-                    profiles.saveAndFlush(other);
-                });
-        profile.setTelegramId(telegramId);
-        profile.setTelegramUsername(telegramUsername);
-        profile.setTelegramLinkedAt(Instant.now());
-        profile.setLinkCode(null);
-        profile.setLinkCodeExpiresAt(null);
-        profiles.save(profile);
+        User user = users.findById(profile.getUserId())
+                .orElseThrow(() -> new StudioException("Учётка не найдена."));
+        try {
+            telegramIdentity.attach(user, telegramId, telegramUsername);
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            throw new StudioException(HttpStatus.CONFLICT, e.getReason());
+        }
         return profile.getUserId();
     }
 
