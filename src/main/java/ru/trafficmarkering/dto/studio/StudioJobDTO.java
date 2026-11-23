@@ -2,6 +2,8 @@ package ru.trafficmarkering.dto.studio;
 
 import ru.trafficmarkering.service.studio.StudioSettings;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -22,11 +24,11 @@ public record StudioJobDTO(
         String downloadUrl,
         String previewUrl,
         /** До какого момента доступен повтор; null — исходники не сохранены */
-        Instant retryUntil,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant retryUntil,
         /** До какого момента хранится готовый файл */
-        Instant availableUntil,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant availableUntil,
         boolean canSendToTelegram,
-        Instant createdAt,
-        Instant startedAt,
-        Instant finishedAt
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant createdAt,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant startedAt,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant finishedAt
 ) {}

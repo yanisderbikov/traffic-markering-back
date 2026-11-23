@@ -1,5 +1,7 @@
 package ru.trafficmarkering.dto.studio;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -11,7 +13,7 @@ public record StudioOverviewDTO(
         int remaining,
         int maxActive,
         int active,
-        Instant quotaResetsAt,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) Instant quotaResetsAt,
         long sourceMaxBytes,
         long bannerMaxBytes,
         long backgroundMaxBytes,
@@ -22,7 +24,7 @@ public record StudioOverviewDTO(
         List<Preset> presets
 ) {
     public record Telegram(boolean botEnabled, String botUsername, String botUrl, boolean linked,
-                           String telegramUsername, Instant linkedAt) {}
+                           String telegramUsername, @JsonFormat(shape = JsonFormat.Shape.STRING) Instant linkedAt) {}
 
     public record Preset(String id, String name, String url) {}
 }
