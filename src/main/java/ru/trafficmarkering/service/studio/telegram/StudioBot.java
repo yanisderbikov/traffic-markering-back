@@ -231,7 +231,7 @@ public class StudioBot {
             case "/history" -> history(owner, chatId);
             case "/templates" -> reply(chatId, templatesText(owner), templatesMarkup(owner));
             case "/account" -> reply(chatId, accountText(owner), null);
-            default -> reply(chatId, "Пришлите видео до 20 МБ — бот смонтирует его по шаблону или предложит режимы. "
+            default -> reply(chatId, "Пришлите видео до " + properties.telegramIncomingLabel() + " — бот смонтирует его по шаблону или предложит режимы. "
                     + "Команды: /jobs, /latest, /history, /templates, /help.", null);
         }
     }
@@ -242,7 +242,7 @@ public class StudioBot {
             User user = users.findById(userId).orElseThrow();
             if (StudioService.allowed(user)) {
                 reply(chatId, "Готово! Telegram привязан к аккаунту <b>" + escape(user.getName()) + "</b>.\n\n"
-                        + "Пришлите видео до 20 МБ — бот смонтирует его. Ролики и шаблоны общие с сайтом.",
+                        + "Пришлите видео до " + properties.telegramIncomingLabel() + " — бот смонтирует его. Ролики и шаблоны общие с сайтом.",
                         keyboard(List.of(List.of(appButton("🎬 Видео-студия", studioUrl)))));
             } else {
                 reply(chatId, "Готово! Telegram привязан к аккаунту <b>" + escape(user.getName()) + "</b>.\n\n"
@@ -278,7 +278,7 @@ public class StudioBot {
                 .filter(t -> t.getId().equals(profile.getActiveTemplateId()))
                 .map(t -> "«" + escape(t.getName()) + "»").findFirst().orElse("выключен");
         reply(chatId, "<b>Видео-студия offer</b>\n\n"
-                + "Пришлите видео, видеодокумент или кружок до 20 МБ.\n"
+                + "Пришлите видео, видеодокумент или кружок до " + properties.telegramIncomingLabel() + ".\n"
                 + "• Автошаблон: " + auto + " (/templates)\n"
                 + "• Без автошаблона бот предложит быстрые режимы и ваши шаблоны.\n"
                 + "• Подпись <code>/choose</code> к видео — выбрать режим разово.\n\n"
@@ -315,8 +315,8 @@ public class StudioBot {
 
     private void onVideo(User owner, long chatId, long messageId, JsonNode message, JsonNode media, boolean choose) {
         long size = media.path("file_size").asLong(0);
-        if (size > properties.getTelegram().getIncomingMaxBytes()) {
-            reply(chatId, "Бот принимает видео до 20 МБ. Для больших исходников используйте сайт.",
+        if (size > properties.telegramIncomingLimit()) {
+            reply(chatId, "Бот принимает видео до " + properties.telegramIncomingLabel() + ". Для больших исходников используйте сайт.",
                     keyboard(List.of(List.of(urlButton("Открыть видео-студию", studioUrl)))), messageId);
             return;
         }
@@ -407,7 +407,7 @@ public class StudioBot {
             reply(chatId, escape(e.getMessage()), null, replyTo);
         } catch (TelegramClient.TelegramException e) {
             storage.delete(key);
-            reply(chatId, e.getCode() == 413 ? "Бот принимает видео до 20 МБ. Для больших исходников используйте сайт."
+            reply(chatId, e.getCode() == 413 ? "Бот принимает видео до " + properties.telegramIncomingLabel() + ". Для больших исходников используйте сайт."
                     : "Не удалось получить видео из Telegram. Пришлите его ещё раз.", null, replyTo);
         } catch (IOException e) {
             storage.delete(key);
@@ -428,7 +428,7 @@ public class StudioBot {
         long[] delays = {5, 20, 60};
         for (int attempt = 0; ; attempt++) {
             try {
-                client.download(fileId, target, properties.getTelegram().getIncomingMaxBytes());
+                client.download(fileId, target, properties.telegramIncomingLimit());
                 return;
             } catch (TelegramClient.TelegramException e) {
                 boolean permanent = e.getCode() == 400 || e.getCode() == 413 || e.getCode() == 404;

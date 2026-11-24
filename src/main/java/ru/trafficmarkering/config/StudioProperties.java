@@ -45,14 +45,37 @@ public class StudioProperties {
         private String webhookBaseUrl = "";
         /** Регистрировать вебхук при старте */
         private boolean registerWebhook = true;
+        /** Облако Telegram или свой сервер Bot API (--local, сервис telegram-bot-api) */
         private String apiUrl = "https://api.telegram.org";
-        /** Видео в чат принимаем до 20 МБ — больше Bot API не отдаёт */
+        /** Облако: видео в чат принимаем до 20 МБ — больше Bot API не отдаёт */
         private long incomingMaxBytes = 20_000_000;
-        /** Отправить файлом в чат — до 50 МБ */
+        /** Облако: отправить файлом в чат — до 50 МБ */
         private long outgoingMaxBytes = 50_000_000;
 
         public boolean enabled() {
             return botToken != null && !botToken.isBlank();
         }
+
+        /** Свой сервер Bot API: файлы до 2 ГБ в обе стороны */
+        public boolean localServer() {
+            return apiUrl != null && !apiUrl.contains("api.telegram.org");
+        }
+    }
+
+    /** Сколько бот принимает: облако — 20 МБ, свой сервер — как сайт */
+    public long telegramIncomingLimit() {
+        return telegram.localServer() ? sourceMaxBytes : telegram.getIncomingMaxBytes();
+    }
+
+    /** Сколько бот отправляет файлом: облако — 50 МБ, свой сервер — до 2 ГБ */
+    public long telegramOutgoingLimit() {
+        return telegram.localServer() ? 2_000_000_000L : telegram.getOutgoingMaxBytes();
+    }
+
+    /** «20 МБ», «80 МБ» — для текстов бота */
+    public String telegramIncomingLabel() {
+        long bytes = telegramIncomingLimit();
+        long mb = bytes % (1024 * 1024) == 0 ? bytes / (1024 * 1024) : Math.round(bytes / 1_000_000.0);
+        return mb + " МБ";
     }
 }

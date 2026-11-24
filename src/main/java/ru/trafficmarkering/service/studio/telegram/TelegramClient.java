@@ -62,11 +62,34 @@ public class TelegramClient {
         return config.getApiUrl().replaceAll("/+$", "") + "/bot" + config.getBotToken();
     }
 
+    /**
+     * Перед переходом на свой сервер Bot API бота нужно разлогинить в облаке, иначе обновления могут теряться.
+     * Повторный вызов безвреден: облако отвечает ошибкой, её игнорируем.
+     */
+    public void logOutFromCloud() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.telegram.org/bot" + config.getBotToken() + "/logOut"))
+                    .timeout(Duration.ofSeconds(20))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            int status = http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+            log.info("Видео-студия: logOut из облака Telegram — HTTP {}", status);
+        } catch (IOException e) {
+            log.warn("Видео-студия: logOut из облака Telegram не удался: {}", e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public JsonNode call(String method, Map<String, ?> params) {
+        return call(method, params, Duration.ofSeconds(40));
+    }
+
+    private JsonNode call(String method, Map<String, ?> params, Duration timeout) {
         try {
             String body = json.writeValueAsString(params == null ? Map.of() : params);
             HttpRequest request = HttpRequest.newBuilder(URI.create(base() + "/" + method))
-                    .timeout(Duration.ofSeconds(40))
+                    .timeout(timeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                     .build();
@@ -154,7 +177,8 @@ public class TelegramClient {
 
     /** Скачивает файл из Telegram; бросает TelegramException, если файл больше лимита */
     public void download(String fileId, Path target, long limit) {
-        JsonNode file = call("getFile", Map.of("file_id", fileId));
+        // свой сервер в режиме --local сам скачивает файл из Telegram внутри getFile — большой ролик идёт минуты
+        JsonNode file = call("getFile", Map.of("file_id", fileId), Duration.ofMinutes(10));
         long size = file.path("file_size").asLong(0);
         if (size > limit) {
             throw new TelegramException(413, "too large");
@@ -163,9 +187,11 @@ public class TelegramClient {
         if (path.isEmpty()) {
             throw new TelegramException(400, "no file path");
         }
-        URI uri = URI.create(config.getApiUrl().replaceAll("/+$", "") + "/file/bot" + config.getBotToken() + "/" + path);
+        // --local: file_path — абсолютный путь на сервере Bot API, nginx того же сервиса отдаёт файл по нему
+        URI uri = URI.create(config.getApiUrl().replaceAll("/+$", "")
+                + (path.startsWith("/") ? path : "/file/bot" + config.getBotToken() + "/" + path));
         try {
-            HttpResponse<InputStream> response = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(3)).GET().build(),
+            HttpResponse<InputStream> response = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(10)).GET().build(),
                     HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() != 200) {
                 response.body().close();
@@ -217,7 +243,7 @@ public class TelegramClient {
                     HttpRequest.BodyPublishers.ofFile(file),
                     HttpRequest.BodyPublishers.ofByteArray(tail));
             HttpRequest request = HttpRequest.newBuilder(URI.create(base() + "/sendVideo"))
-                    .timeout(Duration.ofMinutes(5))
+                    .timeout(Duration.ofMinutes(15))
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                     .POST(body)
                     .build();

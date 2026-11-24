@@ -25,7 +25,7 @@ import static ru.trafficmarkering.service.studio.telegram.TelegramClient.escape;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.keyboard;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.urlButton;
 
-/** Доставка результата в Telegram: файлом до 50 МБ, иначе ссылкой. */
+/** Доставка результата в Telegram: файлом в пределах лимита Bot API (50 МБ, свой сервер — 2 ГБ), иначе ссылкой. */
 @Slf4j
 @Component
 public class StudioNotifier {
@@ -160,7 +160,7 @@ public class StudioNotifier {
         }
         Path temp = null;
         try {
-            if (job.getResultSize() != null && job.getResultSize() <= properties.getTelegram().getOutgoingMaxBytes()) {
+            if (job.getResultSize() != null && job.getResultSize() <= properties.telegramOutgoingLimit()) {
                 temp = Files.createTempFile("studio-send", ".mp4");
                 storage.download(job.getResultKey(), temp);
             }
@@ -187,7 +187,7 @@ public class StudioNotifier {
                 + "\nФайл хранится " + properties.getResultTtlHours() + " ч.";
         Object markup = keyboard(List.of(List.of(urlButton("Скачать MP4", url))));
         long size = job.getResultSize() == null ? Long.MAX_VALUE : job.getResultSize();
-        if (file != null && size <= properties.getTelegram().getOutgoingMaxBytes()) {
+        if (file != null && size <= properties.telegramOutgoingLimit()) {
             try {
                 client.sendVideo(chatId, file, name, caption, markup, replyTo);
                 return;

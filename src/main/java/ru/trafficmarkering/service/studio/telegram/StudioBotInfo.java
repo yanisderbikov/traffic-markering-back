@@ -97,6 +97,9 @@ public class StudioBotInfo {
             return;
         }
         try {
+            if (config.localServer()) {
+                client.logOutFromCloud();
+            }
             client.call("setWebhook", Map.of(
                     "url", url,
                     "secret_token", webhookSecret(),

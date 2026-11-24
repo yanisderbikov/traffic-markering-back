@@ -103,7 +103,7 @@ public class TelegramAuthBot {
                 + "• «Открыть Offer» — кабинет прямо в Telegram, без входа;\n"
                 + "• на сайте нажимайте «Войти через Telegram» — почта и код больше не нужны;\n"
                 + "• или отправьте здесь /login — пришлю ссылку для входа;\n"
-                + (event.creator() ? "• пришлите сюда ролик до 20 МБ — смонтирую видео."
+                + (event.creator() ? "• пришлите сюда ролик — смонтирую видео."
                 : "• сюда будут приходить уведомления о новых роликах по вашим кампаниям."),
                 keyboard(List.of(List.of(appButton("📱 Открыть Offer", appUrl())),
                         List.of(button("🔐 Войти в браузере", LOGIN_CALLBACK)))));
@@ -128,7 +128,7 @@ public class TelegramAuthBot {
             case SITE_LOGGED_IN -> send(chatId, messageId, "✅ Готово — вы вошли на сайт как <b>"
                     + escape(step.user().getName()) + "</b>. Вернитесь во вкладку браузера.\n\n"
                     + (ru.trafficmarkering.service.studio.StudioService.allowed(step.user())
-                    ? "Здесь же можно монтировать видео: пришлите ролик до 20 МБ."
+                    ? "Здесь же можно монтировать видео: пришлите ролик."
                     : "Сюда будут приходить уведомления о роликах по вашим кампаниям."), null);
             case SITE_USE_EMAIL -> send(chatId, messageId, "Telegram подтверждён.\n\n"
                     + "Вернитесь на сайт и войдите по почте — после входа этот Telegram привяжется к вашему аккаунту, "
