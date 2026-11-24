@@ -77,6 +77,16 @@ public class StudioNotifier {
             client.tryEditMessage(chatId, messageId, progressText(name, percent));
         }
 
+        public long messageId() {
+            return messageId;
+        }
+
+        /** Сервер перезапускается посреди сборки: задача в очереди, следующий экземпляр продолжит */
+        public void paused() {
+            client.tryEditMessage(chatId, messageId, "⏸ Сервер перезапускается — сборка <b>" + escape(name)
+                    + "</b> продолжится сама через пару минут.");
+        }
+
         public void cancelled(String filename) {
             client.tryEditMessage(chatId, messageId, "⏹ Сборка отменена: <b>" + escape(filename) + "</b>");
         }
@@ -92,11 +102,27 @@ public class StudioNotifier {
                 + "▓".repeat(filled) + "░".repeat(10 - filled) + " " + percent + "%";
     }
 
-    /** Рендер начался: в чат владельца уходит сообщение с процентами. null — слать некуда */
+    /** Сообщение с процентами, отправленное раньше (до перезапуска); null — его нет */
+    public Progress progressOf(StudioJob job) {
+        Long chatId = chatOf(job);
+        if (!client.enabled() || chatId == null || job.getProgressMessageId() == null) {
+            return null;
+        }
+        return new Progress(client, chatId, job.getProgressMessageId(), job.getFilename());
+    }
+
+    /**
+     * Рендер начался: в чат владельца уходит сообщение с процентами. null — слать некуда.
+     * Задачу уже начинали до перезапуска — правим то же сообщение, а не шлём новое.
+     */
     public Progress started(StudioJob job) {
         Long chatId = chatOf(job);
         if (!client.enabled() || chatId == null) {
             return null;
+        }
+        Progress earlier = progressOf(job);
+        if (earlier != null && client.tryEditMessage(chatId, earlier.messageId(), progressText(job.getFilename(), 0))) {
+            return earlier;
         }
         try {
             JsonNode sent = client.sendMessage(chatId, progressText(job.getFilename(), 0), null, job.getTelegramReplyTo());

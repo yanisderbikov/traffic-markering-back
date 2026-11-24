@@ -54,6 +54,25 @@ public class StudioRenderWorker {
         thread.setDaemon(true);
         return thread;
     });
+    /** Пульс текущей задачи и поиск брошенных — отдельно, рендер занимает свой поток целиком */
+    private final ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "studio-watchdog");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /** Пульс реже этого — экземпляр считается упавшим, задача уходит другому */
+    static final Duration STALE_AFTER = Duration.ofMinutes(2);
+    /** Сколько раз пробуем собрать после падений сервера, потом — ошибка */
+    static final int MAX_ATTEMPTS = 3;
+    /** Остановка сервера: столько ждём, пока текущая сборка доделается, потом возвращаем её в очередь */
+    static final long SHUTDOWN_WAIT_SECONDS = 50;
+
+    private volatile boolean stopping;
+    /** Текущую задачу при остановке отдали в очередь — этот экземпляр её больше не трогает */
+    private volatile boolean abandoned;
+    private volatile UUID current;
+    private volatile StudioNotifier.Progress currentProgress;
 
     public StudioRenderWorker(StudioJobRepository jobs, UserRepository users, StudioService studio, StudioStorage storage,
                               StudioProperties properties, StudioRendererHealth health, StudioNotifier notifier,
@@ -79,34 +98,88 @@ public class StudioRenderWorker {
             log.warn("Видео-студия: FFmpeg не найден — воркер не запущен, задачи останутся в очереди");
             return;
         }
-        failStale();
+        watchdog.scheduleWithFixedDelay(this::beat, 10, 15, TimeUnit.SECONDS);
+        watchdog.scheduleWithFixedDelay(this::recoverStale, 0, 1, TimeUnit.MINUTES);
         executor.scheduleWithFixedDelay(this::drain, 5, 3, TimeUnit.SECONDS);
         log.info("Видео-студия: воркер рендера запущен");
     }
 
+    /**
+     * Остановка (деплой, перезапуск): новые задачи не берём, текущую даём доделать,
+     * не успела — возвращаем в очередь, её соберёт следующий экземпляр, в Telegram — «продолжится сама».
+     */
     @PreDestroy
     public void stop() {
-        executor.shutdownNow();
+        stopping = true;
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                UUID id = current;
+                StudioNotifier.Progress progress = currentProgress;
+                abandoned = true;
+                if (id != null && Boolean.TRUE.equals(tx.execute(st -> jobs.requeue(id) > 0))) {
+                    log.info("Видео-студия: сервер останавливается — задача {} возвращена в очередь", id);
+                    if (progress != null) {
+                        progress.paused();
+                    }
+                }
+                executor.shutdownNow();
+                executor.awaitTermination(10, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            executor.shutdownNow();
+        } catch (RuntimeException e) {
+            log.warn("Видео-студия: не удалось вернуть задачу в очередь при остановке: {}", e.getMessage());
+            executor.shutdownNow();
+        }
+        watchdog.shutdownNow();
     }
 
-    /** Задачи, зависшие в RUNNING (экземпляр упал посреди рендера) */
-    void failStale() {
-        Instant before = Instant.now().minus(Duration.ofSeconds(properties.getRenderTimeoutSeconds()).plusMinutes(10));
-        tx.executeWithoutResult(status -> jobs.findByStatusAndStartedAtBefore(StudioJobStatus.RUNNING, before).forEach(job -> {
-            job.setStatus(StudioJobStatus.FAILED);
-            job.setFinishedAt(Instant.now());
-            job.setError("Обработка прервалась. Повторите задачу или загрузите ролик ещё раз.");
-            if (studio.settingsOf(job).isKeepSource()) {
-                job.setInputsUntil(Instant.now().plus(Duration.ofHours(properties.getInputsTtlHours())));
-            }
-            jobs.save(job);
-        }));
+    private void beat() {
+        UUID id = current;
+        if (id == null) {
+            return;
+        }
+        try {
+            tx.executeWithoutResult(st -> jobs.heartbeat(id, Instant.now()));
+        } catch (RuntimeException e) {
+            log.warn("Видео-студия: пульс задачи {} не записан: {}", id, e.getMessage());
+        }
+    }
+
+    /**
+     * Задачи в RUNNING без пульса — экземпляр упал посреди рендера, не успев вернуть их в очередь.
+     * Возвращаем в очередь; после {@link #MAX_ATTEMPTS} падений подряд — ошибка, чтобы не крутить вечно.
+     */
+    void recoverStale() {
+        try {
+            Instant before = Instant.now().minus(STALE_AFTER);
+            List<StudioJob> failed = new java.util.ArrayList<>();
+            tx.executeWithoutResult(status -> jobs.findStale(before).forEach(job -> {
+                if (job.getAttempts() < MAX_ATTEMPTS) {
+                    log.info("Видео-студия: задача {} брошена упавшим экземпляром — снова в очереди", job.getId());
+                    jobs.requeue(job.getId());
+                    return;
+                }
+                job.setStatus(StudioJobStatus.FAILED);
+                job.setFinishedAt(Instant.now());
+                job.setError("Обработка прервалась. Повторите задачу или загрузите ролик ещё раз.");
+                if (studio.settingsOf(job).isKeepSource()) {
+                    job.setInputsUntil(Instant.now().plus(Duration.ofHours(properties.getInputsTtlHours())));
+                }
+                failed.add(jobs.save(job));
+            }));
+            failed.forEach(job -> notifier.finished(job, null, notifier.progressOf(job)));
+        } catch (RuntimeException e) {
+            log.warn("Видео-студия: не удалось проверить брошенные задачи: {}", e.getMessage());
+        }
     }
 
     private void drain() {
         try {
             Optional<StudioJob> next;
-            while ((next = claim()).isPresent()) {
+            while (!stopping && (next = claim()).isPresent()) {
                 process(next.get());
             }
         } catch (Throwable e) {
@@ -118,6 +191,8 @@ public class StudioRenderWorker {
         return tx.execute(status -> jobs.lockNextQueued().map(job -> {
             job.setStatus(StudioJobStatus.RUNNING);
             job.setStartedAt(Instant.now());
+            job.setHeartbeatAt(Instant.now());
+            job.setAttempts(job.getAttempts() + 1);
             job.setProgress(0);
             return jobs.save(job);
         }));
@@ -132,6 +207,11 @@ public class StudioRenderWorker {
         int[] lastSaved = {0};
         long[] lastSavedAt = {0};
         StudioNotifier.Progress progress = notifier.started(job);
+        if (progress != null && !Long.valueOf(progress.messageId()).equals(job.getProgressMessageId())) {
+            tx.executeWithoutResult(s -> jobs.setProgressMessage(id, progress.messageId()));
+        }
+        current = id;
+        currentProgress = progress;
         try {
             Files.createDirectories(folder);
             storage.download(job.getSourceKey(), folder.resolve("video"));
@@ -160,13 +240,16 @@ public class StudioRenderWorker {
                             tx.executeWithoutResult(s -> jobs.updateProgress(id, percent));
                         }
                     },
-                    () -> jobs.findStatus(id).map(s -> s != StudioJobStatus.RUNNING).orElse(true));
+                    () -> abandoned || jobs.findStatus(id).map(s -> s != StudioJobStatus.RUNNING).orElse(true));
+            if (abandoned) {
+                return;
+            }
             String key = StudioStorage.RESULTS + "/" + id + ".mp4";
             storage.upload(result, key, "video/mp4");
             long size = Files.size(result);
             StudioJob done = tx.execute(s -> {
                 StudioJob fresh = jobs.findById(id).orElseThrow();
-                if (fresh.getStatus() != StudioJobStatus.RUNNING) {
+                if (abandoned || fresh.getStatus() != StudioJobStatus.RUNNING) {
                     return null;
                 }
                 fresh.setStatus(StudioJobStatus.DONE);
@@ -188,7 +271,7 @@ public class StudioRenderWorker {
             notifier.finished(done, result, progress);
         } catch (StudioRenderer.CancelledException e) {
             log.info("Видео-студия: задача {} отменена во время рендера", id);
-            if (progress != null) {
+            if (progress != null && !stopping) {
                 progress.cancelled(job.getFilename());
             }
         } catch (StudioException e) {
@@ -197,6 +280,8 @@ public class StudioRenderWorker {
             log.error("Видео-студия: задача {} упала", id, e);
             fail(id, settings, "Не удалось собрать видео. Попробуйте ещё раз или выберите другой исходник.", progress);
         } finally {
+            current = null;
+            currentProgress = null;
             deleteFolder(folder);
         }
     }
@@ -204,7 +289,7 @@ public class StudioRenderWorker {
     private void fail(UUID id, StudioSettings settings, String message, StudioNotifier.Progress progress) {
         StudioJob failed = tx.execute(s -> {
             StudioJob fresh = jobs.findById(id).orElse(null);
-            if (fresh == null || fresh.getStatus() != StudioJobStatus.RUNNING) {
+            if (abandoned || fresh == null || fresh.getStatus() != StudioJobStatus.RUNNING) {
                 return null;
             }
             fresh.setStatus(StudioJobStatus.FAILED);

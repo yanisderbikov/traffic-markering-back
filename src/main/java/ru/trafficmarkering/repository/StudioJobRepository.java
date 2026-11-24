@@ -53,6 +53,27 @@ public interface StudioJobRepository extends JpaRepository<StudioJob, UUID> {
             + "ru.trafficmarkering.model.studio.StudioJobStatus.RUNNING")
     int updateProgress(@Param("id") UUID id, @Param("progress") int progress);
 
+    @Modifying
+    @Query("UPDATE StudioJob j SET j.heartbeatAt = :now WHERE j.id = :id AND j.status = "
+            + "ru.trafficmarkering.model.studio.StudioJobStatus.RUNNING")
+    int heartbeat(@Param("id") UUID id, @Param("now") Instant now);
+
+    @Modifying
+    @Query("UPDATE StudioJob j SET j.progressMessageId = :messageId WHERE j.id = :id")
+    int setProgressMessage(@Param("id") UUID id, @Param("messageId") Long messageId);
+
+    /** Перезапуск: задача снова в очереди, следующий воркер соберёт её с начала */
+    @Modifying
+    @Query("UPDATE StudioJob j SET j.status = ru.trafficmarkering.model.studio.StudioJobStatus.QUEUED, "
+            + "j.progress = 0, j.startedAt = NULL, j.heartbeatAt = NULL WHERE j.id = :id AND j.status = "
+            + "ru.trafficmarkering.model.studio.StudioJobStatus.RUNNING")
+    int requeue(@Param("id") UUID id);
+
+    /** RUNNING, но воркер давно не отзывался — экземпляр упал посреди сборки */
+    @Query("SELECT j FROM StudioJob j WHERE j.status = ru.trafficmarkering.model.studio.StudioJobStatus.RUNNING "
+            + "AND COALESCE(j.heartbeatAt, j.startedAt) < :before")
+    List<StudioJob> findStale(@Param("before") Instant before);
+
     List<StudioJob> findByStatusAndStartedAtBefore(StudioJobStatus status, Instant startedBefore);
 
     List<StudioJob> findByStatusAndFinishedAtBefore(StudioJobStatus status, Instant finishedBefore);

@@ -89,4 +89,23 @@ class StudioNotifierTest {
         verify(client).sendMessage(eq(555L), contains("Готово"), any(), isNull());
         assertThat(StudioNotifier.progressText("a.mp4", 40)).contains("▓▓▓▓░░░░░░ 40%");
     }
+
+    @Test
+    void afterRestartSameProgressMessageIsEdited() {
+        when(client.enabled()).thenReturn(true);
+        StudioProfile profile = new StudioProfile();
+        profile.setTelegramId(555L);
+        when(profiles.findById(7L)).thenReturn(Optional.of(profile));
+        when(client.tryEditMessage(eq(555L), eq(42L), anyString())).thenReturn(true);
+
+        StudioJob job = webJob();
+        job.setProgressMessageId(42L);
+        StudioNotifier.Progress progress = notifier.started(job);
+
+        assertThat(progress.messageId()).isEqualTo(42L);
+        verify(client).tryEditMessage(eq(555L), eq(42L), contains("0%"));
+        verify(client, never()).sendMessage(anyLong(), anyString(), any(), any());
+        progress.paused();
+        verify(client).tryEditMessage(eq(555L), eq(42L), contains("продолжится сама"));
+    }
 }

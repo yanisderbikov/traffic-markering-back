@@ -96,6 +96,18 @@ public class StudioJob {
     @Column(name = "started_at")
     private Instant startedAt;
 
+    /** Сколько раз задачу брали в работу: перезапуск сервера возвращает её в очередь */
+    @Column(nullable = false)
+    private int attempts;
+
+    /** Воркер жив и собирает: обновляется каждые несколько секунд */
+    @Column(name = "heartbeat_at")
+    private Instant heartbeatAt;
+
+    /** Сообщение с процентами в Telegram — после перезапуска правим его же */
+    @Column(name = "progress_message_id")
+    private Long progressMessageId;
+
     @Column(name = "finished_at")
     private Instant finishedAt;
 }
