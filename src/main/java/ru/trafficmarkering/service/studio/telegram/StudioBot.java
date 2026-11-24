@@ -316,8 +316,7 @@ public class StudioBot {
     private void onVideo(User owner, long chatId, long messageId, JsonNode message, JsonNode media, boolean choose) {
         long size = media.path("file_size").asLong(0);
         if (size > properties.telegramIncomingLimit()) {
-            reply(chatId, "Бот принимает видео до " + properties.telegramIncomingLabel() + ". Для больших исходников используйте сайт.",
-                    keyboard(List.of(List.of(urlButton("Открыть видео-студию", studioUrl)))), messageId);
+            tooBig(chatId, messageId);
             return;
         }
         String filename = media.path("file_name").asText(message.has("video_note") ? "video-note.mp4" : "telegram-video.mp4");
@@ -338,6 +337,14 @@ public class StudioBot {
                 .fileId(fileId).filename(StudioServiceNames.trim(filename)).createdAt(Instant.now()).build());
         reply(chatId, "Как смонтировать <b>" + escape(draft.getFilename()) + "</b>?\nВыбор действует 30 минут.",
                 draftMarkup(owner, draft), messageId);
+    }
+
+    /** Видео больше, чем Bot API отдаёт боту: то же видео грузится в студию мини-приложения — до лимита сайта */
+    private void tooBig(long chatId, long replyTo) {
+        reply(chatId, "Telegram не передаёт ботам видео больше " + properties.telegramIncomingLabel() + ".\n"
+                        + "Откройте студию прямо здесь и выберите это же видео — до " + properties.sourceLabel()
+                        + ". Готовый ролик придёт в этот чат.",
+                keyboard(List.of(List.of(appButton("🎬 Загрузить в студию", studioUrl)))), replyTo);
     }
 
     private Object draftMarkup(User owner, StudioChatDraft draft) {
@@ -407,8 +414,11 @@ public class StudioBot {
             reply(chatId, escape(e.getMessage()), null, replyTo);
         } catch (TelegramClient.TelegramException e) {
             storage.delete(key);
-            reply(chatId, e.getCode() == 413 ? "Бот принимает видео до " + properties.telegramIncomingLabel() + ". Для больших исходников используйте сайт."
-                    : "Не удалось получить видео из Telegram. Пришлите его ещё раз.", null, replyTo);
+            if (e.getCode() == 413) {
+                tooBig(chatId, replyTo);
+            } else {
+                reply(chatId, "Не удалось получить видео из Telegram. Пришлите его ещё раз.", null, replyTo);
+            }
         } catch (IOException e) {
             storage.delete(key);
             log.error("Видео-студия: импорт из Telegram", e);

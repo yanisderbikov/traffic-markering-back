@@ -72,9 +72,17 @@ public class StudioProperties {
         return telegram.localServer() ? 2_000_000_000L : telegram.getOutgoingMaxBytes();
     }
 
+    /** «80 МБ» — сколько принимает сайт */
+    public String sourceLabel() {
+        return label(sourceMaxBytes);
+    }
+
     /** «20 МБ», «80 МБ» — для текстов бота */
     public String telegramIncomingLabel() {
-        long bytes = telegramIncomingLimit();
+        return label(telegramIncomingLimit());
+    }
+
+    private static String label(long bytes) {
         long mb = bytes % (1024 * 1024) == 0 ? bytes / (1024 * 1024) : Math.round(bytes / 1_000_000.0);
         return mb + " МБ";
     }

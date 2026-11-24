@@ -29,6 +29,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -132,7 +133,7 @@ class StudioBotTest {
     void oversizedVideoIsRejectedBeforeDownload() throws Exception {
         when(profiles.findByTelegramId(555L)).thenReturn(Optional.of(StudioProfile.builder().userId(7L).telegramId(555L).build()));
         bot.handle(message("\"video\":{\"file_id\":\"F1\",\"file_size\":30000000}"));
-        verify(client).sendMessage(eq(555L), contains("до 20 МБ"), any(), eq(10L));
+        verify(client).sendMessage(eq(555L), contains("больше 20 МБ"), argThat(markup -> markup.toString().contains("web_app")), eq(10L));
         verify(client, never()).download(any(), any(), anyLong());
     }
 
