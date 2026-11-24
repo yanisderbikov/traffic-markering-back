@@ -77,6 +77,13 @@ class StudioBotTest {
     }
 
     @Test
+    void emailLoginWithTelegramIsAnnouncedInChat() {
+        new TelegramAuthBot(client, authService).onLinked(
+                new ru.trafficmarkering.service.auth.telegram.TelegramLinkedEvent(555L, "Аня", "anya@example.com"));
+        verify(client).sendMessage(eq(555L), contains("вы вошли на сайт"), any(), isNull());
+    }
+
+    @Test
     void unlinkedUserIsOfferedLoginOrRegistration() throws Exception {
         when(profiles.findByTelegramId(555L)).thenReturn(Optional.empty());
         when(authService.openFromBot(any())).thenReturn(new TelegramAuthService.BotStep(

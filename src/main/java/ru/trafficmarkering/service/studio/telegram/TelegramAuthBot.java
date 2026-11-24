@@ -3,7 +3,10 @@ package ru.trafficmarkering.service.studio.telegram;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
@@ -11,6 +14,7 @@ import ru.trafficmarkering.service.auth.telegram.TelegramAuthService;
 import ru.trafficmarkering.service.auth.telegram.TelegramAuthService.BotStep;
 import ru.trafficmarkering.service.auth.telegram.TelegramAuthService.TgUser;
 import ru.trafficmarkering.service.auth.telegram.TelegramIdentity;
+import ru.trafficmarkering.service.auth.telegram.TelegramLinkedEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -82,6 +86,20 @@ public class TelegramAuthBot {
         client.answerCallback(callbackId, null);
         render(chatId, messageId, step, true);
         return true;
+    }
+
+    /** После входа по почте на сайте: в чат приходит «готово», чтобы было понятно, что делать дальше */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onLinked(TelegramLinkedEvent event) {
+        send(event.telegramId(), null, "✅ <b>Готово — вы вошли на сайт</b>\n\n"
+                + "Аккаунт: <b>" + escape(event.name()) + "</b>"
+                + (event.email() != null ? " (" + escape(event.email()) + ")" : "") + "\n"
+                + "Этот Telegram теперь привязан к нему. Дальше:\n"
+                + "• на сайте нажимайте «Войти через Telegram» — почта и код больше не нужны;\n"
+                + "• или отправьте здесь /login — пришлю ссылку для входа;\n"
+                + "• пришлите сюда ролик до 20 МБ — смонтирую видео.",
+                keyboard(List.of(List.of(button("🔐 Войти на сайт", LOGIN_CALLBACK)))));
     }
 
     private void render(long chatId, Long messageId, BotStep step, boolean fromSite) {

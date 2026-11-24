@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.auth.telegram;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -108,6 +109,7 @@ public class TelegramAuthService {
     private final GetterCustomerProfile customerProfiles;
     private final SaverCustomerProfile customerProfileSaver;
     private final StudioBotInfo botInfo;
+    private final ApplicationEventPublisher events;
     @Value("${studio.site-url}")
     private String siteUrl;
 
@@ -181,6 +183,8 @@ public class TelegramAuthService {
         auth.setUserId(user.getId());
         auth.setStatus(TelegramAuthStatus.DONE);
         auths.save(auth);
+        events.publishEvent(new TelegramLinkedEvent(auth.getTelegramId(), user.getName(),
+                TelegramIdentity.telegramOnly(user) ? null : user.getUsername()));
         return telegramLabel(auth);
     }
 

@@ -55,6 +55,7 @@ class TelegramAuthServiceTest {
     @Mock private GetterCustomerProfile customerProfiles;
     @Mock private SaverCustomerProfile customerProfileSaver;
     @Mock private StudioBotInfo botInfo;
+    @Mock private org.springframework.context.ApplicationEventPublisher events;
 
     private final Map<String, TelegramAuth> authStore = new HashMap<>();
     private final Map<Long, User> userStore = new HashMap<>();
@@ -101,7 +102,7 @@ class TelegramAuthServiceTest {
 
         identity = new TelegramIdentity(profiles, users);
         service = new TelegramAuthService(auths, users, identity, jwt, provisioning, partners, creatorProfiles,
-                creatorProfileSaver, customerProfiles, customerProfileSaver, botInfo);
+                creatorProfileSaver, customerProfiles, customerProfileSaver, botInfo, events);
         ReflectionTestUtils.setField(service, "siteUrl", "https://site.example/");
     }
 
@@ -186,6 +187,7 @@ class TelegramAuthServiceTest {
         assertThat(poll.telegram()).isEqualTo("@anya");
 
         assertThat(service.attach(start.secret(), owner)).isEqualTo("@anya");
+        org.mockito.Mockito.verify(events).publishEvent(new TelegramLinkedEvent(555L, owner.getName(), owner.getUsername()));
         assertThat(identity.userOf(555L)).contains(owner);
         assertThat(users.findByUsername("tg:555")).isEmpty();
         assertThatThrownBy(() -> service.attach(start.secret(), owner)).isInstanceOf(ResponseStatusException.class);
