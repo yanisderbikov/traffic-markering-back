@@ -104,6 +104,21 @@ public class TelegramClient {
         return call("sendMessage", params);
     }
 
+    /** Правка без запасного нового сообщения: для прогресса, где лишние сообщения — спам */
+    public boolean tryEditMessage(long chatId, long messageId, String html) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("message_id", messageId);
+        params.put("text", html);
+        params.put("parse_mode", "HTML");
+        try {
+            call("editMessageText", params);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     public void editMessage(long chatId, long messageId, String html, Object replyMarkup) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("chat_id", chatId);

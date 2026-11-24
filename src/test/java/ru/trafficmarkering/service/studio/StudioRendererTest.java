@@ -125,6 +125,47 @@ class StudioRendererTest {
     }
 
     @Test
+    void placedBannerNeedsBothCoordinatesInFrame() {
+        StudioSettings s = new StudioSettings();
+        s.setMode("overlay");
+        s.setBannerX(20.0);
+        assertThatThrownBy(() -> s.validate(false, false, true)).isInstanceOf(StudioException.class);
+        s.setBannerY(120.0);
+        assertThatThrownBy(() -> s.validate(false, false, true)).isInstanceOf(StudioException.class);
+        s.setBannerY(80.0);
+        assertThat(s.validate(false, false, true).bannerPlaced()).isTrue();
+        s.setMode("strip");
+        assertThat(s.bannerPlaced()).isFalse();
+    }
+
+    @Test
+    void rendersBannerWhereItWasDragged(@TempDir Path dir) throws Exception {
+        Assumptions.assumeTrue(ffmpeg, "ffmpeg не установлен");
+        generate(dir.resolve("video"), "-f", "lavfi", "-i", "color=c=black:size=640x360:rate=30:duration=2",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-f", "mp4");
+        generate(dir.resolve("banner"), "-f", "lavfi", "-i", "color=c=red:size=300x100:duration=1",
+                "-frames:v", "1", "-update", "1", "-f", "image2", "-c:v", "png");
+        StudioSettings s = new StudioSettings();
+        s.setMode("overlay");
+        s.setSize(25.0);
+        s.setBannerX(15.0);
+        s.setBannerY(15.0);
+        StudioRenderer renderer = new StudioRenderer("ffmpeg", "ffprobe", 120);
+        Path out = renderer.render(dir, s, List.of(), null, false, p -> { }, () -> false);
+        Path frame = dir.resolve("frame.rgb");
+        Process p = new ProcessBuilder("ffmpeg", "-v", "error", "-y", "-ss", "1", "-i", out.toString(),
+                "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", frame.toString())
+                .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        assertThat(p.waitFor(60, TimeUnit.SECONDS)).isTrue();
+        byte[] rgb = Files.readAllBytes(frame);
+        // центр баннера 96×54 — красный, правый нижний угол — чёрный; 160×53 → пропорции 3:1 сохранены
+        assertThat(rgb[(54 * 640 + 96) * 3] & 0xff).isGreaterThan(200);
+        assertThat(rgb[(54 * 640 + 180) * 3] & 0xff).isLessThan(40);
+        assertThat(rgb[(90 * 640 + 96) * 3] & 0xff).isLessThan(40);
+        assertThat(rgb[(300 * 640 + 560) * 3] & 0xff).isLessThan(40);
+    }
+
+    @Test
     void rendersCirclePresetWithPauseInsert(@TempDir Path dir) throws Exception {
         Assumptions.assumeTrue(ffmpeg, "ffmpeg не установлен");
         generate(dir.resolve("video"), "-f", "lavfi", "-i", "testsrc=size=480x480:rate=30:duration=3",

@@ -459,6 +459,12 @@ public class StudioRenderer {
             };
             int bannerWidth = even(width * settings.sizeEffective() / 100);
             int bannerHeight = even(height * 0.7);
+            if (settings.bannerPlaced()) {
+                // центр там, куда перетащили, баннер целиком в кадре; пропорции держит fit()
+                x = f("'max(0,min(W-w,W*%.5f-w/2))'", settings.getBannerX() / 100);
+                y = f("'max(0,min(H-h,H*%.5f-h/2))'", settings.getBannerY() / 100);
+                bannerHeight = height;
+            }
             String main = "[main]";
             if (settings.getOverlayDim() > 0) {
                 graph.add(f("[main]drawbox=x=0:y=0:w=iw:h=ih:color=black@%.4f:t=fill:enable='%s'[dimmed]",

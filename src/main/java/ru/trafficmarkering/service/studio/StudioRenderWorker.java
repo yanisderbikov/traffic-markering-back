@@ -131,6 +131,7 @@ public class StudioRenderWorker {
         boolean admin = user != null && StudioService.admin(user);
         int[] lastSaved = {0};
         long[] lastSavedAt = {0};
+        StudioNotifier.Progress progress = notifier.started(job);
         try {
             Files.createDirectories(folder);
             storage.download(job.getSourceKey(), folder.resolve("video"));
@@ -149,6 +150,9 @@ public class StudioRenderWorker {
             }
             Path result = renderer.render(folder, settings, studio.cuesOf(job), preset, admin,
                     percent -> {
+                        if (progress != null) {
+                            progress.update(percent);
+                        }
                         long now = System.currentTimeMillis();
                         if (percent - lastSaved[0] >= 3 || now - lastSavedAt[0] > 3000) {
                             lastSaved[0] = percent;
@@ -181,20 +185,23 @@ public class StudioRenderWorker {
             if (done.getInputsUntil() == null) {
                 studio.releaseInputsIfUnused(done);
             }
-            notifier.finished(done, result);
+            notifier.finished(done, result, progress);
         } catch (StudioRenderer.CancelledException e) {
             log.info("Видео-студия: задача {} отменена во время рендера", id);
+            if (progress != null) {
+                progress.cancelled(job.getFilename());
+            }
         } catch (StudioException e) {
-            fail(id, settings, e.getMessage());
+            fail(id, settings, e.getMessage(), progress);
         } catch (Exception e) {
             log.error("Видео-студия: задача {} упала", id, e);
-            fail(id, settings, "Не удалось собрать видео. Попробуйте ещё раз или выберите другой исходник.");
+            fail(id, settings, "Не удалось собрать видео. Попробуйте ещё раз или выберите другой исходник.", progress);
         } finally {
             deleteFolder(folder);
         }
     }
 
-    private void fail(UUID id, StudioSettings settings, String message) {
+    private void fail(UUID id, StudioSettings settings, String message, StudioNotifier.Progress progress) {
         StudioJob failed = tx.execute(s -> {
             StudioJob fresh = jobs.findById(id).orElse(null);
             if (fresh == null || fresh.getStatus() != StudioJobStatus.RUNNING) {
@@ -211,7 +218,7 @@ public class StudioRenderWorker {
             if (failed.getInputsUntil() == null) {
                 studio.releaseInputsIfUnused(failed);
             }
-            notifier.finished(failed, null);
+            notifier.finished(failed, null, progress);
         }
     }
 

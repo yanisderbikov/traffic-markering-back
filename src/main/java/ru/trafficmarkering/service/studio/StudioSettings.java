@@ -32,6 +32,9 @@ public class StudioSettings {
     /** strip: top|bottom; overlay/pause: top|center|bottom */
     private String place = "bottom";
     private String align = "center";
+    /** Поверх видео: центр баннера в % кадра, задаётся перетаскиванием. null — по place/align */
+    private Double bannerX;
+    private Double bannerY;
     /** Начало показа (overlay) или точка вставки (pause), секунды от начала фрагмента */
     private Double start;
     private Double duration;
@@ -116,13 +119,18 @@ public class StudioSettings {
         return "strip".equals(mode) ? 20 : 90;
     }
 
+    /** Баннер поверх видео стоит там, куда его перетащили */
+    public boolean bannerPlaced() {
+        return "overlay".equals(mode) && bannerX != null && bannerY != null;
+    }
+
     public boolean split() {
         return !"off".equals(splitPlace);
     }
 
     public StudioSettings copy() {
         StudioSettings c = new StudioSettings();
-        c.mode = mode; c.place = place; c.align = align; c.start = start; c.duration = duration; c.size = size;
+        c.mode = mode; c.place = place; c.align = align; c.bannerX = bannerX; c.bannerY = bannerY; c.start = start; c.duration = duration; c.size = size;
         c.opacity = opacity; c.overlayDim = overlayDim; c.overlayDuck = overlayDuck; c.green = green;
         c.bannerAudio = bannerAudio; c.bannerLoop = bannerLoop; c.stripColor = stripColor;
         c.background = background; c.preset = preset; c.color = color; c.shape = shape; c.scale = scale;
@@ -149,6 +157,13 @@ public class StudioSettings {
             oneOf("place", place, "top", "center", "bottom");
         }
         oneOf("align", align, "left", "center", "right");
+        if ((bannerX == null) != (bannerY == null)) {
+            throw invalid();
+        }
+        if (bannerX != null) {
+            range("bannerX", bannerX, 0, 100);
+            range("bannerY", bannerY, 0, 100);
+        }
         double maxStart = admin ? Double.MAX_VALUE : MAX_SECONDS;
         double maxDuration = admin ? Double.MAX_VALUE : ("pause".equals(mode) ? PAUSE_MAX_SECONDS : MAX_SECONDS);
         if (start != null) {
