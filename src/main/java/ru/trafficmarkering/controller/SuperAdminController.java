@@ -1,5 +1,9 @@
 package ru.trafficmarkering.controller;
 
+import ru.trafficmarkering.dto.notify.BroadcastDTO;
+import ru.trafficmarkering.dto.notify.BroadcastRequestDTO;
+import ru.trafficmarkering.dto.notify.ReachDTO;
+import ru.trafficmarkering.service.notify.BroadcastService;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class SuperAdminController {
 
     private final SuperAdminService superAdminService;
     private final PlatformDashboardService platformDashboardService;
+    private final BroadcastService broadcastService;
 
     @GetMapping("/dashboard")
     public ResponseEntity<PlatformDashboardDTO> dashboard(@RequestParam(required = false) Integer days) {
@@ -57,6 +62,23 @@ public class SuperAdminController {
     @PostMapping("/users")
     public ResponseEntity<AdminUserDTO> assignRole(@Valid @RequestBody AssignRoleRequestDTO request) {
         return ResponseEntity.ok(superAdminService.assignRole(request));
+    }
+
+    @GetMapping("/notifications/reach")
+    public ResponseEntity<List<ReachDTO>> notificationReach() {
+        return ResponseEntity.ok(broadcastService.reach());
+    }
+
+    @GetMapping("/broadcasts")
+    public ResponseEntity<List<BroadcastDTO>> broadcasts() {
+        return ResponseEntity.ok(broadcastService.list());
+    }
+
+    /** Рассылка ставится в очередь и уходит в фоне; test=true — только себе, без истории (ответ пустой) */
+    @PostMapping("/broadcasts")
+    public ResponseEntity<BroadcastDTO> broadcast(@Valid @RequestBody BroadcastRequestDTO request) {
+        BroadcastDTO created = broadcastService.create(request);
+        return created == null ? ResponseEntity.accepted().build() : ResponseEntity.ok(created);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

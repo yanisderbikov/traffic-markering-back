@@ -44,6 +44,7 @@ class RoleTest {
                 CabinetTab.FRAUD,
                 CabinetTab.CREATOR_TRUST,
                 CabinetTab.USERS,
+                CabinetTab.BROADCASTS,
                 CabinetTab.STUDIO);
     }
 

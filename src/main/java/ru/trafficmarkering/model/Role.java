@@ -5,6 +5,7 @@ import java.util.Set;
 
 import static ru.trafficmarkering.model.CabinetTab.APPLICATIONS;
 import static ru.trafficmarkering.model.CabinetTab.BOARD;
+import static ru.trafficmarkering.model.CabinetTab.BROADCASTS;
 import static ru.trafficmarkering.model.CabinetTab.CAMPAIGNS;
 import static ru.trafficmarkering.model.CabinetTab.CREATOR_TRUST;
 import static ru.trafficmarkering.model.CabinetTab.CUSTOMER_WALLETS;
@@ -60,7 +61,7 @@ public enum Role {
             case ADMIN -> EnumSet.of(OVERVIEW, BOARD, CAMPAIGNS, APPLICATIONS, WALLET, EARNINGS,
                     MODERATION, FRAUD, CREATOR_TRUST, STUDIO, PROFILE);
             case SUPER_ADMIN -> EnumSet.of(OVERVIEW, DASHBOARD, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS,
-                    OPERATIONS, MODERATION, FRAUD, CREATOR_TRUST, USERS, STUDIO);
+                    OPERATIONS, MODERATION, FRAUD, CREATOR_TRUST, USERS, BROADCASTS, STUDIO);
             case SERVICE -> EnumSet.noneOf(CabinetTab.class);
         };
     }

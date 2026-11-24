@@ -67,11 +67,14 @@ class ApplicationServiceImplTest {
     private final CreatorTrustService creatorTrustService = mock(CreatorTrustService.class);
     private final FraudCheckService fraudCheckService = mock(FraudCheckService.class);
     private final SocialVideoOwnership socialVideoOwnership = mock(SocialVideoOwnership.class);
+    private final ru.trafficmarkering.service.notify.ApplicationNotifications notifications =
+            mock(ru.trafficmarkering.service.notify.ApplicationNotifications.class);
 
     private final ApplicationServiceImpl service = new ApplicationServiceImpl(
             getterApplication, saverApplication, applicationDeleter, getterCampaign, getterCreatorProfile,
             getterSocialAccount, currentUserService, campaignAccrualService, getterViewSnapshot,
-            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService, socialVideoOwnership);
+            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService, socialVideoOwnership,
+            notifications);
 
     {
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.NEW);

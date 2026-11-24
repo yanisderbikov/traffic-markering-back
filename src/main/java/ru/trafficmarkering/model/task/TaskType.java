@@ -3,7 +3,9 @@ package ru.trafficmarkering.model.task;
 import ru.trafficmarkering.dto.email.EmailTaskPayload;
 
 public enum TaskType {
-    EMAIL(EmailTaskPayload.class);
+    EMAIL(EmailTaskPayload.class),
+    NOTIFICATION(ru.trafficmarkering.dto.notify.NotificationPayload.class),
+    BROADCAST(ru.trafficmarkering.dto.notify.BroadcastPayload.class);
 
     private final Class<?> payloadClass;
 

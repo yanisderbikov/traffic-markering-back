@@ -1,5 +1,6 @@
 package ru.trafficmarkering.service.application.impl;
 
+import ru.trafficmarkering.service.notify.ApplicationNotifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -82,6 +83,7 @@ class ApplicationServiceImpl implements ApplicationService {
     private final CreatorTrustService creatorTrustService;
     private final FraudCheckService fraudCheckService;
     private final SocialVideoOwnership socialVideoOwnership;
+    private final ApplicationNotifications notifications;
 
     @Override
     @Transactional
@@ -120,6 +122,9 @@ class ApplicationServiceImpl implements ApplicationService {
         }
 
         Application saved = saverApplication.save(application);
+        if (rawVideoUrl != null) {
+            notifications.submitted(saved);
+        }
         return ApplicationDTO.from(saved, campaign, creator, creatorProfile(creator.getId()));
     }
 
@@ -145,6 +150,7 @@ class ApplicationServiceImpl implements ApplicationService {
         }
 
         saverApplication.save(application);
+        notifications.submitted(application);
         return toDto(requireApplication(id));
     }
 
@@ -230,8 +236,12 @@ class ApplicationServiceImpl implements ApplicationService {
             application.setModeratedBy(moderator);
         }
         application.setRejectionReason(status == ApplicationStatus.REJECTED ? reason : null);
+        ApplicationStatus previous = application.getStatus();
         application.setStatus(status);
         saverApplication.save(application);
+        if (previous != status) {
+            notifications.decided(application);
+        }
         // Статус решает, идут ли по отклику деньги, поэтому бюджет объявления пересчитываем целиком
         campaignAccrualService.recalculate(application.getCampaign());
     }
