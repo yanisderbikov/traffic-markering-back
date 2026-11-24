@@ -33,6 +33,7 @@ import ru.trafficmarkering.dto.studio.StudioRetryRequestDTO;
 import ru.trafficmarkering.dto.studio.StudioTelegramLinkDTO;
 import ru.trafficmarkering.dto.studio.StudioTemplateDTO;
 import ru.trafficmarkering.dto.studio.StudioTemplateRequestDTO;
+import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.studio.StudioProfile;
 import ru.trafficmarkering.service.auth.CurrentUserService;
@@ -61,7 +62,7 @@ public class StudioController {
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/api/studio/overview")
     public StudioOverviewDTO overview() {
-        return studio.overview(currentUser.require());
+        return studio.overview(creator());
     }
 
     @Operation(summary = "Ссылка на загрузку файла",
@@ -69,14 +70,14 @@ public class StudioController {
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/api/studio/uploads/presign")
     public StudioPresignResponseDTO presign(@Valid @RequestBody StudioPresignRequestDTO request) {
-        return studio.presign(currentUser.require(), request);
+        return studio.presign(creator(), request);
     }
 
     @Operation(summary = "Собрать видео", description = "Ставит задачу в очередь; для профиля 9:16 + 1:1 — две задачи одного пакета",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/api/studio/jobs")
     public ResponseEntity<List<StudioJobDTO>> create(@Valid @RequestBody StudioJobRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(studio.createFromWeb(currentUser.require(), request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(studio.createFromWeb(creator(), request));
     }
 
     @Operation(summary = "Мои видео", description = "filter: all | active | done | failed",
@@ -84,33 +85,33 @@ public class StudioController {
     @GetMapping("/api/studio/jobs")
     public List<StudioJobDTO> jobs(@RequestParam(defaultValue = "all") String filter,
                                    @RequestParam(defaultValue = "50") int limit) {
-        return studio.list(currentUser.require(), filter, limit);
+        return studio.list(creator(), filter, limit);
     }
 
     @GetMapping("/api/studio/jobs/{id}")
     @Operation(summary = "Задача", security = @SecurityRequirement(name = "Bearer"))
     public StudioJobDTO job(@PathVariable UUID id) {
-        return studio.get(currentUser.require(), id);
+        return studio.get(creator(), id);
     }
 
     @PostMapping("/api/studio/jobs/{id}/cancel")
     @Operation(summary = "Отменить задачу", security = @SecurityRequirement(name = "Bearer"))
     public StudioJobDTO cancel(@PathVariable UUID id) {
-        return studio.cancel(currentUser.require(), id);
+        return studio.cancel(creator(), id);
     }
 
     @PostMapping("/api/studio/jobs/{id}/retry")
     @Operation(summary = "Повторить задачу", description = "Нужны сохранённые исходники (keepSource). quality: null или \"720\"",
             security = @SecurityRequirement(name = "Bearer"))
     public StudioJobDTO retry(@PathVariable UUID id, @RequestBody(required = false) StudioRetryRequestDTO request) {
-        return studio.retry(currentUser.require(), id, request == null ? null : request.quality());
+        return studio.retry(creator(), id, request == null ? null : request.quality());
     }
 
     @PostMapping("/api/studio/jobs/{id}/telegram")
     @Operation(summary = "Прислать готовый MP4 в Telegram", description = "Нужна привязка Telegram; квоту не тратит",
             security = @SecurityRequirement(name = "Bearer"))
     public Map<String, String> sendToTelegram(@PathVariable UUID id) {
-        User user = currentUser.require();
+        User user = creator();
         StudioProfile profile = studio.profile(user.getId());
         if (profile.getTelegramId() == null) {
             throw new StudioException("Сначала привяжите Telegram.");
@@ -123,45 +124,45 @@ public class StudioController {
     @Operation(summary = "Библиотека", description = "Свои баннеры и фоны и общий каталог",
             security = @SecurityRequirement(name = "Bearer"))
     public List<StudioAssetDTO> assets() {
-        return studio.assets(currentUser.require());
+        return studio.assets(creator());
     }
 
     @PostMapping("/api/studio/assets")
     @Operation(summary = "Сохранить файл в библиотеку", description = "shared=true — в общий каталог (только админ)",
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<StudioAssetDTO> saveAsset(@Valid @RequestBody StudioAssetRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(studio.saveAsset(currentUser.require(), request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(studio.saveAsset(creator(), request));
     }
 
     @DeleteMapping("/api/studio/assets/{id}")
     @Operation(summary = "Удалить файл из библиотеки", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<Void> deleteAsset(@PathVariable UUID id) {
-        studio.deleteAsset(currentUser.require(), id);
+        studio.deleteAsset(creator(), id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/api/studio/templates")
     @Operation(summary = "Шаблоны монтажа", security = @SecurityRequirement(name = "Bearer"))
     public List<StudioTemplateDTO> templates() {
-        return studio.templates(currentUser.require());
+        return studio.templates(creator());
     }
 
     @PostMapping("/api/studio/templates")
     @Operation(summary = "Новый шаблон", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<StudioTemplateDTO> createTemplate(@Valid @RequestBody StudioTemplateRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(studio.saveTemplate(currentUser.require(), null, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(studio.saveTemplate(creator(), null, request));
     }
 
     @PutMapping("/api/studio/templates/{id}")
     @Operation(summary = "Изменить шаблон", security = @SecurityRequirement(name = "Bearer"))
     public StudioTemplateDTO updateTemplate(@PathVariable UUID id, @Valid @RequestBody StudioTemplateRequestDTO request) {
-        return studio.saveTemplate(currentUser.require(), id, request);
+        return studio.saveTemplate(creator(), id, request);
     }
 
     @DeleteMapping("/api/studio/templates/{id}")
     @Operation(summary = "Удалить шаблон", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<Void> deleteTemplate(@PathVariable UUID id) {
-        studio.deleteTemplate(currentUser.require(), id);
+        studio.deleteTemplate(creator(), id);
         return ResponseEntity.noContent().build();
     }
 
@@ -170,8 +171,14 @@ public class StudioController {
             description = "templateId=null — выключить; favorite=true — избранный (первым в списке под видео)",
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<Void> setActive(@RequestBody StudioActiveTemplateRequestDTO request) {
-        studio.setActiveTemplate(currentUser.require(), request.templateId(), Boolean.TRUE.equals(request.favorite()));
+        studio.setActiveTemplate(creator(), request.templateId(), Boolean.TRUE.equals(request.favorite()));
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Привязан ли Telegram", description = "Для всех ролей: через бота приходят уведомления и вход")
+    @GetMapping("/api/studio/telegram/link")
+    public StudioOverviewDTO.Telegram telegramStatus() {
+        return studio.telegramStatus(currentUser.require());
     }
 
     @PostMapping("/api/studio/telegram/link")
@@ -215,5 +222,10 @@ public class StudioController {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest().body(Map.of("message", message.isBlank() ? "Некорректный запрос" : message));
+    }
+
+    /** Видео-студия — для креаторов (админы проходят по старшинству роли) */
+    private User creator() {
+        return currentUser.require(Role.CREATOR);
     }
 }

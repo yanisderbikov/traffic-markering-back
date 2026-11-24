@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import ru.trafficmarkering.service.auth.telegram.TelegramIdentity;
 import ru.trafficmarkering.config.StudioProperties;
 import ru.trafficmarkering.dto.studio.StudioJobDTO;
 import ru.trafficmarkering.model.User;
@@ -208,6 +209,15 @@ public class StudioBot {
             return;
         }
         User owner = user.get();
+        if (!StudioService.allowed(owner)) {
+            // Рекламодателю бот — только уведомления и вход; монтаж видео — у креаторов
+            if ("/account".equals(command)) {
+                reply(chatId, accountText(owner), null);
+            } else {
+                customerWelcome(owner, chatId, videoOf(message) != null);
+            }
+            return;
+        }
         JsonNode media = videoOf(message);
         if (media != null) {
             onVideo(owner, chatId, messageId, message, media, "/choose".equals(command));
@@ -220,9 +230,7 @@ public class StudioBot {
             case "/latest" -> latest(owner, chatId);
             case "/history" -> history(owner, chatId);
             case "/templates" -> reply(chatId, templatesText(owner), templatesMarkup(owner));
-            case "/account" -> reply(chatId, "Telegram привязан к аккаунту <b>" + escape(owner.getName()) + "</b> ("
-                    + escape(owner.getUsername()) + ").\nОтвязать можно в «Видео-студии» на сайте.",
-                    keyboard(List.of(List.of(urlButton("Видео-студия на сайте", studioUrl)))));
+            case "/account" -> reply(chatId, accountText(owner), null);
             default -> reply(chatId, "Пришлите видео до 20 МБ — бот смонтирует его по шаблону или предложит режимы. "
                     + "Команды: /jobs, /latest, /history, /templates, /help.", null);
         }
@@ -232,12 +240,35 @@ public class StudioBot {
         try {
             Long userId = studio.confirmTelegramLink(code, telegramId, tgUsername);
             User user = users.findById(userId).orElseThrow();
-            reply(chatId, "Готово! Telegram привязан к аккаунту <b>" + escape(user.getName()) + "</b>.\n\n"
-                    + "Пришлите видео до 20 МБ — бот смонтирует его. Ролики и шаблоны общие с сайтом.",
-                    keyboard(List.of(List.of(urlButton("Видео-студия на сайте", studioUrl)))));
+            if (StudioService.allowed(user)) {
+                reply(chatId, "Готово! Telegram привязан к аккаунту <b>" + escape(user.getName()) + "</b>.\n\n"
+                        + "Пришлите видео до 20 МБ — бот смонтирует его. Ролики и шаблоны общие с сайтом.",
+                        keyboard(List.of(List.of(appButton("🎬 Видео-студия", studioUrl)))));
+            } else {
+                reply(chatId, "Готово! Telegram привязан к аккаунту <b>" + escape(user.getName()) + "</b>.\n\n"
+                        + "Сюда будут приходить уведомления о роликах по вашим кампаниям.",
+                        keyboard(List.of(List.of(appButton("📱 Открыть Offer", appUrl)))));
+            }
         } catch (StudioException e) {
-            reply(chatId, escape(e.getMessage()), keyboard(List.of(List.of(urlButton("Открыть видео-студию", studioUrl)))));
+            reply(chatId, escape(e.getMessage()), keyboard(List.of(List.of(appButton("📱 Открыть Offer", appUrl)))));
         }
+    }
+
+    private static String accountText(User owner) {
+        return "Telegram привязан к аккаунту <b>" + escape(owner.getName()) + "</b>"
+                + (TelegramIdentity.telegramOnly(owner) ? "" : " (" + escape(owner.getUsername()) + ")")
+                + ".\nОтвязать можно в профиле на сайте.";
+    }
+
+    /** Рекламодатель: здесь приходят уведомления о роликах, кабинет — в мини-приложении */
+    private void customerWelcome(User owner, long chatId, boolean sentVideo) {
+        reply(chatId, (sentVideo ? "Монтаж видео доступен креаторам.\n\n" : "")
+                + "<b>Offer</b> — " + escape(owner.getName()) + ", сюда приходят уведомления: "
+                + "новые ролики по вашим кампаниям и всё, что требует вашего решения.\n\n"
+                + "Кабинет открывается кнопкой ниже — вход уже выполнен.",
+                keyboard(List.of(
+                        List.of(appButton("📱 Открыть Offer", appUrl)),
+                        List.of(button("🔐 Войти в браузере", TelegramAuthBot.LOGIN_CALLBACK)))));
     }
 
     private void welcome(User owner, long chatId) {
@@ -571,6 +602,10 @@ public class StudioBot {
             return;
         }
         User owner = user.get();
+        if (!StudioService.allowed(owner)) {
+            client.answerCallback(callbackId, "Монтаж видео доступен креаторам");
+            return;
+        }
         try {
             if (data.equals("q")) {
                 client.answerCallback(callbackId, null);

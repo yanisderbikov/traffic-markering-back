@@ -76,7 +76,7 @@ class RoleTest {
     @Test
     void customerAndCreatorSeeOnlyTheirOwnCabinet() {
         assertThat(Role.CUSTOMER.tabs()).containsExactly(
-                CabinetTab.OVERVIEW, CabinetTab.CAMPAIGNS, CabinetTab.WALLET, CabinetTab.STUDIO, CabinetTab.PROFILE);
+                CabinetTab.OVERVIEW, CabinetTab.CAMPAIGNS, CabinetTab.WALLET, CabinetTab.PROFILE);
         assertThat(Role.CREATOR.tabs()).containsExactly(
                 CabinetTab.OVERVIEW, CabinetTab.BOARD, CabinetTab.APPLICATIONS, CabinetTab.EARNINGS,
                 CabinetTab.STUDIO, CabinetTab.PROFILE);

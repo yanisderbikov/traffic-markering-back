@@ -179,13 +179,14 @@ public class TelegramAuthService {
         TelegramAuth auth = auths.lockBySecretHash(hash(secret))
                 .filter(a -> a.getStatus() == TelegramAuthStatus.CONFIRMED && a.getUserId() == null && !a.expired())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.GONE,
-                        "Ссылка из Telegram устарела — привяжите его в «Видео-студии»."));
+                        "Ссылка из Telegram устарела — привяжите его в профиле."));
         identity.attach(user, auth.getTelegramId(), auth.getTelegramUsername());
         auth.setUserId(user.getId());
         auth.setStatus(TelegramAuthStatus.DONE);
         auths.save(auth);
         events.publishEvent(new TelegramLinkedEvent(auth.getTelegramId(), user.getName(),
-                TelegramIdentity.telegramOnly(user) ? null : user.getUsername()));
+                TelegramIdentity.telegramOnly(user) ? null : user.getUsername(),
+                ru.trafficmarkering.service.studio.StudioService.allowed(user)));
         return telegramLabel(auth);
     }
 

@@ -116,6 +116,21 @@ public class StudioService {
         return user.getRole() != null && user.getRole().isAdmin();
     }
 
+    /** Монтаж — инструмент креаторов (и админов); рекламодателю студия не нужна */
+    public static boolean allowed(User user) {
+        return user != null && user.getRole() != null && user.getRole().implies(ru.trafficmarkering.model.Role.CREATOR);
+    }
+
+    /** Привязка Telegram — для всех ролей: через него приходят уведомления и вход */
+    @Transactional
+    public StudioOverviewDTO.Telegram telegramStatus(User user) {
+        StudioProfile profile = profile(user.getId());
+        String username = botInfo.username();
+        return new StudioOverviewDTO.Telegram(botInfo.enabled(), username,
+                username == null ? null : "https://t.me/" + username,
+                profile.getTelegramId() != null, profile.getTelegramUsername(), profile.getTelegramLinkedAt());
+    }
+
     static Instant dayStart(Instant now) {
         return LocalDate.ofInstant(now, ZoneOffset.UTC).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
@@ -145,9 +160,7 @@ public class StudioService {
                 properties.getSourceMaxBytes(), properties.getBannerMaxBytes(), properties.getBackgroundMaxBytes(),
                 rendererHealth.available(),
                 profile.getActiveTemplateId(), profile.getFavoriteTemplateId(),
-                new StudioOverviewDTO.Telegram(botInfo.enabled(), username,
-                        username == null ? null : "https://t.me/" + username,
-                        profile.getTelegramId() != null, profile.getTelegramUsername(), profile.getTelegramLinkedAt()),
+                telegramStatus(user),
                 presets);
     }
 
@@ -695,7 +708,7 @@ public class StudioService {
     public Long confirmTelegramLink(String code, long telegramId, String telegramUsername) {
         StudioProfile profile = profiles.findByLinkCode(code)
                 .filter(p -> p.getLinkCodeExpiresAt() != null && p.getLinkCodeExpiresAt().isAfter(Instant.now()))
-                .orElseThrow(() -> new StudioException("Ссылка устарела. Откройте «Видео-студию» на сайте и нажмите «Привязать Telegram» ещё раз."));
+                .orElseThrow(() -> new StudioException("Ссылка устарела. Нажмите «Привязать Telegram» на сайте ещё раз — в профиле или в «Видео-студии»."));
         User user = users.findById(profile.getUserId())
                 .orElseThrow(() -> new StudioException("Учётка не найдена."));
         try {

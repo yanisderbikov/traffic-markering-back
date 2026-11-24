@@ -79,7 +79,7 @@ class StudioBotTest {
     @Test
     void emailLoginWithTelegramIsAnnouncedInChat() {
         new TelegramAuthBot(client, authService).onLinked(
-                new ru.trafficmarkering.service.auth.telegram.TelegramLinkedEvent(555L, "Аня", "anya@example.com"));
+                new ru.trafficmarkering.service.auth.telegram.TelegramLinkedEvent(555L, "Аня", "anya@example.com", true));
         verify(client).sendMessage(eq(555L), contains("вы вошли на сайт"), any(), isNull());
     }
 
@@ -134,6 +134,17 @@ class StudioBotTest {
         bot.handle(message("\"video\":{\"file_id\":\"F1\",\"file_size\":30000000}"));
         verify(client).sendMessage(eq(555L), contains("до 20 МБ"), any(), eq(10L));
         verify(client, never()).download(any(), any(), anyLong());
+    }
+
+    @Test
+    void customerGetsNotificationsBotWithoutVideoEditing() throws Exception {
+        User customer = User.builder().id(8L).role(Role.CUSTOMER).name("Босс").username("boss@example.com").build();
+        when(users.findById(8L)).thenReturn(Optional.of(customer));
+        when(profiles.findByTelegramId(555L)).thenReturn(Optional.of(StudioProfile.builder().userId(8L).telegramId(555L).build()));
+        bot.handle(message("\"video\":{\"file_id\":\"F1\",\"file_size\":1000}"));
+        verify(client).sendMessage(eq(555L), contains("доступен креаторам"), any(), isNull());
+        verify(client, never()).download(any(), any(), anyLong());
+        verify(drafts, never()).save(any());
     }
 
     @Test

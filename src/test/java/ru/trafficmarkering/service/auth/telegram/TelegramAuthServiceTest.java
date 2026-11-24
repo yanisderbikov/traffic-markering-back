@@ -187,7 +187,7 @@ class TelegramAuthServiceTest {
         assertThat(poll.telegram()).isEqualTo("@anya");
 
         assertThat(service.attach(start.secret(), owner)).isEqualTo("@anya");
-        org.mockito.Mockito.verify(events).publishEvent(new TelegramLinkedEvent(555L, owner.getName(), owner.getUsername()));
+        org.mockito.Mockito.verify(events).publishEvent(new TelegramLinkedEvent(555L, owner.getName(), owner.getUsername(), true));
         assertThat(identity.userOf(555L)).contains(owner);
         assertThat(users.findByUsername("tg:555")).isEmpty();
         assertThatThrownBy(() -> service.attach(start.secret(), owner)).isInstanceOf(ResponseStatusException.class);

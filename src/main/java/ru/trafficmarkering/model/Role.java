@@ -55,7 +55,7 @@ public enum Role {
 
     public Set<CabinetTab> tabs() {
         return switch (this) {
-            case CUSTOMER -> EnumSet.of(OVERVIEW, CAMPAIGNS, WALLET, STUDIO, PROFILE);
+            case CUSTOMER -> EnumSet.of(OVERVIEW, CAMPAIGNS, WALLET, PROFILE);
             case CREATOR -> EnumSet.of(OVERVIEW, BOARD, APPLICATIONS, EARNINGS, STUDIO, PROFILE);
             case FINANCE_MANAGER -> EnumSet.of(OVERVIEW, CUSTOMER_WALLETS, TOP_UPS, PAYOUTS, OPERATIONS);
             case ADMIN -> EnumSet.of(OVERVIEW, BOARD, CAMPAIGNS, APPLICATIONS, WALLET, EARNINGS,
