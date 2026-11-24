@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.dto.auth.AuthResponseDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthPollDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthStartDTO;
+import ru.trafficmarkering.dto.auth.TelegramWebAppDTO;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.auth.TelegramAuth;
@@ -186,6 +187,43 @@ public class TelegramAuthService {
         events.publishEvent(new TelegramLinkedEvent(auth.getTelegramId(), user.getName(),
                 TelegramIdentity.telegramOnly(user) ? null : user.getUsername()));
         return telegramLabel(auth);
+    }
+
+    // ───────────────────────── мини-приложение ─────────────────────────
+
+    /**
+     * Вход из мини-приложения: Telegram уже подтверждён подписью initData.
+     * Привязан — сразу токен; нет — человек выбирает: новая учётка (cr/cu) или своя с почтой (have).
+     */
+    @Transactional
+    public TelegramWebAppDTO webApp(TelegramInitData.Launch launch, String action, String referralCode) {
+        TgUser tg = launch.user();
+        String label = tg.username() != null ? "@" + tg.username() : tg.displayName();
+        Optional<User> linked = identity.userOf(tg.id());
+        if (linked.isPresent()) {
+            return new TelegramWebAppDTO("DONE", issue(linked.get()), label, null, launch.startParam());
+        }
+        if ("cr".equals(action) || "cu".equals(action)) {
+            User user = register(tg, "cu".equals(action) ? Role.CUSTOMER : Role.CREATOR, referralCode);
+            return new TelegramWebAppDTO("DONE", issue(user), label, null, launch.startParam());
+        }
+        if ("have".equals(action)) {
+            // Та же запись, что и при «У меня есть аккаунт» в боте: после входа по почте её привязывает /telegram/attach
+            String secret = secret();
+            TelegramAuth auth = TelegramAuth.builder()
+                    .id(newId())
+                    .secretHash(hash(secret))
+                    .origin(TelegramAuthOrigin.SITE)
+                    .status(TelegramAuthStatus.CONFIRMED)
+                    .clientInfo("Мини-приложение Telegram")
+                    .createdAt(Instant.now())
+                    .expiresAt(Instant.now().plus(EMAIL_TTL))
+                    .build();
+            remember(auth, tg);
+            auths.save(auth);
+            return new TelegramWebAppDTO("NEED_EMAIL", null, label, secret, launch.startParam());
+        }
+        return new TelegramWebAppDTO("NEED_ACCOUNT", null, label, null, launch.startParam());
     }
 
     // ───────────────────────── бот ─────────────────────────

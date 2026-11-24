@@ -29,12 +29,15 @@ public class StudioBotInfo {
     private final StudioProperties.Telegram config;
     private final TelegramClient client;
     private final String backUrl;
+    private final String siteUrl;
     private volatile String username;
 
-    public StudioBotInfo(StudioProperties properties, TelegramClient client, @Value("${url.back}") String backUrl) {
+    public StudioBotInfo(StudioProperties properties, TelegramClient client, @Value("${url.back}") String backUrl,
+                         @Value("${studio.site-url}") String siteUrl) {
         this.config = properties.getTelegram();
         this.client = client;
         this.backUrl = backUrl;
+        this.siteUrl = siteUrl == null ? "" : siteUrl.replaceAll("/+$", "");
         String configured = config.getBotUsername();
         this.username = configured == null || configured.isBlank() ? null : configured.replace("@", "").strip();
     }
@@ -109,6 +112,11 @@ public class StudioBotInfo {
                     Map.of("command", "cancel", "description", "Снять ожидающее видео"),
                     Map.of("command", "account", "description", "Привязка к кабинету"),
                     Map.of("command", "help", "description", "Как пользоваться"))));
+            if (siteUrl.startsWith("https://")) {
+                // Кнопка слева от поля ввода открывает сайт мини-приложением, вход — по initData
+                client.call("setChatMenuButton", Map.of("menu_button", Map.of(
+                        "type", "web_app", "text", "Offer", "web_app", Map.of("url", siteUrl + "/app"))));
+            }
             JsonNode me = client.call("getMe", Map.of());
             username = me.path("username").asText(username);
             log.info("Видео-студия: вебхук Telegram @{} → {}", username, url);

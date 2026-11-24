@@ -24,11 +24,14 @@ import ru.trafficmarkering.dto.auth.VerifyCodeDTO;
 import ru.trafficmarkering.service.auth.AuthService;
 import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.auth.telegram.TelegramAuthService;
+import ru.trafficmarkering.service.auth.telegram.TelegramInitData;
 import ru.trafficmarkering.dto.auth.EmailCodeDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthPollDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthSecretDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthStartDTO;
 import ru.trafficmarkering.dto.auth.TelegramAuthStartRequestDTO;
+import ru.trafficmarkering.dto.auth.TelegramWebAppDTO;
+import ru.trafficmarkering.dto.auth.TelegramWebAppRequestDTO;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.RequestHeader;
 
@@ -46,6 +49,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final TelegramAuthService telegramAuthService;
+    private final TelegramInitData telegramInitData;
     private final CurrentUserService currentUserService;
 
     @Operation(summary = "Регистрация",
@@ -91,6 +95,15 @@ public class AuthController {
             @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent) {
         TelegramAuthStartRequestDTO body = request == null ? new TelegramAuthStartRequestDTO(null, null) : request;
         return ResponseEntity.ok(telegramAuthService.start(body.role(), body.referralCode(), describeClient(userAgent)));
+    }
+
+    @Operation(summary = "Вход из мини-приложения Telegram",
+            description = "Принимает Telegram.WebApp.initData, проверяет подпись бота. Привязанный Telegram — сразу JWT; "
+                    + "непривязанный — NEED_ACCOUNT, затем повторный запрос с action cr/cu/have")
+    @PostMapping("/telegram/webapp")
+    public ResponseEntity<TelegramWebAppDTO> telegramWebApp(@Valid @RequestBody TelegramWebAppRequestDTO request) {
+        return ResponseEntity.ok(telegramAuthService.webApp(telegramInitData.verify(request.initData()),
+                request.action(), request.referralCode()));
     }
 
     @Operation(summary = "Вход через Telegram: результат",

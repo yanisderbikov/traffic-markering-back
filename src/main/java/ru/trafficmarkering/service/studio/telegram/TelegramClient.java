@@ -236,6 +236,14 @@ public class TelegramClient {
         return Map.of("text", text, "url", url);
     }
 
+    /** Кнопка мини-приложения; Telegram принимает только HTTPS — иначе обычная ссылка (локальная разработка) */
+    public static Map<String, Object> appButton(String text, String url) {
+        if (url != null && url.startsWith("https://")) {
+            return Map.of("text", text, "web_app", Map.of("url", url));
+        }
+        return urlButton(text, url);
+    }
+
     public static String escape(String text) {
         return text == null ? "" : text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }

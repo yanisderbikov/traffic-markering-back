@@ -43,7 +43,8 @@ public class WebSecurityConfig {
                     // ── Доска объявлений и карточки: видны всем, даже неавторизованным ──
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/request-code", "/api/auth/verify",
-                            "/api/auth/telegram/start", "/api/auth/telegram/poll").permitAll()
+                            "/api/auth/telegram/start", "/api/auth/telegram/poll",
+                            "/api/auth/telegram/webapp").permitAll()
                     // ── Межсервисные ручки: общий секрет SERVICE_JWT_TOKEN ──
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")

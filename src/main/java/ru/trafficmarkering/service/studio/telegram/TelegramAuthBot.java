@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.studio.telegram;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static ru.trafficmarkering.service.studio.telegram.TelegramClient.appButton;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.button;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.escape;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.keyboard;
@@ -39,6 +41,8 @@ public class TelegramAuthBot {
 
     private final TelegramClient client;
     private final TelegramAuthService auth;
+    @Value("${studio.site-url:}")
+    private String siteUrl;
 
     static TgUser tgUser(JsonNode from) {
         return new TgUser(from.path("id").asLong(), from.path("username").asText(null),
@@ -96,10 +100,16 @@ public class TelegramAuthBot {
                 + "Аккаунт: <b>" + escape(event.name()) + "</b>"
                 + (event.email() != null ? " (" + escape(event.email()) + ")" : "") + "\n"
                 + "Этот Telegram теперь привязан к нему. Дальше:\n"
+                + "• «Открыть Offer» — кабинет прямо в Telegram, без входа;\n"
                 + "• на сайте нажимайте «Войти через Telegram» — почта и код больше не нужны;\n"
                 + "• или отправьте здесь /login — пришлю ссылку для входа;\n"
                 + "• пришлите сюда ролик до 20 МБ — смонтирую видео.",
-                keyboard(List.of(List.of(button("🔐 Войти на сайт", LOGIN_CALLBACK)))));
+                keyboard(List.of(List.of(appButton("📱 Открыть Offer", appUrl())),
+                        List.of(button("🔐 Войти в браузере", LOGIN_CALLBACK)))));
+    }
+
+    private String appUrl() {
+        return (siteUrl == null ? "" : siteUrl.replaceAll("/+$", "")) + "/app";
     }
 
     private void render(long chatId, Long messageId, BotStep step, boolean fromSite) {

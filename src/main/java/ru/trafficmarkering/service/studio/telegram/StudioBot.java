@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.button;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.escape;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.keyboard;
+import static ru.trafficmarkering.service.studio.telegram.TelegramClient.appButton;
 import static ru.trafficmarkering.service.studio.telegram.TelegramClient.urlButton;
 
 /**
@@ -100,6 +101,7 @@ public class StudioBot {
     private final UserRepository users;
     private final StudioProperties properties;
     private final String studioUrl;
+    private final String appUrl;
     private final TelegramAuthBot authBot;
     private final Map<Long, Boolean> seenUpdates = Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, false) {
         @Override
@@ -128,7 +130,8 @@ public class StudioBot {
         this.jobs = jobs;
         this.users = users;
         this.properties = properties;
-        this.studioUrl = (frontUrl == null ? "" : frontUrl.replaceAll("/+$", "")) + "/app/studio";
+        this.appUrl = (frontUrl == null ? "" : frontUrl.replaceAll("/+$", "")) + "/app";
+        this.studioUrl = appUrl + "/studio";
     }
 
     @PreDestroy
@@ -251,8 +254,10 @@ public class StudioBot {
                 + "/jobs — очередь и прогресс\n/latest — последний ролик\n/history — история\n/cancel — снять ожидающее видео\n\n"
                 + "/login — войти на сайт без почты\n\n"
                 + "Сегодня осталось задач: " + remainingText(owner) + ". Большие исходники, баннеры и фоны — на сайте.",
-                keyboard(List.of(List.of(button("🔐 Войти на сайт", TelegramAuthBot.LOGIN_CALLBACK),
-                        urlButton("Видео-студия", studioUrl)))));
+                keyboard(List.of(
+                        List.of(appButton("📱 Открыть Offer", appUrl)),
+                        List.of(button("🔐 Войти в браузере", TelegramAuthBot.LOGIN_CALLBACK),
+                                appButton("🎬 Видео-студия", studioUrl)))));
     }
 
     private String remainingText(User owner) {

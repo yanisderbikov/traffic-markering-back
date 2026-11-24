@@ -243,4 +243,36 @@ class TelegramAuthServiceTest {
         assertThat(identity.userOf(555L)).contains(second);
         assertThat(identity.linkOf(first.getId())).isEmpty();
     }
+
+    @Test
+    void miniAppLogsInLinkedTelegramRightAway() {
+        User owner = emailUser();
+        var result = service.webApp(new TelegramInitData.Launch(tg, "studio"), null, null);
+        assertThat(result.status()).isEqualTo("DONE");
+        assertThat(result.auth().token()).isEqualTo("jwt-" + owner.getUsername());
+        assertThat(result.startParam()).isEqualTo("studio");
+    }
+
+    @Test
+    void miniAppAsksUnlinkedTelegramAndCreatesOneAccount() {
+        var launch = new TelegramInitData.Launch(tg, null);
+        assertThat(service.webApp(launch, null, null).status()).isEqualTo("NEED_ACCOUNT");
+        assertThat(users.findByUsername("tg:555")).isEmpty();
+
+        assertThat(service.webApp(launch, "cu", null).status()).isEqualTo("DONE");
+        User created = users.findByUsername("tg:555").orElseThrow();
+        assertThat(created.getRole()).isEqualTo(Role.CUSTOMER);
+        // Повторное открытие — та же учётка, вторую не заводим
+        assertThat(service.webApp(launch, "cr", null).auth().token()).isEqualTo("jwt-tg:555");
+        assertThat(identity.userOf(555L)).contains(created);
+    }
+
+    @Test
+    void miniAppHaveAccountAttachesAfterEmailLogin() {
+        User owner = users.save(User.builder().username("boss@example.com").name("Босс").role(Role.CUSTOMER).build());
+        var result = service.webApp(new TelegramInitData.Launch(tg, null), "have", null);
+        assertThat(result.status()).isEqualTo("NEED_EMAIL");
+        assertThat(service.attach(result.secret(), owner)).isEqualTo("@anya");
+        assertThat(identity.userOf(555L)).contains(owner);
+    }
 }
