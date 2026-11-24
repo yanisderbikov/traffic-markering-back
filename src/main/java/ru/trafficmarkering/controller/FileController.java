@@ -31,11 +31,16 @@ public class FileController {
     public static final String CAMPAIGN_PHOTO_PREFIX = "campaign-photos";
     public static final String CAMPAIGN_MATERIAL_PREFIX = "campaign-materials";
     public static final String TRANSFER_PROOF_PREFIX = "transfer-proofs";
+    public static final String PLACEMENT_PROOF_PREFIX = "placement-proofs";
 
     private static final Set<String> ALLOWED_IMAGE_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
     private static final Set<String> ALLOWED_PROOF_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf");
+    /** Скриншот профиля или запись экрана с закреплённым комментарием */
+    private static final Set<String> ALLOWED_PLACEMENT_PROOF_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+            "video/mp4", "video/quicktime", "video/webm");
     private static final Set<String> SCRIPTABLE_MATERIAL_TYPES = Set.of(
             "text/html", "application/xhtml+xml", "image/svg+xml",
             "text/javascript", "application/javascript", "application/x-javascript");
@@ -71,6 +76,23 @@ public class FileController {
         }
         FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
                 request.getFilename(), request.getContentType(), TRANSFER_PROOF_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку доказательства размещения",
+            description = "Presigned PUT-ссылка для криатора: скриншот профиля с рекламной ссылкой или запись экрана "
+                    + "с закреплённым комментарием и промокодом. Полученный key передаётся при подаче работы "
+                    + "«ссылка и промокод» или при исправлении надбавки",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/placement-proof/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignPlacementProof(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (!ALLOWED_PLACEMENT_PROOF_TYPES.contains(request.getContentType().toLowerCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Можно загрузить скриншот (JPEG, PNG, WebP, HEIC) или запись экрана (MP4, MOV, WebM)");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), PLACEMENT_PROOF_PREFIX);
         return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
     }
 

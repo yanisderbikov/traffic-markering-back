@@ -65,7 +65,8 @@ class CampaignBoardServiceImpl implements CampaignBoardService {
                 : null;
         return CampaignDTO.from(campaign, campaign.getCustomer(), profile,
                 fileStorage.presignedUrl(campaign.getPhotoKey()),
-                CampaignMaterials.toDTO(campaign, fileStorage), applications.size(), totalViews);
+                CampaignMaterials.toDTO(campaign, fileStorage), applications.size(), totalViews)
+                .withoutPromoMaterials();
     }
 
     /** Компании заказчиков одним запросом: на доске карточек много, а профиль у каждой свой. */

@@ -39,6 +39,7 @@ import ru.trafficmarkering.service.rate.UsdtRateService;
 import ru.trafficmarkering.service.wallet.OperationReader;
 import ru.trafficmarkering.service.wallet.WalletLedger;
 import ru.trafficmarkering.util.PayoutCalculator;
+import ru.trafficmarkering.util.SnapshotPayout;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -244,6 +245,9 @@ class EarningsServiceImpl implements EarningsService {
      * списала просмотры, платим по меньшему. Без замера старше окна не созрело ничего.
      */
     private long maturedUncredited(Application application, Campaign campaign, TrustLevel trust, Instant matureBefore) {
+        if (application.submittedBySnapshot()) {
+            return maturedSnapshotUncredited(application, campaign, trust, matureBefore);
+        }
         long credited = application.getCreditedKopecks() != null ? application.getCreditedKopecks() : 0L;
         if (holdDays <= 0) {
             return application.accrued() - credited;
@@ -268,6 +272,35 @@ class EarningsServiceImpl implements EarningsService {
         long rate = campaign.getRatePerThousandKopecks() != null ? campaign.getRatePerThousandKopecks() : 0L;
         long maturedAccrual = Math.min(application.accrued(), PayoutCalculator.accrual(views, rate, Long.MAX_VALUE));
         return maturedAccrual - credited;
+    }
+
+    /**
+     * Работа «ссылка и промокод»: в кошелёк уходит база и только засчитанные надбавки — условные ждут конца
+     * срока размещения. Снимок при подаче созревает за то же окно удержания, что и обычные замеры, а если
+     * площадка с тех пор списала просмотры, платим по меньшему — как у обычных откликов.
+     */
+    private long maturedSnapshotUncredited(Application application, Campaign campaign, TrustLevel trust,
+                                           Instant matureBefore) {
+        long credited = application.getCreditedKopecks() != null ? application.getCreditedKopecks() : 0L;
+        long views = application.billingViewsValue();
+        if (holdDays > 0) {
+            ApplicationViewSnapshot billing = application.getBillingSnapshot();
+            if (billing == null || billing.getCapturedAt() == null || billing.getCapturedAt().isAfter(matureBefore)) {
+                return 0L;
+            }
+            List<ApplicationViewSnapshot> snapshots = getterViewSnapshot.getByApplicationId(application.getId());
+            if (!snapshots.isEmpty()) {
+                Long cap = trust.capsPayableViews() ? fraudProperties.getNewCreatorMaxPayableViews() : null;
+                long latest = SnapshotPayout.billableViews(snapshots.get(0).payableViews(campaign.viewRegion()).views(), cap);
+                views = Math.min(views, latest);
+            }
+        }
+        if (!campaign.paysViews(views)) {
+            return 0L;
+        }
+        long matured = Math.min(application.accrued(),
+                SnapshotPayout.reward(views, application.creditableRate(), campaign.getMaxRewardPerVideoKopecks()));
+        return matured - credited;
     }
 
     private Map<UUID, Long> accruedByCampaign(User creator) {

@@ -2,6 +2,8 @@ package ru.trafficmarkering.dto.campaign;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -11,6 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
+import ru.trafficmarkering.model.campaign.PaymentModel;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 
 import java.time.Instant;
@@ -81,6 +84,45 @@ public class CampaignCreateUpdateRequestDTO {
     @Schema(description = "До какого момента объявление принимает отклики, ISO-8601; null — бессрочно",
             example = "2026-10-20T20:59:59.999Z")
     private Instant endsAt;
+
+    @Schema(description = "Как платить за просмотры: CONTINUOUS — по мере роста (по умолчанию), "
+            + "SNAPSHOT — «ссылка и промокод»: по снимку при подаче, база ставки плюс надбавки", example = "SNAPSHOT")
+    private PaymentModel paymentModel;
+
+    @Size(max = 1024, message = "Рекламная ссылка не длиннее 1024 символов")
+    @Schema(description = "SNAPSHOT: общая рекламная HTTPS-ссылка, которую криаторы ставят в ссылки профиля; "
+            + "обязательна, если есть надбавка за ссылку", example = "https://example.com/app?utm_source=offer")
+    private String promoUrl;
+
+    @Size(max = 64, message = "Промокод не длиннее 64 символов")
+    @Schema(description = "SNAPSHOT: общий многоразовый промокод для закреплённого комментария; "
+            + "обязателен, если есть надбавка за промокод", example = "OFFER20")
+    private String promoCode;
+
+    @Size(max = 2000, message = "Описание выгоды не длиннее 2000 символов")
+    @Schema(description = "SNAPSHOT: что даёт промокод и на каких условиях — попадёт в шаблон комментария",
+            example = "−20% на первый месяц, до 31 декабря")
+    private String promoBenefit;
+
+    @PositiveOrZero(message = "Надбавка за ссылку не может быть отрицательной")
+    @Schema(description = "SNAPSHOT: надбавка к базовой ставке за ссылку в профиле, в копейках за 1000 просмотров; "
+            + "0 или null — не предлагается", example = "30000")
+    private Long linkBonusPerThousandKopecks;
+
+    @PositiveOrZero(message = "Надбавка за промокод не может быть отрицательной")
+    @Schema(description = "SNAPSHOT: надбавка к базовой ставке за промокод в закрепе, в копейках за 1000 просмотров; "
+            + "0 или null — не предлагается", example = "20000")
+    private Long promoBonusPerThousandKopecks;
+
+    @Min(value = 1, message = "Срок размещения — от 1 дня")
+    @Max(value = 90, message = "Срок размещения — не больше 90 дней")
+    @Schema(description = "SNAPSHOT: сколько дней после подачи держать ссылку и закреп; null — 7", example = "7")
+    private Integer placementRetentionDays;
+
+    @Positive(message = "Потолок за ролик должен быть больше нуля")
+    @Schema(description = "SNAPSHOT: потолок вознаграждения за один ролик, в копейках; null — без потолка",
+            example = "1000000")
+    private Long maxRewardPerVideoKopecks;
 
     @Valid
     @Size(max = 10, message = "Не больше 10 материалов")

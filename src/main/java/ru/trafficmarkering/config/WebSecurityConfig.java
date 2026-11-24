@@ -53,6 +53,7 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     .requestMatchers("/api/finance/**").hasRole("FINANCE_MANAGER")
                     .requestMatchers("/api/files/transfer-proof/**").hasAnyRole("FINANCE_MANAGER", "CUSTOMER")
+                    .requestMatchers("/api/files/placement-proof/**").hasRole("CREATOR")
                     .requestMatchers("/api/wallet/**").hasRole("CUSTOMER")
                     .requestMatchers("/api/earnings/**").hasRole("CREATOR")
                     .requestMatchers("/api/partner/**").hasRole("CUSTOMER")

@@ -10,7 +10,9 @@ import ru.trafficmarkering.model.fraud.TrustLevel;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.PlacementState;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.PaymentModel;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
@@ -18,6 +20,7 @@ import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -246,6 +249,64 @@ class CampaignAccrualServiceImplTest {
         assertEquals(0L, withoutGeography.getAccruedKopecks().longValue());
         assertEquals(350_00L, withGeography.getAccruedKopecks().longValue());
         assertEquals(350_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_snapshotWorkUsesFrozenViewsAndReservedRate() {
+        // «Ссылка и промокод»: 10 000 просмотров зафиксированы при подаче, потом ролик набрал 50 000 — не в счёт.
+        // Ссылка подтверждена, промокод ждёт проверки: бюджет занят под полную ставку 50 + 30 + 20 ₽
+        Campaign campaign = snapshotCampaign(100_000_00);
+        Application work = snapshotWork(ApplicationStatus.APPROVED, 10_000);
+        work.setViews(50_000L);
+        work.link().setState(PlacementState.VERIFIED);
+        work.promo().setState(PlacementState.PENDING);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(work));
+
+        service.recalculate(campaign);
+
+        assertEquals(1_000_00L, work.getAccruedKopecks().longValue());
+
+        // Промокод не подтвердили — его часть освобождает бюджет, база и ссылка остаются
+        work.promo().setState(PlacementState.REJECTED);
+        service.recalculate(campaign);
+        assertEquals(800_00L, work.getAccruedKopecks().longValue());
+        assertEquals(800_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_snapshotWorkCappedPerVideoAndByBudget() {
+        Campaign campaign = snapshotCampaign(1_200_00);
+        campaign.setMaxRewardPerVideoKopecks(700_00L);
+        Application first = snapshotWork(ApplicationStatus.APPROVED, 10_000);
+        first.link().setState(PlacementState.EARNED);
+        first.promo().setState(PlacementState.EARNED);
+        Application second = snapshotWork(ApplicationStatus.APPROVED, 10_000);
+        Application pending = snapshotWork(ApplicationStatus.PENDING, 10_000);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId()))
+                .thenReturn(List.of(first, second, pending));
+
+        service.recalculate(campaign);
+
+        assertEquals(700_00L, first.getAccruedKopecks().longValue());
+        assertEquals(500_00L, second.getAccruedKopecks().longValue());
+        assertEquals(0L, pending.getAccruedKopecks().longValue());
+        assertEquals(1_200_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    private Campaign snapshotCampaign(long budgetKopecks) {
+        Campaign campaign = campaign(50_00, budgetKopecks);
+        campaign.setPaymentModel(PaymentModel.SNAPSHOT);
+        return campaign;
+    }
+
+    private Application snapshotWork(ApplicationStatus status, long billingViews) {
+        Application work = application(status, billingViews, 0);
+        work.setBaseRateKopecks(50_00L);
+        work.setLinkBonusKopecks(30_00L);
+        work.setPromoBonusKopecks(20_00L);
+        work.setBillingViews(billingViews);
+        work.setSubmittedAt(Instant.now());
+        return work;
     }
 
     private Campaign campaign(long ratePerThousandKopecks, long budgetKopecks) {

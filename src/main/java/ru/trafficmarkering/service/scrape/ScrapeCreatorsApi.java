@@ -7,6 +7,7 @@ import ru.trafficmarkering.service.http.JsonNode;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,8 @@ public class ScrapeCreatorsApi {
                 firstText(user, "avatarMedium", "avatarLarger", "avatarThumb"),
                 JsonNode.number(stats, "followerCount"),
                 JsonNode.text(user, "signature"),
-                privacy(user.get("privateAccount"), user.get("secret")));
+                privacy(user.get("privateAccount"), user.get("secret")),
+                tiktokLinks(user));
     }
 
     private ScrapeVideo tiktokVideo(String videoUrl) {
@@ -101,7 +103,8 @@ public class ScrapeCreatorsApi {
                 firstText(user, "profile_pic_url_hd", "profile_pic_url"),
                 JsonNode.number(JsonNode.object(user, "edge_followed_by"), "count"),
                 JsonNode.text(user, "biography"),
-                privacy(user.get("is_private")));
+                privacy(user.get("is_private")),
+                instagramLinks(user));
     }
 
     /**
@@ -150,7 +153,8 @@ public class ScrapeCreatorsApi {
                 lastSource(JsonNode.object(JsonNode.object(response, "avatar"), "image")),
                 JsonNode.number(response, "subscriberCount"),
                 JsonNode.text(response, "description"),
-                ScrapeProfile.Privacy.PUBLIC);
+                ScrapeProfile.Privacy.PUBLIC,
+                textArray(response, "links"));
     }
 
     private ScrapeVideo youtubeVideo(String videoUrl) {
@@ -176,6 +180,60 @@ public class ScrapeCreatorsApi {
                 null,
                 null,
                 parseOffset(JsonNode.text(response, "publishDate")));
+    }
+
+    /** TikTok: ссылка в профиле лежит в user.bioLink.link; нет bioLink в ответе — источник ссылок не знает. */
+    private static List<String> tiktokLinks(Map<String, Object> user) {
+        if (!user.containsKey("bioLink")) {
+            return null;
+        }
+        List<String> links = new ArrayList<>();
+        addLink(links, JsonNode.text(JsonNode.object(user, "bioLink"), "link"));
+        return links;
+    }
+
+    /** Instagram: bio_links[].url и external_url; нет ни одного из полей — источник ссылок не знает. */
+    private static List<String> instagramLinks(Map<String, Object> user) {
+        if (!user.containsKey("bio_links") && !user.containsKey("external_url")) {
+            return null;
+        }
+        List<String> links = new ArrayList<>();
+        addLink(links, JsonNode.text(user, "external_url"));
+        for (Object item : JsonNode.array(user, "bio_links")) {
+            if (item instanceof Map<?, ?> link && link.get("url") instanceof String url) {
+                addLink(links, url);
+            }
+        }
+        return links;
+    }
+
+    /** Массив строк (ссылки канала YouTube); нет поля — null, а не пустой список. */
+    private static List<String> textArray(Map<String, Object> source, String key) {
+        if (source == null || !source.containsKey(key)) {
+            return null;
+        }
+        List<Object> items = JsonNode.array(source, key);
+        List<String> values = new ArrayList<>();
+        for (Object item : items) {
+            if (item instanceof String text) {
+                addLink(values, text);
+            } else if (item instanceof Map<?, ?> object) {
+                for (String field : List.of("url", "link", "href")) {
+                    if (object.get(field) instanceof String text) {
+                        addLink(values, text);
+                        break;
+                    }
+                }
+            }
+        }
+        // Незнакомый формат элементов — не «ссылок нет», а «не разобрали»
+        return !items.isEmpty() && values.isEmpty() ? null : values;
+    }
+
+    private static void addLink(List<String> links, String link) {
+        if (link != null && !link.isBlank() && !links.contains(link.trim())) {
+            links.add(link.trim());
+        }
     }
 
     /** «http://www.youtube.com/@ThePatMcAfeeShow» → ThePatMcAfeeShow; нет @ в ссылке — то, что ввёл криатор. */

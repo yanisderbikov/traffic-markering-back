@@ -6,9 +6,11 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.PlacementState;
 
 import ru.trafficmarkering.model.fraud.FraudStatus;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -53,6 +55,24 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
                                                              @Param("status") ApplicationStatus status);
 
     boolean existsByPublicId(String publicId);
+
+    /** Очередь модерации: ролики на проверке и поданные работы, у которых надбавка ждёт решения. */
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.status = :pending or (a.status in :working "
+            + "and (a.linkPlacement.state = :placementPending or a.promoPlacement.state = :placementPending)) "
+            + "order by a.createdAt asc")
+    List<Application> findAwaitingModeration(@Param("pending") ApplicationStatus pending,
+                                             @Param("working") Collection<ApplicationStatus> working,
+                                             @Param("placementPending") PlacementState placementPending);
+
+    /** Работы с подтверждёнными, но ещё условными надбавками, у которых истёк срок размещения. */
+    @Query("select a from Application a join fetch a.campaign join fetch a.creator "
+            + "where a.placementRetainUntil <= :now and a.status in :working "
+            + "and (a.linkPlacement.state = :verified or a.promoPlacement.state = :verified) "
+            + "order by a.placementRetainUntil asc")
+    List<Application> findPlacementsDue(@Param("now") Instant now,
+                                        @Param("working") Collection<ApplicationStatus> working,
+                                        @Param("verified") PlacementState verified);
 
     @Query("select a from Application a join fetch a.campaign join fetch a.creator "
             + "where a.accruedKopecks > a.creditedKopecks order by a.creator.id asc, a.createdAt asc")

@@ -14,6 +14,7 @@ import ru.trafficmarkering.repository.SaverCampaign;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.util.PayoutCalculator;
+import ru.trafficmarkering.util.SnapshotPayout;
 
 import java.util.List;
 import java.util.Map;
@@ -49,12 +50,22 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
         // Порядок важен: бюджет достаётся тем, кто откликнулся раньше
         for (Application application : applications) {
             long accrued = 0L;
-            long views = payableViews(application, campaign,
-                    trust.getOrDefault(application.getCreator().getId(), TrustLevel.NEW));
-            // isAccruable учитывает и статус отклика, и вердикт антифрода: за накрутку не платим
-            if (application.isAccruable() && campaign.paysViews(views)) {
-                accrued = PayoutCalculator.accrual(views, rate, budget - spent);
-                spent += accrued;
+            if (application.submittedBySnapshot()) {
+                // «Ссылка и промокод»: просмотры и ставки зафиксированы при подаче, надбавки без отказа занимают бюджет
+                if (application.isAccruable() && campaign.paysViews(application.billingViewsValue())) {
+                    long reward = SnapshotPayout.reward(application.billingViewsValue(), application.reservedRate(),
+                            campaign.getMaxRewardPerVideoKopecks());
+                    accrued = Math.min(reward, Math.max(0L, budget - spent));
+                    spent += accrued;
+                }
+            } else {
+                long views = payableViews(application, campaign,
+                        trust.getOrDefault(application.getCreator().getId(), TrustLevel.NEW));
+                // isAccruable учитывает и статус отклика, и вердикт антифрода: за накрутку не платим
+                if (application.isAccruable() && campaign.paysViews(views)) {
+                    accrued = PayoutCalculator.accrual(views, rate, budget - spent);
+                    spent += accrued;
+                }
             }
             // Неодобренным (PENDING, REJECTED) начисление обнуляем: отклик мог быть одобрен,
             // а потом отклонён — старая сумма не должна висеть на нём и в бюджете

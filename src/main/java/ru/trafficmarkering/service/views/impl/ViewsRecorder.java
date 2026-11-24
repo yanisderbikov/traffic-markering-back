@@ -35,7 +35,7 @@ class ViewsRecorder {
         }
         Application application = locked.get();
         VideoMetrics metrics = fresh.metrics();
-        saverViewSnapshot.save(ApplicationViewSnapshot.builder()
+        ApplicationViewSnapshot snapshot = saverViewSnapshot.save(ApplicationViewSnapshot.builder()
                 .application(application)
                 .capturedAt(capturedAt)
                 .views(fresh.total())
@@ -67,10 +67,12 @@ class ViewsRecorder {
         saverApplication.save(application);
 
         boolean fraudChanged = fraudCheckService.check(application);
-        return Optional.of(new Recorded(application.getCampaign().getId(),
-                effective != current || geographyChanged || fraudChanged));
+        // Работа «по снимку» считается по замеру при подаче: новые просмотры её деньги не трогают
+        boolean affectsMoney = !application.submittedBySnapshot()
+                && (effective != current || geographyChanged);
+        return Optional.of(new Recorded(application.getCampaign().getId(), affectsMoney || fraudChanged, snapshot));
     }
 
-    record Recorded(UUID campaignId, boolean accrualAffected) {
+    record Recorded(UUID campaignId, boolean accrualAffected, ApplicationViewSnapshot snapshot) {
     }
 }

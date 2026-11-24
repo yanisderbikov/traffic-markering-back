@@ -7,13 +7,16 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.PlacementState;
 import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 
 import ru.trafficmarkering.model.fraud.FraudStatus;
 
+import java.time.Instant;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -107,7 +110,19 @@ class ApplicationManager implements GetterApplication, SaverApplication, Applica
     @Override
     public List<Application> getAwaitingModeration() {
         try {
-            return applicationRepo.findByStatus(ApplicationStatus.PENDING);
+            return applicationRepo.findAwaitingModeration(ApplicationStatus.PENDING,
+                    EnumSet.of(ApplicationStatus.APPROVED, ApplicationStatus.COMPLETED), PlacementState.PENDING);
+        } catch (Exception e) {
+            log.error(e);
+            throw new RuntimeException("Database exception", e);
+        }
+    }
+
+    @Override
+    public List<Application> getPlacementsDue(Instant now) {
+        try {
+            return applicationRepo.findPlacementsDue(now,
+                    EnumSet.of(ApplicationStatus.APPROVED, ApplicationStatus.COMPLETED), PlacementState.VERIFIED);
         } catch (Exception e) {
             log.error(e);
             throw new RuntimeException("Database exception", e);

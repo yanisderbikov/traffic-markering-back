@@ -18,7 +18,6 @@ import ru.trafficmarkering.model.application.Application;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
 import ru.trafficmarkering.model.application.CountryViewsConverter;
-import ru.trafficmarkering.model.application.Platform;
 import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
@@ -27,7 +26,6 @@ import ru.trafficmarkering.repository.ApplicationDeleter;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.GetterCampaign;
 import ru.trafficmarkering.repository.GetterCreatorProfile;
-import ru.trafficmarkering.repository.GetterSocialAccount;
 import ru.trafficmarkering.repository.GetterViewSnapshot;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
@@ -36,10 +34,7 @@ import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
-import ru.trafficmarkering.service.http.ShortLinkResolver;
-import ru.trafficmarkering.service.social.SocialVideoOwnership;
 import ru.trafficmarkering.util.PublicIdGenerator;
-import ru.trafficmarkering.util.VideoUrls;
 
 import java.time.Instant;
 import java.util.EnumSet;
@@ -62,6 +57,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 class ApplicationServiceImpl implements ApplicationService {
 
+    static final String SNAPSHOT_FLOW_HINT = "По этому объявлению ролик подаётся через расчёт: возьмите оффер в работу, "
+            + "выложите ролик и нажмите «Рассчитать» — просмотры зафиксируются на момент подачи";
+
     /** Что заказчику разрешено выставить: PENDING отклик получает при создании и обратно не возвращается */
     private static final Set<ApplicationStatus> CUSTOMER_DECISIONS =
             EnumSet.of(ApplicationStatus.APPROVED, ApplicationStatus.REJECTED, ApplicationStatus.COMPLETED);
@@ -74,16 +72,15 @@ class ApplicationServiceImpl implements ApplicationService {
     private final ApplicationDeleter applicationDeleter;
     private final GetterCampaign getterCampaign;
     private final GetterCreatorProfile getterCreatorProfile;
-    private final GetterSocialAccount getterSocialAccount;
     private final CurrentUserService currentUserService;
     private final CampaignAccrualService campaignAccrualService;
     private final GetterViewSnapshot getterViewSnapshot;
     private final SaverViewSnapshot saverViewSnapshot;
-    private final ShortLinkResolver shortLinkResolver;
     private final CreatorTrustService creatorTrustService;
     private final FraudCheckService fraudCheckService;
-    private final SocialVideoOwnership socialVideoOwnership;
+    private final VideoChecks videoChecks;
     private final ApplicationNotifications notifications;
+    private final PlacementDtos placementDtos;
 
     @Override
     @Transactional
@@ -102,10 +99,13 @@ class ApplicationServiceImpl implements ApplicationService {
         requireNotBlocked(creator);
 
         String rawVideoUrl = trimToNull(request.getVideoUrl());
+        if (rawVideoUrl != null && campaign.paysBySnapshot()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, SNAPSHOT_FLOW_HINT);
+        }
         if (rawVideoUrl == null) {
             Optional<Application> inProgress = getterApplication.getInProgress(campaign.getId(), creator.getId());
             if (inProgress.isPresent()) {
-                return ApplicationDTO.from(inProgress.get(), campaign, creator, creatorProfile(creator.getId()));
+                return toDto(inProgress.get());
             }
         }
         requireVideoLimitNotReached(campaign, creator);
@@ -117,6 +117,14 @@ class ApplicationServiceImpl implements ApplicationService {
                 .comment(trimToNull(request.getComment()))
                 .status(ApplicationStatus.IN_PROGRESS)
                 .build();
+        if (campaign.paysBySnapshot()) {
+            // Ставки фиксируем сейчас: криатор берёт оффер на тех условиях, которые видел
+            application.setBaseRateKopecks(campaign.getRatePerThousandKopecks());
+            application.setLinkBonusKopecks(campaign.offersLink() ? campaign.linkBonus() : 0L);
+            application.setPromoBonusKopecks(campaign.offersPromo() ? campaign.promoBonus() : 0L);
+            Placements.choose(application, campaign, Boolean.TRUE.equals(request.getWithLink()),
+                    Boolean.TRUE.equals(request.getWithPromo()));
+        }
         if (rawVideoUrl != null) {
             submitVideo(application, campaign, creator, rawVideoUrl);
         }
@@ -125,7 +133,7 @@ class ApplicationServiceImpl implements ApplicationService {
         if (rawVideoUrl != null) {
             notifications.submitted(saved);
         }
-        return ApplicationDTO.from(saved, campaign, creator, creatorProfile(creator.getId()));
+        return toDto(saved);
     }
 
     @Override
@@ -140,6 +148,9 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ролик к этой работе уже приложен");
         }
         Campaign campaign = application.getCampaign();
+        if (campaign.paysBySnapshot()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, SNAPSHOT_FLOW_HINT);
+        }
         requireAcceptingApplications(campaign);
         requireNotBlocked(creator);
 
@@ -326,37 +337,9 @@ class ApplicationServiceImpl implements ApplicationService {
         return normalized;
     }
 
-    /**
-     * Короткие ссылки (vm.tiktok.com, youtu.be в редиректе) разворачиваем до полной:
-     * иначе один и тот же ролик под двумя ссылками пройдёт как два разных.
-     * Площадка недоступна — работаем с тем, что прислали.
-     */
-    private String resolveVideoUrl(Platform platform, String videoUrl) {
-        boolean identified = switch (platform) {
-            case TIKTOK -> VideoUrls.tiktokVideoId(videoUrl) != null;
-            case YOUTUBE_SHORTS -> VideoUrls.youtubeVideoId(videoUrl) != null;
-            default -> true;
-        };
-        return identified ? videoUrl : shortLinkResolver.resolve(videoUrl);
-    }
-
-    /**
-     * Ролик к отклику: площадка из ссылки, аккаунт этой площадки в профиле, короткая ссылка
-     * развёрнута до полной, тот же ролик нигде больше не подан, а под флагом ScrapeCreators ещё и
-     * выложен с привязанного аккаунта. После этого отклик ждёт решения заказчика.
-     */
+    /** Ролик к обычному отклику: все проверки в {@link VideoChecks}, после них отклик ждёт решения заказчика. */
     private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl) {
-        Platform platform = requirePlatform(rawVideoUrl);
-        requireAcceptedByCampaign(campaign, platform);
-        requireConnectedAccount(creator, platform);
-        String videoUrl = resolveVideoUrl(platform, rawVideoUrl);
-        String videoKey = VideoUrls.videoKey(platform, videoUrl);
-        requireVideoNotSubmitted(videoKey, creator);
-        socialVideoOwnership.requireOwnedBy(creator, platform, videoUrl);
-
-        application.setPlatform(platform);
-        application.setVideoUrl(videoUrl);
-        application.setVideoKey(videoKey);
+        videoChecks.attach(application, campaign, creator, rawVideoUrl);
         application.setStatus(ApplicationStatus.PENDING);
     }
 
@@ -403,47 +386,6 @@ class ApplicationServiceImpl implements ApplicationService {
         return count % 10 == 1 && count % 100 != 11 ? "ролика" : "роликов";
     }
 
-    private Platform requirePlatform(String videoUrl) {
-        Platform platform = VideoUrls.detectPlatform(videoUrl);
-        if (platform == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Не удалось определить площадку по ссылке: принимаются ролики YouTube, TikTok и Instagram");
-        }
-        return platform;
-    }
-
-    private void requireAcceptedByCampaign(Campaign campaign, Platform platform) {
-        if (campaign.acceptsPlatform(platform)) {
-            return;
-        }
-        String accepted = campaign.getPlatforms().stream()
-                .sorted()
-                .map(Platform::getDescription)
-                .collect(Collectors.joining(", "));
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Объявление не принимает ролики с " + platform.getDescription()
-                        + (accepted.isEmpty() ? "" : ": подходят только " + accepted));
-    }
-
-    private void requireConnectedAccount(User creator, Platform platform) {
-        if (getterSocialAccount.getActiveByUserIdAndPlatform(creator.getId(), platform).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Привяжите аккаунт " + platform.getDescription()
-                            + " в профиле: ролик должен быть выложен с подключённого аккаунта");
-        }
-    }
-
-    private void requireVideoNotSubmitted(String videoKey, User creator) {
-        getterApplication.getActiveByVideoKey(videoKey).ifPresent(existing -> {
-            if (Objects.equals(existing.getCreator().getId(), creator.getId())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Этот ролик уже подан по объявлению «" + existing.getCampaign().getTitle() + "»");
-            }
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Этот ролик уже подан на площадке другим криатором");
-        });
-    }
-
     private Application requireApplication(UUID id) {
         return getterApplication.getById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отклик не найден: " + id));
@@ -455,7 +397,8 @@ class ApplicationServiceImpl implements ApplicationService {
     }
 
     private ApplicationDTO toDto(Application application) {
-        return ApplicationDTO.from(application, creatorProfile(application.getCreator().getId()));
+        return placementDtos.attach(ApplicationDTO.from(application, creatorProfile(application.getCreator().getId())),
+                application);
     }
 
     /**
@@ -474,7 +417,8 @@ class ApplicationServiceImpl implements ApplicationService {
                 .collect(Collectors.toMap(profile -> profile.getUser().getId(), Function.identity()));
 
         return applications.stream()
-                .map(application -> ApplicationDTO.from(application, profiles.get(application.getCreator().getId())))
+                .map(application -> placementDtos.attach(
+                        ApplicationDTO.from(application, profiles.get(application.getCreator().getId())), application))
                 .toList();
     }
 

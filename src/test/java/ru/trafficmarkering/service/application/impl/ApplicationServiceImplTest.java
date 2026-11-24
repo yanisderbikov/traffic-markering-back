@@ -72,9 +72,10 @@ class ApplicationServiceImplTest {
 
     private final ApplicationServiceImpl service = new ApplicationServiceImpl(
             getterApplication, saverApplication, applicationDeleter, getterCampaign, getterCreatorProfile,
-            getterSocialAccount, currentUserService, campaignAccrualService, getterViewSnapshot,
-            saverViewSnapshot, shortLinkResolver, creatorTrustService, fraudCheckService, socialVideoOwnership,
-            notifications);
+            currentUserService, campaignAccrualService, getterViewSnapshot,
+            saverViewSnapshot, creatorTrustService, fraudCheckService,
+            new VideoChecks(getterApplication, getterSocialAccount, shortLinkResolver, socialVideoOwnership),
+            notifications, new PlacementDtos(mock(ru.trafficmarkering.service.storage.FileStorage.class)));
 
     {
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.NEW);

@@ -29,4 +29,10 @@ public class ApplicationCreateRequestDTO {
 
     @Schema(description = "Комментарий заказчику: что сняли и почему так")
     private String comment;
+
+    @Schema(description = "Объявление «ссылка и промокод»: беру надбавку за рекламную ссылку в профиле")
+    private Boolean withLink;
+
+    @Schema(description = "Объявление «ссылка и промокод»: беру надбавку за промокод в закреплённом комментарии")
+    private Boolean withPromo;
 }

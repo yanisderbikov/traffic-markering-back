@@ -2,6 +2,7 @@ package ru.trafficmarkering.dto.application;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import ru.trafficmarkering.dto.fraud.FraudFlagDTO;
+import ru.trafficmarkering.dto.placement.ApplicationPlacementDTO;
 import ru.trafficmarkering.model.fraud.TrustLevel;
 
 import java.util.List;
@@ -50,6 +51,9 @@ public record ApplicationDTO(
         @Schema(description = "Человекочитаемая репутация", example = "Новичок") String creatorTrustLevelDescription,
         @Schema(description = "Когда отклик прошёл модерацию, ISO-8601; null — ещё не проверен") String moderatedAt,
         @Schema(description = "Причина отказа; есть только у REJECTED") String rejectionReason,
+        @Schema(description = "Как платит объявление: CONTINUOUS или SNAPSHOT («ссылка и промокод»)") String paymentModel,
+        @Schema(description = "Работа «ссылка и промокод»: ставки, снимок, материалы и надбавки; null у обычных откликов")
+        ApplicationPlacementDTO placement,
         String createdAt,
         String updatedAt
 ) {
@@ -103,6 +107,8 @@ public record ApplicationDTO(
                 trustLevel.getDescription(),
                 application.getModeratedAt() != null ? application.getModeratedAt().toString() : null,
                 application.getRejectionReason(),
+                campaign != null ? campaign.paymentModel().name() : null,
+                null,
                 application.getCreatedAt() != null ? application.getCreatedAt().toString() : null,
                 application.getUpdatedAt() != null ? application.getUpdatedAt().toString() : null);
     }
@@ -115,7 +121,18 @@ public record ApplicationDTO(
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
                 fraudStatusDescription, null, List.of(), creatorTrustLevel, creatorTrustLevelDescription,
-                moderatedAt, rejectionReason, createdAt, updatedAt);
+                moderatedAt, rejectionReason, paymentModel, placement, createdAt, updatedAt);
+    }
+
+    /** Копия с условиями «ссылка и промокод»: их собирает сервис — для доказательств нужны ссылки хранилища. */
+    public ApplicationDTO withPlacement(ApplicationPlacementDTO value) {
+        return new ApplicationDTO(id, publicId, campaignId, campaignPublicId, campaignTitle, campaignEndsAt,
+                ratePerThousandKopecks, minPayoutKopecks,
+                campaignViewRegion, campaignViewRegionDescription, creatorId, creatorName, creatorTelegram, platform,
+                platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
+                viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
+                fraudStatusDescription, fraudScore, fraudFlags, creatorTrustLevel, creatorTrustLevelDescription,
+                moderatedAt, rejectionReason, paymentModel, value, createdAt, updatedAt);
     }
 
     /** Короткая форма: объявление и криатор берутся из отклика (нужна открытая транзакция). */

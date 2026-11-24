@@ -4,6 +4,7 @@ import ru.trafficmarkering.model.application.Application;
 
 import ru.trafficmarkering.model.fraud.FraudStatus;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -36,7 +37,11 @@ public interface GetterApplication {
      */
     List<Application> getApproved();
 
+    /** Ролики на модерации и поданные работы «ссылка и промокод», где надбавка ждёт решения. */
     List<Application> getAwaitingModeration();
+
+    /** Работы, у которых истёк срок размещения, а подтверждённая надбавка ещё не засчитана. */
+    List<Application> getPlacementsDue(Instant now);
 
     /**
      * Уже поданный ролик: один и тот же видос нельзя подать дважды.

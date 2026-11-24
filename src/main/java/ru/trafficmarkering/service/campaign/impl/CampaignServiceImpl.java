@@ -20,6 +20,7 @@ import ru.trafficmarkering.model.campaign.CampaignMaterial;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.model.campaign.CampaignTopic;
 import ru.trafficmarkering.model.campaign.MaterialKind;
+import ru.trafficmarkering.model.campaign.PaymentModel;
 import ru.trafficmarkering.model.campaign.ViewRegion;
 import ru.trafficmarkering.model.profile.CustomerProfile;
 import ru.trafficmarkering.repository.CampaignDeleter;
@@ -36,6 +37,7 @@ import ru.trafficmarkering.service.campaign.CampaignService;
 import ru.trafficmarkering.service.storage.FileStorage;
 import ru.trafficmarkering.service.wallet.WalletService;
 import ru.trafficmarkering.util.MoneyUtil;
+import ru.trafficmarkering.util.PromoLinks;
 import ru.trafficmarkering.util.PublicIdGenerator;
 
 import java.time.Instant;
@@ -43,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -129,6 +132,7 @@ class CampaignServiceImpl implements CampaignService {
         Campaign campaign = requireAccessible(id);
         long previousBudget = budgetOf(campaign);
         requireBudgetCoversSpent(campaign, request.getBudgetKopecks());
+        requirePromoTermsKept(campaign, request);
         apply(campaign, request);
         if (request.getStatus() != null) {
             requireNotBackToDraft(campaign, request.getStatus());
@@ -234,6 +238,70 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setEndsAt(requireEndAfterStart(request.getStartsAt(), request.getEndsAt()));
         campaign.getMaterials().clear();
         campaign.getMaterials().addAll(toMaterials(request.getMaterials()));
+        applyPromoTerms(campaign, request);
+    }
+
+    /**
+     * «Ссылка и промокод». Ссылку и код проверяем сразу при сохранении — даже в черновике, чтобы заказчик
+     * узнал об опечатке до запуска; обязательность по надбавкам проверяет missingForLaunch.
+     */
+    private void applyPromoTerms(Campaign campaign, CampaignCreateUpdateRequestDTO request) {
+        // null — не менять: у нового объявления это CONTINUOUS
+        PaymentModel model = request.getPaymentModel() != null ? request.getPaymentModel() : campaign.paymentModel();
+        campaign.setPaymentModel(model);
+        if (model != PaymentModel.SNAPSHOT) {
+            campaign.setPromoUrl(null);
+            campaign.setPromoCode(null);
+            campaign.setPromoBenefit(null);
+            campaign.setLinkBonusPerThousandKopecks(null);
+            campaign.setPromoBonusPerThousandKopecks(null);
+            campaign.setPlacementRetentionDays(null);
+            campaign.setMaxRewardPerVideoKopecks(null);
+            return;
+        }
+        String url = trimToNull(request.getPromoUrl());
+        if (url != null) {
+            PromoLinks.validateCampaignUrl(url).ifPresent(error -> {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error);
+            });
+        }
+        String code = trimToNull(request.getPromoCode());
+        if (code != null) {
+            PromoLinks.validatePromoCode(code).ifPresent(error -> {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error);
+            });
+        }
+        campaign.setPromoUrl(url);
+        campaign.setPromoCode(code);
+        campaign.setPromoBenefit(trimToNull(request.getPromoBenefit()));
+        campaign.setLinkBonusPerThousandKopecks(request.getLinkBonusPerThousandKopecks());
+        campaign.setPromoBonusPerThousandKopecks(request.getPromoBonusPerThousandKopecks());
+        campaign.setPlacementRetentionDays(request.getPlacementRetentionDays());
+        campaign.setMaxRewardPerVideoKopecks(request.getMaxRewardPerVideoKopecks());
+    }
+
+    /**
+     * Ссылку, промокод и способ оплаты нельзя молча поменять тем, кто уже взял оффер: они разместили
+     * прежние, а работы посчитаны по прежним правилам. Ставки менять можно — у взявших оффер они зафиксированы.
+     */
+    private void requirePromoTermsKept(Campaign campaign, CampaignCreateUpdateRequestDTO request) {
+        if (getterApplication.countByCampaignId(campaign.getId()) == 0) {
+            return;
+        }
+        PaymentModel next = request.getPaymentModel() != null ? request.getPaymentModel() : campaign.paymentModel();
+        if (next != campaign.paymentModel()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "По объявлению уже есть отклики — способ оплаты не поменять. Запустите новое объявление");
+        }
+        if (!campaign.paysBySnapshot()) {
+            return;
+        }
+        if (!Objects.equals(campaign.getPromoUrl(), trimToNull(request.getPromoUrl()))
+                || !Objects.equals(campaign.getPromoCode(), trimToNull(request.getPromoCode()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Оффер уже взяли криаторы и разместили прежние ссылку и промокод — их не поменять. "
+                            + "Если они перестали работать, поставьте объявление на паузу и запустите новое");
+        }
     }
 
     private CampaignTopic topicOrNull(String code) {

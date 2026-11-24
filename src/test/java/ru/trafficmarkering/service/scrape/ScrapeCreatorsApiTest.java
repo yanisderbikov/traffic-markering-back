@@ -35,6 +35,32 @@ class ScrapeCreatorsApiTest {
     }
 
     @Test
+    void profileLinks_knownOnlyWhenSourceReturnsThem() {
+        when(client.get("/v1/tiktok/profile", Map.of("handle", "linked"))).thenReturn(Map.of(
+                "user", Map.of("id", "1", "uniqueId", "linked", "signature", "",
+                        "bioLink", Map.of("link", "example.com/app", "risk", 0))));
+        when(client.get("/v1/instagram/profile", Map.of("handle", "insta"))).thenReturn(Map.of(
+                "data", Map.of("user", Map.of("id", "2", "username", "insta", "biography", "",
+                        "external_url", "https://l.instagram.com/?u=https%3A%2F%2Fexample.com",
+                        "bio_links", List.of(Map.of("url", "https://example.com/app", "title", "App"))))));
+        when(client.get("/v1/instagram/profile", Map.of("handle", "plain"))).thenReturn(Map.of(
+                "data", Map.of("user", Map.of("id", "3", "username", "plain", "biography", "example.com/app"))));
+        when(client.get(eq("/v1/youtube/channel"), eq(Map.of("channelId", "UCxcTeAKWJca6XyJ37_ZoKIQ")))).thenReturn(Map.of(
+                "channelId", "UCxcTeAKWJca6XyJ37_ZoKIQ", "channel", "https://www.youtube.com/@pat",
+                "links", List.of("https://example.com/app", "https://x.com/pat")));
+
+        assertThat(api.profile(Platform.TIKTOK, new ProfileRef(ProfileRef.Kind.HANDLE, "linked")).links())
+                .containsExactly("example.com/app");
+        assertThat(api.profile(Platform.INSTAGRAM, new ProfileRef(ProfileRef.Kind.HANDLE, "insta")).links())
+                .containsExactly("https://l.instagram.com/?u=https%3A%2F%2Fexample.com", "https://example.com/app");
+        // Строка в bio — не ссылка профиля, а без полей ссылок источник ничего о них не знает
+        assertThat(api.profile(Platform.INSTAGRAM, new ProfileRef(ProfileRef.Kind.HANDLE, "plain")).linksKnown()).isFalse();
+        assertThat(api.profile(Platform.YOUTUBE_SHORTS,
+                new ProfileRef(ProfileRef.Kind.CHANNEL_ID, "UCxcTeAKWJca6XyJ37_ZoKIQ")).links())
+                .containsExactly("https://example.com/app", "https://x.com/pat");
+    }
+
+    @Test
     void tiktokVideo() {
         String url = "https://www.tiktok.com/@stoolpresidente/video/7517114944362499342";
         when(client.get("/v2/tiktok/video", Map.of("url", url))).thenReturn(Map.of(

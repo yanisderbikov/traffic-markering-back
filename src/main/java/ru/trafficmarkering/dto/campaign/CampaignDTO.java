@@ -39,6 +39,17 @@ public record CampaignDTO(
         @Schema(description = "До какого момента принимаются отклики, ISO-8601; null — бессрочно") String endsAt,
         @Schema(description = "Принимает ли объявление отклики прямо сейчас: статус ACTIVE и период действия не истёк") boolean acceptingApplications,
         @Schema(description = "Материалы для криатора в порядке показа") List<CampaignMaterialDTO> materials,
+        @Schema(description = "Как платит объявление: CONTINUOUS — по мере роста просмотров, SNAPSHOT — «ссылка и промокод»") String paymentModel,
+        @Schema(description = "Человекочитаемый способ оплаты") String paymentModelDescription,
+        @Schema(description = "Общая рекламная ссылка; на публичной странице скрыта до взятия оффера") String promoUrl,
+        @Schema(description = "Общий промокод; на публичной странице скрыт до взятия оффера") String promoCode,
+        @Schema(description = "Что даёт промокод зрителю") String promoBenefit,
+        @Schema(description = "Надбавка за ссылку в профиле, в копейках за 1000 просмотров") Long linkBonusPerThousandKopecks,
+        @Schema(description = "Надбавка за промокод в закрепе, в копейках за 1000 просмотров") Long promoBonusPerThousandKopecks,
+        @Schema(description = "Предлагает ли объявление надбавку за ссылку") boolean offersLink,
+        @Schema(description = "Предлагает ли объявление надбавку за промокод") boolean offersPromo,
+        @Schema(description = "Сколько дней после подачи держать ссылку и закреп") Integer placementRetentionDays,
+        @Schema(description = "Потолок вознаграждения за ролик, в копейках; null — без потолка") Long maxRewardPerVideoKopecks,
         Long customerId,
         String customerName,
         @Schema(description = "Компания заказчика; null — профиль не заполнен") String customerCompany,
@@ -89,6 +100,18 @@ public record CampaignDTO(
                 campaign.getEndsAt() != null ? campaign.getEndsAt().toString() : null,
                 campaign.acceptsApplicationsAt(Instant.now()),
                 materials,
+                campaign.paymentModel().name(),
+                campaign.paymentModel().getDescription(),
+                campaign.getPromoUrl(),
+                campaign.getPromoCode(),
+                campaign.getPromoBenefit(),
+                campaign.getLinkBonusPerThousandKopecks(),
+                campaign.getPromoBonusPerThousandKopecks(),
+                campaign.offersLink(),
+                campaign.offersPromo(),
+                campaign.getPlacementRetentionDays() != null ? campaign.getPlacementRetentionDays()
+                        : (campaign.paysBySnapshot() ? campaign.retentionDays() : null),
+                campaign.getMaxRewardPerVideoKopecks(),
                 customer != null ? customer.getId() : null,
                 customer != null ? customer.getName() : null,
                 customerProfile != null ? customerProfile.getCompany() : null,
@@ -96,6 +119,18 @@ public record CampaignDTO(
                 totalViews,
                 campaign.getCreatedAt() != null ? campaign.getCreatedAt().toString() : null,
                 campaign.getUpdatedAt() != null ? campaign.getUpdatedAt().toString() : null);
+    }
+
+    /** Для публичной страницы: ссылку и промокод криатор получает, когда берёт оффер в работу. */
+    public CampaignDTO withoutPromoMaterials() {
+        return new CampaignDTO(id, publicId, title, description, photoUrl, photoKey, topic, topicDescription,
+                topicAverageRatePerThousandKopecks, ratePerThousandKopecks, budgetKopecks, spentKopecks,
+                remainingKopecks, minPayoutKopecks, status, statusDescription, platforms, viewRegion,
+                viewRegionDescription, minVideoSeconds, minPaidViews, maxVideosPerCreator, startsAt, endsAt,
+                acceptingApplications, materials, paymentModel, paymentModelDescription, null, null, promoBenefit,
+                linkBonusPerThousandKopecks, promoBonusPerThousandKopecks, offersLink, offersPromo,
+                placementRetentionDays, maxRewardPerVideoKopecks, customerId, customerName, customerCompany,
+                applicationsCount, totalViews, createdAt, updatedAt);
     }
 
     /** Короткая форма: заказчик берётся из самого объявления (нужна открытая транзакция). */

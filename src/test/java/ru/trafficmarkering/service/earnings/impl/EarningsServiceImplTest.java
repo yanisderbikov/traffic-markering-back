@@ -23,7 +23,9 @@ import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.service.rate.UsdtRateService;
 import org.springframework.test.util.ReflectionTestUtils;
 import ru.trafficmarkering.model.application.ApplicationStatus;
+import ru.trafficmarkering.model.application.PlacementState;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.campaign.PaymentModel;
 import ru.trafficmarkering.model.wallet.Transfer;
 import ru.trafficmarkering.model.wallet.Wallet;
 import ru.trafficmarkering.model.wallet.WalletTransaction;
@@ -526,6 +528,59 @@ class EarningsServiceImplTest {
 
         assertThat(service.creditAccrued()).isEqualTo(1);
         assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+    }
+
+    @Test
+    void creditAccruedSnapshotWorkPaysBaseUntilBonusEarned() {
+        // «Ссылка и промокод»: 10 000 просмотров зафиксированы при подаче 8 дней назад, ставка 50 + 30 + 20 ₽.
+        // Ссылка подтверждена, но срок размещения не кончился, промокод ждёт проверки — в кошелёк только база
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setPaymentModel(PaymentModel.SNAPSHOT);
+        Application application = application(campaign, 1_000_00L, 0L);
+        Instant now = Instant.now();
+        ApplicationViewSnapshot billing = snapshot(application, now.minus(Duration.ofDays(8)), 10_400L);
+        submitted(application, billing, 10_000L);
+        application.link().setState(PlacementState.VERIFIED);
+        application.promo().setState(PlacementState.PENDING);
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(
+                snapshot(application, now.minus(Duration.ofHours(1)), 30_000L), billing));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 500_00L);
+
+        // Срок размещения прошёл, ссылку засчитали — следующей ночью доезжает её надбавка, рост просмотров не в счёт
+        application.link().setState(PlacementState.EARNED);
+        assertThat(service.creditAccrued()).isEqualTo(1);
+        assertThat(wallet.balance()).isEqualTo(7_000_00L + 800_00L);
+        assertThat(application.getCreditedKopecks()).isEqualTo(800_00L);
+    }
+
+    @Test
+    void creditAccruedSnapshotWorkWaitsForHoldWindow() {
+        ReflectionTestUtils.setField(service, "holdDays", 7);
+        Campaign campaign = campaign(100_00L);
+        campaign.setPaymentModel(PaymentModel.SNAPSHOT);
+        Application application = application(campaign, 500_00L, 0L);
+        ApplicationViewSnapshot billing = snapshot(application, Instant.now().minus(Duration.ofDays(2)), 10_000L);
+        submitted(application, billing, 10_000L);
+        when(getterViewSnapshot.getByApplicationId(application.getId())).thenReturn(List.of(billing));
+        when(getterApplication.getCreditable()).thenReturn(List.of(application));
+        when(getterApplication.getByCreatorId(1L)).thenReturn(List.of(application));
+
+        assertThat(service.creditAccrued()).isZero();
+        assertThat(wallet.balance()).isEqualTo(7_000_00L);
+    }
+
+    private static void submitted(Application application, ApplicationViewSnapshot billing, long billingViews) {
+        application.setBaseRateKopecks(50_00L);
+        application.setLinkBonusKopecks(30_00L);
+        application.setPromoBonusKopecks(20_00L);
+        application.setBillingSnapshot(billing);
+        application.setBillingViews(billingViews);
+        application.setSubmittedAt(billing.getCapturedAt());
     }
 
     private ApplicationViewSnapshot snapshot(Application application, Instant capturedAt, long views) {

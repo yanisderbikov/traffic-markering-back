@@ -39,6 +39,9 @@ import java.util.UUID;
 @ToString
 public class Campaign {
 
+    /** Срок размещения ссылки и закрепа по умолчанию, дней после подачи ролика */
+    public static final int DEFAULT_RETENTION_DAYS = 7;
+
     @Id
     @GeneratedValue(generator = "UUID")
     @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
@@ -112,6 +115,40 @@ public class Campaign {
     @JoinColumn(name = "topic")
     private CampaignTopic topic;
 
+    /** Как платим за просмотры; SNAPSHOT — механика «ссылка и промокод» */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_model", nullable = false, length = 32)
+    private PaymentModel paymentModel = PaymentModel.CONTINUOUS;
+
+    /** Общая рекламная ссылка кампании: одна на всех криаторов, ставится в ссылки профиля */
+    @Column(name = "promo_url", length = 1024)
+    private String promoUrl;
+
+    /** Общий многоразовый промокод кампании: криатор пишет его в закреплённом комментарии */
+    @Column(name = "promo_code", length = 64)
+    private String promoCode;
+
+    /** Что даёт промокод зрителю и на каких условиях — попадает в шаблон комментария */
+    @Column(name = "promo_benefit", columnDefinition = "TEXT")
+    private String promoBenefit;
+
+    /** Надбавка к базовой ставке за ссылку в профиле, в копейках за 1000 просмотров */
+    @Column(name = "link_bonus_per_thousand_kopecks")
+    private Long linkBonusPerThousandKopecks;
+
+    /** Надбавка к базовой ставке за промокод в закреплённом комментарии, в копейках за 1000 просмотров */
+    @Column(name = "promo_bonus_per_thousand_kopecks")
+    private Long promoBonusPerThousandKopecks;
+
+    /** Сколько дней после подачи держать ссылку и закреп; null — по умолчанию */
+    @Column(name = "placement_retention_days")
+    private Integer placementRetentionDays;
+
+    /** Потолок вознаграждения за один ролик, в копейках; null — без потолка */
+    @Column(name = "max_reward_per_video_kopecks")
+    private Long maxRewardPerVideoKopecks;
+
     @Builder.Default
     @ToString.Exclude
     @ElementCollection
@@ -147,6 +184,10 @@ public class Campaign {
         filled.put("ставка", ratePerThousandKopecks != null && ratePerThousandKopecks > 0);
         filled.put("бюджет", budgetKopecks != null && budgetKopecks >= 0);
         filled.put("порог вывода", minPayoutKopecks != null && minPayoutKopecks > 0);
+        if (paysBySnapshot()) {
+            filled.put("рекламная ссылка", linkBonus() == 0 || hasText(promoUrl));
+            filled.put("промокод", promoBonus() == 0 || hasText(promoCode));
+        }
         return filled.entrySet().stream()
                 .filter(entry -> !entry.getValue())
                 .map(Map.Entry::getKey)
@@ -187,6 +228,39 @@ public class Campaign {
 
     public boolean limitsVideosPerCreator() {
         return maxVideosPerCreator != null;
+    }
+
+    public PaymentModel paymentModel() {
+        return paymentModel != null ? paymentModel : PaymentModel.CONTINUOUS;
+    }
+
+    public boolean paysBySnapshot() {
+        return paymentModel() == PaymentModel.SNAPSHOT;
+    }
+
+    public long linkBonus() {
+        return linkBonusPerThousandKopecks != null ? linkBonusPerThousandKopecks : 0L;
+    }
+
+    public long promoBonus() {
+        return promoBonusPerThousandKopecks != null ? promoBonusPerThousandKopecks : 0L;
+    }
+
+    /** Предлагает ли объявление надбавку за ссылку: есть сама ссылка и прибавка к ставке. */
+    public boolean offersLink() {
+        return paysBySnapshot() && linkBonus() > 0 && hasText(promoUrl);
+    }
+
+    public boolean offersPromo() {
+        return paysBySnapshot() && promoBonus() > 0 && hasText(promoCode);
+    }
+
+    public int retentionDays() {
+        return placementRetentionDays != null ? placementRetentionDays : DEFAULT_RETENTION_DAYS;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /** Сколько бюджета ещё можно раздать; в минус не уходит даже при ручной правке сумм. */

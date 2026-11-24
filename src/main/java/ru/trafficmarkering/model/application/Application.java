@@ -145,6 +145,67 @@ public class Application {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    // ---- «Ссылка и промокод» (Campaign.paymentModel = SNAPSHOT) ----
+
+    /** Базовая ставка за 1000 просмотров на момент, когда криатор взял оффер, в копейках */
+    @Column(name = "base_rate_kopecks")
+    private Long baseRateKopecks;
+
+    /** Надбавка за ссылку в профиле на момент взятия оффера, в копейках за 1000 просмотров */
+    @Column(name = "link_bonus_kopecks")
+    private Long linkBonusKopecks;
+
+    /** Надбавка за промокод в закрепе на момент взятия оффера, в копейках за 1000 просмотров */
+    @Column(name = "promo_bonus_kopecks")
+    private Long promoBonusKopecks;
+
+    /** Замер просмотров, по которому посчитана работа: снят при подаче, дальше не меняется */
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "billing_snapshot_id")
+    private ApplicationViewSnapshot billingSnapshot;
+
+    /** Оплачиваемые просмотры работы: из снимка при подаче, с учётом региона, округления и потолка новичка */
+    @Column(name = "billing_views")
+    private Long billingViews;
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    /** До какого момента криатор держит ссылку и закреп; после него подтверждённые надбавки засчитываются */
+    @Column(name = "placement_retain_until")
+    private Instant placementRetainUntil;
+
+    @Builder.Default
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "state", column = @Column(name = "link_state", nullable = false, length = 32)),
+            @AttributeOverride(name = "proofKey", column = @Column(name = "link_proof_key", length = 512)),
+            @AttributeOverride(name = "proofUrl", column = @Column(name = "link_proof_url", length = 1024)),
+            @AttributeOverride(name = "checkState", column = @Column(name = "link_check_state", length = 32)),
+            @AttributeOverride(name = "checkDetail", column = @Column(name = "link_check_detail", columnDefinition = "TEXT")),
+            @AttributeOverride(name = "checkedAt", column = @Column(name = "link_checked_at")),
+            @AttributeOverride(name = "note", column = @Column(name = "link_note", columnDefinition = "TEXT")),
+            @AttributeOverride(name = "decidedAt", column = @Column(name = "link_decided_at")),
+            @AttributeOverride(name = "decidedBy", column = @Column(name = "link_decided_by"))
+    })
+    private Placement linkPlacement = new Placement();
+
+    @Builder.Default
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "state", column = @Column(name = "promo_state", nullable = false, length = 32)),
+            @AttributeOverride(name = "proofKey", column = @Column(name = "promo_proof_key", length = 512)),
+            @AttributeOverride(name = "proofUrl", column = @Column(name = "promo_proof_url", length = 1024)),
+            @AttributeOverride(name = "checkState", column = @Column(name = "promo_check_state", length = 32)),
+            @AttributeOverride(name = "checkDetail", column = @Column(name = "promo_check_detail", columnDefinition = "TEXT")),
+            @AttributeOverride(name = "checkedAt", column = @Column(name = "promo_checked_at")),
+            @AttributeOverride(name = "note", column = @Column(name = "promo_note", columnDefinition = "TEXT")),
+            @AttributeOverride(name = "decidedAt", column = @Column(name = "promo_decided_at")),
+            @AttributeOverride(name = "decidedBy", column = @Column(name = "promo_decided_by"))
+    })
+    private Placement promoPlacement = new Placement();
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -194,6 +255,51 @@ public class Application {
 
     public boolean geographyKnown() {
         return countryViews != null;
+    }
+
+    public Placement link() {
+        if (linkPlacement == null) {
+            linkPlacement = new Placement();
+        }
+        return linkPlacement;
+    }
+
+    public Placement promo() {
+        if (promoPlacement == null) {
+            promoPlacement = new Placement();
+        }
+        return promoPlacement;
+    }
+
+    public Placement placement(PlacementKind kind) {
+        return kind == PlacementKind.LINK ? link() : promo();
+    }
+
+    /** Работа подана по снимку: просмотры и ставка зафиксированы, рост после подачи её не меняет. */
+    public boolean submittedBySnapshot() {
+        return submittedAt != null && billingViews != null;
+    }
+
+    public long billingViewsValue() {
+        return billingViews != null ? billingViews : 0L;
+    }
+
+    /** Ставки отклика, зафиксированные при взятии оффера. */
+    public RateParts rateParts() {
+        return new RateParts(
+                baseRateKopecks != null ? baseRateKopecks : 0L,
+                linkBonusKopecks != null ? linkBonusKopecks : 0L,
+                promoBonusKopecks != null ? promoBonusKopecks : 0L);
+    }
+
+    /** Ставка, под которую занят бюджет: база и надбавки, по которым ещё нет отказа. */
+    public long reservedRate() {
+        return rateParts().rate(link().state().reservesBudget(), promo().state().reservesBudget());
+    }
+
+    /** Ставка, которая уже уходит в кошелёк: база и засчитанные надбавки. */
+    public long creditableRate() {
+        return rateParts().rate(link().state().creditable(), promo().state().creditable());
     }
 
     public PayableViews payableViews(ViewRegion region) {
