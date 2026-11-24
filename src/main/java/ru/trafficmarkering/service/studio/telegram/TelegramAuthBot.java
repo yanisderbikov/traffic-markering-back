@@ -133,10 +133,12 @@ public class TelegramAuthBot {
             case SITE_USE_EMAIL -> send(chatId, messageId, "Telegram подтверждён.\n\n"
                     + "Вернитесь на сайт и войдите по почте — после входа этот Telegram привяжется к вашему аккаунту, "
                     + "и дальше можно будет входить через него.", null);
-            case LOGIN_LINK -> send(chatId, messageId, "🔐 Вход на сайт как <b>" + escape(step.user().getName()) + "</b>"
-                    + account(step.user()) + ".\n\nСсылка одноразовая и действует 10 минут — никому её не пересылайте. "
-                    + "Новая — по /login.",
-                    keyboard(List.of(List.of(urlButton("Войти на сайт", step.url())))));
+            case LOGIN_LINK -> send(chatId, messageId, "👋 Вы вошли как <b>" + escape(step.user().getName()) + "</b>"
+                    + account(step.user()) + ".\n\n"
+                    + "«Открыть Offer» — кабинет прямо в Telegram, входить не нужно.\n"
+                    + "«Войти в браузере» — одноразовая ссылка на 10 минут, никому её не пересылайте. Новая — по /login.",
+                    keyboard(List.of(List.of(appButton("📱 Открыть Offer", appUrl())),
+                            List.of(urlButton("🔐 Войти в браузере", step.url())))));
             case EMAIL_LINK -> send(chatId, messageId, "Откройте сайт и войдите по почте — Telegram привяжется "
                     + "к вашему аккаунту. Ссылка действует 30 минут.",
                     keyboard(List.of(List.of(urlButton("Войти по почте", step.url())))));
