@@ -109,6 +109,21 @@ class ModerationQueueRulesTest {
     }
 
     @Test
+    void inactiveAfterThreeMissedByDefault() {
+        assertEquals(3, new ru.trafficmarkering.config.ModerationProperties().getPauseAfterMissed());
+    }
+
+    @Test
+    void moderatorLabelOnVideo() {
+        Moderator moderator = Moderator.builder().username("ivan_moder").displayName("Иван Петров").build();
+        assertEquals("@ivan_moder (Иван Петров)", moderator.label());
+        assertTrue(moderator.active());
+        moderator.setPaused(true);
+        assertFalse(moderator.active());
+        assertEquals("@maria_check", Moderator.builder().username("maria_check").build().label());
+    }
+
+    @Test
     void minutesWord() {
         assertEquals("30 минут", ModerationBot.minutes(30));
         assertEquals("21 минута", ModerationBot.minutes(21));

@@ -110,8 +110,8 @@ public class ModerationTelegram {
             client.call("setMyCommands", Map.of("commands", List.of(
                     Map.of("command", "start", "description", "Начать и статус"),
                     Map.of("command", "hours", "description", "Часы, когда приходят заявки"),
-                    Map.of("command", "pause", "description", "Перерыв — заявки не приходят"),
-                    Map.of("command", "resume", "description", "Снова принимать заявки"),
+                    Map.of("command", "on", "description", "Активен — принимать заявки"),
+                    Map.of("command", "off", "description", "Неактивен — заявки не приходят"),
                     Map.of("command", "stats", "description", "Сколько проверено"),
                     Map.of("command", "help", "description", "Как это работает"))));
             JsonNode me = client.call("getMe", Map.of());

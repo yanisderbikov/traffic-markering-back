@@ -1,5 +1,7 @@
 package ru.trafficmarkering.model.application;
 
+import ru.trafficmarkering.model.moderation.Moderator;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -141,6 +143,12 @@ public class Application {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "moderated_by")
     private User moderatedBy;
+
+    /** Менеджер из Telegram-бота модерации, решивший ролик; null — решали на сайте или ещё не решали */
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "moderated_by_moderator")
+    private Moderator moderatedByModerator;
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;

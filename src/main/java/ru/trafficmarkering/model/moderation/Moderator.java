@@ -103,6 +103,16 @@ public class Moderator {
         return enabled && chatId != null && !paused && worksAt(now);
     }
 
+    /** «@ivan_moder (Иван Петров)» — подпись менеджера на ролике */
+    public String label() {
+        return displayName != null && !displayName.isBlank() ? "@" + username + " (" + displayName.strip() + ")" : "@" + username;
+    }
+
+    /** Активен — получает заявки в свои часы; неактивен — сам выключился, выключил админ или пропустил заявки подряд */
+    public boolean active() {
+        return !paused;
+    }
+
     public String scheduleLabel() {
         if (!scheduled()) {
             return "часы не настроены";

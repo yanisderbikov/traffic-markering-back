@@ -191,10 +191,10 @@ public class ModerationQueue {
                 moderator.setPaused(true);
             }
             String note = pause
-                    ? "⏸ Пропущено заявок подряд: " + moderator.getMissedInRow() + ". Поставили вас на паузу, "
-                    + "чтобы ролики не ждали. Вернуться — /resume"
+                    ? "⚪ Пропущено заявок подряд: " + moderator.getMissedInRow() + " — вы стали <b>неактивны</b>, "
+                    + "заявки больше не приходят. Готовы снова — /on"
                     : "⏰ Время на заявку <code>" + TelegramClient.escape(assignment.getApplicationPublicId())
-                    + "</code> вышло — она ушла другому менеджеру.";
+                    + "</code> вышло — она вернулась в очередь.";
             return new Review(Status.EXPIRED, assignment.getChatId(), assignment.getMessageId(),
                     assignment.getWithVideo(), note, pause, null, moderator.offset());
         });
@@ -373,7 +373,7 @@ public class ModerationQueue {
                     return null;
                 }
                 applicationService.moderateByManager(assignment.getApplicationId(),
-                        new ApplicationStatusUpdateRequestDTO(decision, reason));
+                        new ApplicationStatusUpdateRequestDTO(decision, reason), assignment.getModerator());
                 assignment.close(Status.DECIDED, now);
                 assignment.setDecision(decision);
                 assignment.setReason(decision == ApplicationStatus.REJECTED ? reason : null);

@@ -160,8 +160,8 @@ public class ModerationBot {
                 }
             }
             case "/hours" -> reply(chatId, "Ваш часовой пояс:", zonesKeyboard());
-            case "/pause" -> pause(chatId, moderator, null);
-            case "/resume" -> resume(chatId, moderator, null);
+            case "/off", "/pause" -> pause(chatId, moderator, null);
+            case "/on", "/resume" -> resume(chatId, moderator, null);
             case "/stats" -> reply(chatId, statsText(moderator), null);
             case "/help" -> reply(chatId, helpText(), null);
             default -> reply(chatId, statusText(moderator), statusKeyboard(moderator));
@@ -302,16 +302,19 @@ public class ModerationBot {
             }
         });
         client().answerCallback(callbackId, "Сохранено");
-        String now = updated.worksAt(Instant.now())
+        String now = !updated.active()
+                ? "Сейчас вы неактивны — чтобы получать заявки, нажмите /on."
+                : updated.worksAt(Instant.now())
                 ? "Сейчас рабочее время — первая заявка придёт, как только появится ролик на модерации."
                 : "Сейчас не ваше время — заявки начнут приходить в начале окна.";
         client().editMessage(chatId, messageId, "✅ Заявки будут приходить: <b>" + escape(updated.scheduleLabel()) + "</b>.\n"
-                + now + "\n\nПоменять часы — /hours, перерыв — /pause.", statusKeyboard(updated));
+                + now + "\n\nПоменять часы — /hours, стать неактивным — /off.", statusKeyboard(updated));
     }
 
     private void pause(long chatId, Moderator moderator, Long messageId) {
         Moderator updated = roster.update(moderator.getId(), m -> m.setPaused(true));
-        String text = "⏸ Пауза: новые заявки не приходят. Текущую, если она есть, ещё можно решить.\nВернуться — /resume";
+        String text = "⚪ Вы <b>неактивны</b>: новые заявки не приходят. Текущую, если она есть, ещё можно решить.\n"
+                + "Снова принимать заявки — /on";
         show(chatId, messageId, text, statusKeyboard(updated));
     }
 
@@ -325,8 +328,8 @@ public class ModerationBot {
             return;
         }
         String text = updated.worksAt(Instant.now())
-                ? "▶️ Снова принимаете заявки. Ролики на очереди: " + roster.waiting() + "."
-                : "▶️ Снова принимаете заявки — они придут в ваши часы: " + escape(updated.scheduleLabel()) + ".";
+                ? "🟢 Вы <b>активны</b> — заявки уже идут. Роликов в очереди: " + roster.waiting() + "."
+                : "🟢 Вы <b>активны</b> — заявки придут в ваши часы: " + escape(updated.scheduleLabel()) + ".";
         show(chatId, messageId, text, statusKeyboard(updated));
     }
 
@@ -343,12 +346,12 @@ public class ModerationBot {
     private String statusText(Moderator moderator) {
         StringBuilder text = new StringBuilder("👤 <b>").append(escape(name(moderator))).append("</b>, менеджер модерации\n");
         text.append("Часы: ").append(escape(moderator.scheduleLabel())).append('\n');
-        if (moderator.isPaused()) {
-            text.append("Статус: ⏸ пауза — /resume, чтобы вернуться\n");
+        if (!moderator.active()) {
+            text.append("Статус: ⚪ неактивен — заявки не приходят, включиться — /on\n");
         } else if (moderator.worksAt(Instant.now())) {
-            text.append("Статус: ▶️ принимаете заявки\n");
+            text.append("Статус: 🟢 активен, принимаете заявки\n");
         } else {
-            text.append("Статус: 🌙 сейчас не ваше время\n");
+            text.append("Статус: 🟢 активен, но сейчас не ваши часы\n");
         }
         text.append("Роликов в очереди: ").append(roster.waiting());
         return text.toString();
@@ -367,9 +370,10 @@ public class ModerationBot {
         return "Как это работает:\n"
                 + "• Ролики на модерации раздаются менеджерам по одному. Пока вы не ответили, следующий не придёт.\n"
                 + "• На заявку — " + holdLabel() + ". Не успели — она уйдёт другому менеджеру.\n"
-                + "• Пропустили несколько подряд — бот поставит паузу, вернуться — /resume.\n"
+                + "• Пропустили " + properties.getPauseAfterMissed() + " подряд — станете неактивны, заявки перестанут приходить. "
+                + "Включиться снова — /on.\n"
                 + "• «Отклонить» просит причину: выберите готовую или напишите свою — её увидит криатор.\n\n"
-                + "/hours — часы приёма, /pause — перерыв, /resume — вернуться, /stats — статистика.";
+                + "/on — активен, /off — неактивен (перерыв), /hours — часы приёма, /stats — статистика.";
     }
 
     private String holdLabel() {
@@ -391,7 +395,7 @@ public class ModerationBot {
 
     private static Map<String, Object> statusKeyboard(Moderator moderator) {
         List<Map<String, Object>> row = new ArrayList<>();
-        row.add(moderator.isPaused() ? button("▶️ Принимать заявки", "go") : button("⏸ Пауза", "ps"));
+        row.add(moderator.active() ? button("⚪ Стать неактивным", "ps") : button("🟢 Стать активным", "go"));
         row.add(button("🕘 Часы", "hr"));
         return keyboard(List.of(row));
     }

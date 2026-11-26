@@ -6,7 +6,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.config.ModerationProperties;
+import ru.trafficmarkering.dto.moderation.ModerationDecisionDTO;
 import ru.trafficmarkering.dto.moderation.ModeratorDTO;
+import ru.trafficmarkering.model.application.Application;
+import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.dto.moderation.ModeratorsDTO;
 import ru.trafficmarkering.model.application.ApplicationStatus;
 import ru.trafficmarkering.model.moderation.ModerationAssignment;
@@ -44,10 +47,12 @@ public class ModeratorRoster {
     private final ModerationTelegram telegram;
     private final ModerationProperties properties;
     private final TransactionTemplate tx;
+    private final GetterApplication applications;
 
     public ModeratorRoster(ModeratorRepository moderators, ModerationAssignmentRepository assignments,
                            ModerationQueue queue, ModerationTelegram telegram, ModerationProperties properties,
-                           TransactionTemplate tx) {
+                           TransactionTemplate tx, GetterApplication applications) {
+        this.applications = applications;
         this.moderators = moderators;
         this.assignments = assignments;
         this.queue = queue;
@@ -119,7 +124,7 @@ public class ModeratorRoster {
                             moderator.getTelegramId() != null,
                             moderator.getDisplayName(),
                             moderator.scheduleLabel(),
-                            moderator.isPaused(),
+                            moderator.active(),
                             moderator.available(now),
                             current != null ? current.getApplicationPublicId() : null,
                             current != null && current.getMessageId() != null ? current.getExpiresAt() : null,
@@ -219,6 +224,62 @@ public class ModeratorRoster {
         long day = assignments.countByModeratorIdAndStatusInAndClosedAtGreaterThanEqual(moderatorId,
                 List.of(Status.DECIDED), Instant.now().minus(Duration.ofDays(1)));
         return new long[]{all[0], all[1], all[2], day};
+    }
+
+    /**
+     * Супер-админ включает или выключает менеджера. Выключенному заявки не приходят; текущую он ещё может решить.
+     * Менеджеру приходит сообщение в бота.
+     */
+    public ModeratorsDTO setActive(String rawUsername, boolean active) {
+        String username = normalize(rawUsername);
+        Moderator moderator = tx.execute(status -> {
+            Moderator found = username == null ? null : moderators.findByUsername(username).orElse(null);
+            if (found == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджера @" + rawUsername + " нет в списке");
+            }
+            found.setPaused(!active);
+            found.setMissedInRow(0);
+            return found;
+        });
+        if (moderator.getChatId() != null && telegram.enabled()) {
+            try {
+                telegram.client().sendMessage(moderator.getChatId(), active
+                        ? "🟢 Администратор сделал вас <b>активным</b> — заявки снова будут приходить в ваши часы."
+                        : "⚪ Администратор сделал вас <b>неактивным</b> — заявки больше не приходят.", null, null);
+            } catch (RuntimeException ignored) {
+                // менеджер мог заблокировать бота — статус всё равно сохранён
+            }
+        }
+        queue.kick();
+        return list();
+    }
+
+    /** Кто какой ролик как решил; username — только этот менеджер */
+    @Transactional(readOnly = true)
+    public List<ModerationDecisionDTO> decisions(String rawUsername, int limit) {
+        org.springframework.data.domain.PageRequest page =
+                org.springframework.data.domain.PageRequest.of(0, Math.max(1, Math.min(limit, 500)));
+        String username = rawUsername == null || rawUsername.isBlank() ? null : normalize(rawUsername);
+        List<ModerationAssignment> rows = username == null ? assignments.findClosed(Status.DECIDED, page)
+                : assignments.findClosedBy(Status.DECIDED, username, page);
+        return rows.stream().map(row -> {
+            Application application = row.getApplicationId() == null ? null
+                    : applications.getById(row.getApplicationId()).orElse(null);
+            return new ModerationDecisionDTO(
+                    row.getId(),
+                    row.getApplicationId(),
+                    row.getApplicationPublicId(),
+                    application != null ? application.getCampaign().getTitle() : null,
+                    application != null ? application.getCreator().getName() : null,
+                    application != null ? application.getVideoUrl() : null,
+                    application != null && application.getStatus() != null ? application.getStatus().name() : null,
+                    row.getModerator().getUsername(),
+                    row.getModerator().label(),
+                    row.getDecision() != null ? row.getDecision().name() : null,
+                    row.getReason(),
+                    row.getAssignedAt(),
+                    row.getClosedAt());
+        }).toList();
     }
 
     public long waiting() {

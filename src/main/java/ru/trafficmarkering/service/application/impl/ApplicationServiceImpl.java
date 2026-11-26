@@ -20,6 +20,7 @@ import ru.trafficmarkering.model.application.ApplicationViewSnapshot;
 import ru.trafficmarkering.model.application.CountryViewsConverter;
 import ru.trafficmarkering.model.application.ViewSource;
 import ru.trafficmarkering.model.campaign.Campaign;
+import ru.trafficmarkering.model.moderation.Moderator;
 import ru.trafficmarkering.model.campaign.CampaignStatus;
 import ru.trafficmarkering.model.profile.CreatorProfile;
 import ru.trafficmarkering.repository.ApplicationDeleter;
@@ -185,9 +186,11 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это чужое объявление");
         }
         // Взятые в работу без ролика заказчику решать не о чем
-        return toDtoList(getterApplication.getByCampaignIdOrderByCreatedAt(campaignId).stream()
+        List<ApplicationDTO> result = toDtoList(getterApplication.getByCampaignIdOrderByCreatedAt(campaignId).stream()
                 .filter(application -> application.getStatus() != ApplicationStatus.IN_PROGRESS)
                 .toList());
+        // ownerId задан — смотрит заказчик: кто из менеджеров решал, ему не показываем
+        return ownerId == null ? result : result.stream().map(ApplicationDTO::withoutModerator).toList();
     }
 
     @Override
@@ -238,7 +241,7 @@ class ApplicationServiceImpl implements ApplicationService {
 
     @Override
     @Transactional
-    public void moderateByManager(UUID id, ApplicationStatusUpdateRequestDTO request) {
+    public void moderateByManager(UUID id, ApplicationStatusUpdateRequestDTO request, Moderator moderator) {
         Application application = requireApplication(id);
         if (!MODERATION_DECISIONS.contains(request.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -248,6 +251,7 @@ class ApplicationServiceImpl implements ApplicationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Отклик уже не ждёт модерации: " + application.getStatus().getDescription().toLowerCase());
         }
+        application.setModeratedByModerator(moderator);
         decide(application, request, null);
     }
 
@@ -260,6 +264,10 @@ class ApplicationServiceImpl implements ApplicationService {
         if (application.getStatus() == ApplicationStatus.PENDING || status == ApplicationStatus.REJECTED) {
             application.setModeratedAt(Instant.now());
             application.setModeratedBy(moderator);
+            if (moderator != null) {
+                // решили на сайте — подпись менеджера из бота больше не про это решение
+                application.setModeratedByModerator(null);
+            }
         }
         application.setRejectionReason(status == ApplicationStatus.REJECTED ? reason : null);
         ApplicationStatus previous = application.getStatus();

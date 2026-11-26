@@ -8,15 +8,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import ru.trafficmarkering.dto.moderation.ModerationDecisionDTO;
+import ru.trafficmarkering.dto.moderation.ModeratorActiveRequestDTO;
 import ru.trafficmarkering.dto.moderation.ModeratorsDTO;
 import ru.trafficmarkering.dto.moderation.ModeratorsUpdateRequestDTO;
 import ru.trafficmarkering.service.moderation.ModeratorRoster;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -42,6 +48,24 @@ public class SuperAdminModeratorController {
     @PutMapping
     public ResponseEntity<ModeratorsDTO> replace(@Valid @RequestBody ModeratorsUpdateRequestDTO request) {
         return ResponseEntity.ok(roster.replace(request.usernames()));
+    }
+
+    @Operation(summary = "Сделать менеджера активным или неактивным",
+            description = "Неактивному заявки не приходят (текущую он ещё может решить); менеджеру приходит сообщение в бота",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PatchMapping("/{username}")
+    public ResponseEntity<ModeratorsDTO> setActive(@PathVariable("username") String username,
+                                                   @RequestBody ModeratorActiveRequestDTO request) {
+        return ResponseEntity.ok(roster.setActive(username, request.active()));
+    }
+
+    @Operation(summary = "Журнал решений менеджеров",
+            description = "Кто какой ролик принял или отклонил, свежие сверху — для выборочной перепроверки",
+            security = @SecurityRequirement(name = "Bearer"))
+    @GetMapping("/decisions")
+    public ResponseEntity<List<ModerationDecisionDTO>> decisions(@RequestParam(required = false) String username,
+                                                                 @RequestParam(defaultValue = "100") int limit) {
+        return ResponseEntity.ok(roster.decisions(username, limit));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

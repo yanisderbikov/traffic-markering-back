@@ -11,7 +11,8 @@ public record ModeratorDTO(
         @Schema(description = "Уже заходил в бота") boolean linked,
         @Schema(description = "Имя в Telegram") String displayName,
         @Schema(description = "Часы приёма, например «10:00–19:00 (UTC+3)»") String schedule,
-        @Schema(description = "На паузе: сам поставил или пропустил заявки подряд") boolean paused,
+        @Schema(description = "Активен: получает заявки в свои часы. Неактивен — выключился сам, выключил админ "
+                + "или пропустил заявки подряд") boolean active,
         @Schema(description = "Прямо сейчас может получать заявки") boolean available,
         @Schema(description = "Номер ролика, который сейчас у менеджера") String activeApplication,
         @Schema(description = "До когда заявка у менеджера, ISO-8601") Instant activeUntil,

@@ -51,6 +51,8 @@ public record ApplicationDTO(
         @Schema(description = "Репутация криатора: NEW, TRUSTED, RESTRICTED, BLOCKED") String creatorTrustLevel,
         @Schema(description = "Человекочитаемая репутация", example = "Новичок") String creatorTrustLevelDescription,
         @Schema(description = "Когда отклик прошёл модерацию, ISO-8601; null — ещё не проверен") String moderatedAt,
+        @Schema(description = "Кто решил ролик: менеджер из Telegram-бота («@ivan_moder (Иван)») или пользователь сайта; "
+                + "только для админов, криатору и заказчику — null") String moderatedByName,
         @Schema(description = "Причина отказа; есть только у REJECTED") String rejectionReason,
         @Schema(description = "Как платит объявление: CONTINUOUS или SNAPSHOT («ссылка и промокод»)") String paymentModel,
         @Schema(description = "Работа «ссылка и промокод»: ставки, снимок, материалы и надбавки; null у обычных откликов")
@@ -108,6 +110,7 @@ public record ApplicationDTO(
                 trustLevel.name(),
                 trustLevel.getDescription(),
                 application.getModeratedAt() != null ? application.getModeratedAt().toString() : null,
+                moderatorName(application),
                 application.getRejectionReason(),
                 campaign != null ? campaign.paymentModel().name() : null,
                 null,
@@ -123,7 +126,25 @@ public record ApplicationDTO(
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
                 fraudStatusDescription, null, List.of(), creatorTrustLevel, creatorTrustLevelDescription,
-                moderatedAt, rejectionReason, paymentModel, placement, createdAt, updatedAt);
+                moderatedAt, null, rejectionReason, paymentModel, placement, createdAt, updatedAt);
+    }
+
+    /** Копия для заказчика: внутренняя кухня модерации (кто из менеджеров решил) ему не нужна */
+    public ApplicationDTO withoutModerator() {
+        return new ApplicationDTO(id, publicId, campaignId, campaignPublicId, campaignTitle, campaignEndsAt,
+                ratePerThousandKopecks, contentTopic, minPayoutKopecks,
+                campaignViewRegion, campaignViewRegionDescription, creatorId, creatorName, creatorTelegram, platform,
+                platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
+                viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
+                fraudStatusDescription, fraudScore, fraudFlags, creatorTrustLevel, creatorTrustLevelDescription,
+                moderatedAt, null, rejectionReason, paymentModel, placement, createdAt, updatedAt);
+    }
+
+    private static String moderatorName(Application application) {
+        if (application.getModeratedByModerator() != null) {
+            return application.getModeratedByModerator().label() + " · бот модерации";
+        }
+        return application.getModeratedBy() != null ? application.getModeratedBy().getName() : null;
     }
 
     /** Копия с условиями «ссылка и промокод»: их собирает сервис — для доказательств нужны ссылки хранилища. */
@@ -134,7 +155,7 @@ public record ApplicationDTO(
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
                 fraudStatusDescription, fraudScore, fraudFlags, creatorTrustLevel, creatorTrustLevelDescription,
-                moderatedAt, rejectionReason, paymentModel, value, createdAt, updatedAt);
+                moderatedAt, moderatedByName, rejectionReason, paymentModel, value, createdAt, updatedAt);
     }
 
     /** Короткая форма: объявление и криатор берутся из отклика (нужна открытая транзакция). */

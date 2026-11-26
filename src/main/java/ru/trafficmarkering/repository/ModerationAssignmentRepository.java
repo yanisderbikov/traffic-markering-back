@@ -15,6 +15,17 @@ public interface ModerationAssignmentRepository extends JpaRepository<Moderation
 
     List<ModerationAssignment> findByStatus(ModerationAssignment.Status status);
 
+    /** Журнал решений, свежие сверху — для выборочной перепроверки */
+    @Query("SELECT m FROM ModerationAssignment m JOIN FETCH m.moderator WHERE m.status = :status ORDER BY m.closedAt DESC")
+    List<ModerationAssignment> findClosed(@Param("status") ModerationAssignment.Status status,
+                                          org.springframework.data.domain.Pageable pageable);
+
+    @Query("SELECT m FROM ModerationAssignment m JOIN FETCH m.moderator WHERE m.status = :status "
+            + "AND m.moderator.username = :username ORDER BY m.closedAt DESC")
+    List<ModerationAssignment> findClosedBy(@Param("status") ModerationAssignment.Status status,
+                                            @Param("username") String username,
+                                            org.springframework.data.domain.Pageable pageable);
+
     Optional<ModerationAssignment> findFirstByModeratorIdAndStatus(Long moderatorId, ModerationAssignment.Status status);
 
     boolean existsByModeratorIdAndStatus(Long moderatorId, ModerationAssignment.Status status);
