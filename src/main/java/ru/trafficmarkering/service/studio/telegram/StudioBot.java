@@ -204,8 +204,10 @@ public class StudioBot {
         }
         Optional<User> user = userOf(telegramId);
         if (user.isEmpty()) {
-            // Незнакомый Telegram: предлагаем войти в аккаунт с почтой или завести новый
-            authBot.login(chatId, message.path("from"), null);
+            // Незнакомый Telegram: предлагаем войти в аккаунт с почтой или завести новый.
+            // Ссылка ?start=creator|customer сразу предлагает учётку этой роли со своим приветствием
+            authBot.login(chatId, message.path("from"), null,
+                    "/start".equals(command) ? TelegramAuthBot.startRole(argument) : null);
             return;
         }
         User owner = user.get();

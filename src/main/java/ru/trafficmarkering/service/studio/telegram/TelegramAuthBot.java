@@ -57,7 +57,27 @@ public class TelegramAuthBot {
 
     /** /login, кнопка «Войти на сайт» или любое сообщение от непривязанного Telegram */
     void login(long chatId, JsonNode from, Long editMessageId) {
-        render(chatId, editMessageId, auth.openFromBot(tgUser(from)), false);
+        login(chatId, from, editMessageId, null);
+    }
+
+    /** role — роль из ссылки t.me/bot?start=creator|customer, приветствие и кнопка под неё */
+    void login(long chatId, JsonNode from, Long editMessageId, Role role) {
+        render(chatId, editMessageId, auth.openFromBot(tgUser(from), role), false);
+    }
+
+    /**
+     * Роль из параметра /start: ссылки t.me/bot?start=creator и ?start=customer.
+     * null — параметра нет или он не про роль.
+     */
+    static Role startRole(String argument) {
+        if (argument == null) {
+            return null;
+        }
+        return switch (argument.strip().toLowerCase(java.util.Locale.ROOT)) {
+            case "creator", "creators", "cr" -> Role.CREATOR;
+            case "customer", "customers", "advertiser", "client", "cu" -> Role.CUSTOMER;
+            default -> null;
+        };
     }
 
     /** @return true — кнопка входа, обработана */
@@ -149,8 +169,8 @@ public class TelegramAuthBot {
 
     private static String chooseText(BotStep step) {
         if (step.presetRole() != null) {
-            return "<b>Регистрация в Offer</b> — " + roleLabel(step.presetRole()) + ".\n\n"
-                    + "Аккаунт будет привязан к этому Telegram, почта и пароль не нужны. "
+            return roleGreeting(step.presetRole())
+                    + "Создайте аккаунт одной кнопкой — он будет привязан к этому Telegram, почта и пароль не нужны. "
                     + "Почту можно добавить потом в профиле.\n\n"
                     + "Уже есть аккаунт Offer с почтой? Нажмите «У меня есть аккаунт» — войдёте по почте, "
                     + "и Telegram привяжется к нему, второй аккаунт не появится.";
@@ -181,8 +201,15 @@ public class TelegramAuthBot {
         return TelegramIdentity.telegramOnly(user) ? "" : " (" + escape(user.getUsername()) + ")";
     }
 
-    private static String roleLabel(Role role) {
-        return role == Role.CUSTOMER ? "рекламодатель" : "креатор";
+    private static String roleGreeting(Role role) {
+        if (role == Role.CUSTOMER) {
+            return "👋 <b>Здравствуйте! Это Offer для рекламодателей</b>\n\n"
+                    + "Запускайте рекламу у креаторов: создаёте кампанию, креаторы снимают и публикуют ролики, "
+                    + "а сюда приходят уведомления о новых роликах и всём, что требует вашего решения.\n\n";
+        }
+        return "👋 <b>Привет, креатор! Это Offer</b>\n\n"
+                + "Здесь вы берёте рекламные кампании, снимаете ролики и зарабатываете на них. "
+                + "А ещё бот монтирует видео: пришлите ролик — сделает вертикальный формат, сожмёт или наложит шаблон.\n\n";
     }
 
     private static String cb(BotStep step, String action) {

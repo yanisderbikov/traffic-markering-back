@@ -196,7 +196,7 @@ class TelegramAuthServiceTest {
     @Test
     void botLoginGivesOneTimeSiteLink() {
         User owner = emailUser();
-        var step = service.openFromBot(tg);
+        var step = service.openFromBot(tg, null);
         assertThat(step.step()).isEqualTo(Step.LOGIN_LINK);
         assertThat(step.url()).startsWith("https://site.example/auth/telegram#");
         String secret = step.url().substring(step.url().indexOf('#') + 1);
@@ -208,7 +208,7 @@ class TelegramAuthServiceTest {
 
     @Test
     void botRegistrationThenLinkLogsIntoNewAccount() {
-        var step = service.openFromBot(tg);
+        var step = service.openFromBot(tg, null);
         assertThat(step.step()).isEqualTo(Step.CHOOSE_ACCOUNT);
         var created = service.decide(step.authId(), "cr", tg);
         assertThat(created.step()).isEqualTo(Step.LOGIN_LINK);
@@ -217,14 +217,29 @@ class TelegramAuthServiceTest {
         assertThat(service.poll(secret).status()).isEqualTo("DONE");
 
         // Повторная регистрация тем же Telegram не заводит вторую учётку
-        var again = service.openFromBot(tg);
+        var again = service.openFromBot(tg, null);
         assertThat(again.step()).isEqualTo(Step.LOGIN_LINK);
         assertThat(again.user().getId()).isEqualTo(created.user().getId());
     }
 
     @Test
+    void botStartLinkPresetsRoleForNewcomer() {
+        var step = service.openFromBot(tg, Role.CUSTOMER);
+        assertThat(step.step()).isEqualTo(Step.CHOOSE_ACCOUNT);
+        assertThat(step.presetRole()).isEqualTo(Role.CUSTOMER);
+        // «Войти» без учётки возвращает к тому же выбору — роль из ссылки не теряется
+        assertThat(service.decide(step.authId(), "ok", tg).presetRole()).isEqualTo(Role.CUSTOMER);
+        assertThat(service.decide(step.authId(), "cu", tg).user().getRole()).isEqualTo(Role.CUSTOMER);
+    }
+
+    @Test
+    void botStartLinkIgnoresNonSelfRegistrableRole() {
+        assertThat(service.openFromBot(tg, Role.ADMIN).presetRole()).isNull();
+    }
+
+    @Test
     void telegramOnlyAccountKeepsItsOnlyLogin() {
-        var step = service.openFromBot(tg);
+        var step = service.openFromBot(tg, null);
         User tgOnly = service.decide(step.authId(), "cr", tg).user();
         User other = users.save(User.builder().username("boris@example.com").name("Борис").role(Role.CREATOR).build());
 
