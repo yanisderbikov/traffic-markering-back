@@ -124,7 +124,7 @@ public class TelegramClient {
         if (replyTo != null) {
             params.put("reply_parameters", Map.of("message_id", replyTo, "allow_sending_without_reply", true));
         }
-        return call("sendMessage", params);
+        return callWithEmoji("sendMessage", params);
     }
 
     /** Правка без запасного нового сообщения: для прогресса, где лишние сообщения — спам */
@@ -135,7 +135,7 @@ public class TelegramClient {
         params.put("text", html);
         params.put("parse_mode", "HTML");
         try {
-            call("editMessageText", params);
+            callWithEmoji("editMessageText", params);
             return true;
         } catch (RuntimeException e) {
             return false;
@@ -153,13 +153,50 @@ public class TelegramClient {
             params.put("reply_markup", replyMarkup);
         }
         try {
-            call("editMessageText", params);
+            callWithEmoji("editMessageText", params);
         } catch (TelegramException e) {
             // «message is not modified» — не ошибка; остальное шлём новым сообщением
             if (!e.getMessage().contains("not modified")) {
                 sendMessage(chatId, html, replyMarkup, null);
             }
         }
+    }
+
+    /**
+     * Текст и кнопки с иконками пака. Если Telegram отверг кастомные эмодзи (400) — то же сообщение
+     * уходит с обычными, чтобы пользователь его не потерял.
+     */
+    private JsonNode callWithEmoji(String method, Map<String, Object> params) {
+        Map<String, Object> fancy = withEmoji(params);
+        if (fancy.equals(params)) {
+            return call(method, params);
+        }
+        try {
+            return call(method, fancy);
+        } catch (TelegramException e) {
+            if (e.getCode() != 400 || e.getMessage().contains("not modified")) {
+                throw e;
+            }
+            log.warn("Telegram: {} с кастомными эмодзи отклонён ({}), шлю с обычными", method, e.getMessage());
+            return call(method, params);
+        }
+    }
+
+    private Map<String, Object> withEmoji(Map<String, Object> params) {
+        if (!config.isCustomEmoji()) {
+            return params;
+        }
+        Map<String, Object> result = new LinkedHashMap<>(params);
+        if (params.get("text") instanceof String text) {
+            result.put("text", TelegramEmoji.html(text));
+        }
+        if (params.get("caption") instanceof String caption) {
+            result.put("caption", TelegramEmoji.html(caption));
+        }
+        if (params.containsKey("reply_markup")) {
+            result.put("reply_markup", TelegramEmoji.markup(params.get("reply_markup")));
+        }
+        return result;
     }
 
     public void answerCallback(String callbackId, String text) {
@@ -225,11 +262,12 @@ public class TelegramClient {
             writeField(head, boundary, "chat_id", String.valueOf(chatId));
             writeField(head, boundary, "supports_streaming", "true");
             if (caption != null) {
-                writeField(head, boundary, "caption", caption);
+                writeField(head, boundary, "caption", config.isCustomEmoji() ? TelegramEmoji.html(caption) : caption);
                 writeField(head, boundary, "parse_mode", "HTML");
             }
             if (replyMarkup != null) {
-                writeField(head, boundary, "reply_markup", json.writeValueAsString(replyMarkup));
+                writeField(head, boundary, "reply_markup", json.writeValueAsString(
+                        config.isCustomEmoji() ? TelegramEmoji.markup(replyMarkup) : replyMarkup));
             }
             if (replyTo != null) {
                 writeField(head, boundary, "reply_parameters",

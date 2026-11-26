@@ -51,6 +51,8 @@ public class StudioProperties {
         private long incomingMaxBytes = 20_000_000;
         /** Облако: отправить файлом в чат — до 50 МБ */
         private long outgoingMaxBytes = 50_000_000;
+        /** Иконки из пака tgiosicons вместо обычных эмодзи; видны, если у владельца бота Telegram Premium */
+        private boolean customEmoji = true;
 
         public boolean enabled() {
             return botToken != null && !botToken.isBlank();

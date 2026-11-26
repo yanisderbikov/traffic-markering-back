@@ -135,7 +135,7 @@ class WalletServiceImpl implements WalletService {
                         "Перевод не найден для операции " + transaction.getPublicId()));
         if (transfer.isExpired(Instant.now())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Время на подтверждение вышло — если деньги не пришли, напишите менеджеру финансов");
+                    "Время на подтверждение вышло — если деньги не пришли, напишите менеджеру финансов @getoffermanager");
         }
         transfer.confirm();
         saverTransfer.save(transfer);
