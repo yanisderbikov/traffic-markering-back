@@ -9,6 +9,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.config.ModerationProperties;
+import ru.trafficmarkering.config.StudioProperties;
 import ru.trafficmarkering.service.studio.telegram.TelegramClient;
 
 import java.nio.charset.StandardCharsets;
@@ -31,10 +32,13 @@ public class ModerationTelegram {
     private final ModerationProperties properties;
     private final TelegramClient client;
     private final String backUrl;
+    private final String studioWebhookBaseUrl;
     private volatile String username;
 
-    public ModerationTelegram(ModerationProperties properties, ObjectMapper json, @Value("${url.back}") String backUrl) {
+    public ModerationTelegram(ModerationProperties properties, StudioProperties studio, ObjectMapper json,
+                              @Value("${url.back}") String backUrl) {
         this.properties = properties;
+        this.studioWebhookBaseUrl = studio.getTelegram().getWebhookBaseUrl();
         this.client = new TelegramClient(properties.getTelegram(), json);
         this.backUrl = backUrl;
         String configured = properties.getTelegram().getBotUsername();
@@ -78,8 +82,15 @@ public class ModerationTelegram {
         }
     }
 
+    /**
+     * Свой адрес из MODERATION_TELEGRAM_WEBHOOK_BASE_URL, иначе тот же публичный адрес, что у бота студии
+     * (бэк один и тот же), иначе url.back. На dev url.back смотрит на домен, который Telegram не резолвит.
+     */
     public String webhookUrl() {
         String base = properties.getTelegram().getWebhookBaseUrl();
+        if (base == null || base.isBlank()) {
+            base = studioWebhookBaseUrl;
+        }
         if (base == null || base.isBlank()) {
             base = backUrl;
         }
