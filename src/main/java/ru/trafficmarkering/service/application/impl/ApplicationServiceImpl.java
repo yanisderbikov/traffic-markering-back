@@ -236,6 +236,21 @@ class ApplicationServiceImpl implements ApplicationService {
         return toDto(requireApplication(id));
     }
 
+    @Override
+    @Transactional
+    public void moderateByManager(UUID id, ApplicationStatusUpdateRequestDTO request) {
+        Application application = requireApplication(id);
+        if (!MODERATION_DECISIONS.contains(request.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "На модерации отклик можно только одобрить или отклонить");
+        }
+        if (application.getStatus() != ApplicationStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Отклик уже не ждёт модерации: " + application.getStatus().getDescription().toLowerCase());
+        }
+        decide(application, request, null);
+    }
+
     private void decide(Application application, ApplicationStatusUpdateRequestDTO request, User moderator) {
         ApplicationStatus status = request.getStatus();
         String reason = trimToNull(request.getReason());

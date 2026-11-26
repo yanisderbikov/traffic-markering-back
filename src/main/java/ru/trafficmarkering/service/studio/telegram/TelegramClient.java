@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.studio.telegram;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.config.StudioProperties;
 
@@ -49,8 +50,14 @@ public class TelegramClient {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
+    @Autowired
     public TelegramClient(StudioProperties properties, ObjectMapper json) {
-        this.config = properties.getTelegram();
+        this(properties.getTelegram(), json);
+    }
+
+    /** Клиент другого бота с тем же API (бот модерации) */
+    public TelegramClient(StudioProperties.Telegram config, ObjectMapper json) {
+        this.config = config;
         this.json = json;
     }
 
@@ -199,6 +206,60 @@ public class TelegramClient {
         return result;
     }
 
+    /** Видео, уже лежащее в Telegram, по file_id — без повторной загрузки */
+    public JsonNode sendVideoById(long chatId, String fileId, String caption, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("video", fileId);
+        params.put("supports_streaming", true);
+        params.put("caption", caption);
+        params.put("parse_mode", "HTML");
+        if (replyMarkup != null) {
+            params.put("reply_markup", replyMarkup);
+        }
+        return callWithEmoji("sendVideo", params);
+    }
+
+    /** Правит подпись под видео; false — Telegram отказал (сообщение удалено и т. п.) */
+    public boolean editCaption(long chatId, long messageId, String caption, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("message_id", messageId);
+        params.put("caption", caption);
+        params.put("parse_mode", "HTML");
+        params.put("reply_markup", replyMarkup != null ? replyMarkup : Map.of("inline_keyboard", List.of()));
+        try {
+            callWithEmoji("editMessageCaption", params);
+            return true;
+        } catch (TelegramException e) {
+            return e.getMessage() != null && e.getMessage().contains("not modified");
+        }
+    }
+
+    /** Меняет только кнопки под сообщением */
+    public void editMarkup(long chatId, long messageId, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("message_id", messageId);
+        params.put("reply_markup", replyMarkup != null ? replyMarkup : Map.of("inline_keyboard", List.of()));
+        try {
+            callWithEmoji("editMessageReplyMarkup", params);
+        } catch (TelegramException e) {
+            log.debug("editMessageReplyMarkup: {}", e.getMessage());
+        }
+    }
+
+    /** Удаляет сообщение; Telegram разрешает это боту в личке в течение 48 часов */
+    public boolean deleteMessage(long chatId, long messageId) {
+        try {
+            call("deleteMessage", Map.of("chat_id", chatId, "message_id", messageId));
+            return true;
+        } catch (TelegramException e) {
+            log.debug("deleteMessage: {}", e.getMessage());
+            return false;
+        }
+    }
+
     public void answerCallback(String callbackId, String text) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("callback_query_id", callbackId);
@@ -254,8 +315,8 @@ public class TelegramClient {
         }
     }
 
-    /** sendVideo с загрузкой файла (multipart) */
-    public void sendVideo(long chatId, Path file, String filename, String caption, Object replyMarkup, Long replyTo) {
+    /** sendVideo с загрузкой файла (multipart); возвращает отправленное сообщение */
+    public JsonNode sendVideo(long chatId, Path file, String filename, String caption, Object replyMarkup, Long replyTo) {
         String boundary = "----offer" + UUID.randomUUID().toString().replace("-", "");
         try {
             ByteArrayOutputStream head = new ByteArrayOutputStream();
@@ -285,7 +346,7 @@ public class TelegramClient {
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                     .POST(body)
                     .build();
-            unwrap(http.send(request, HttpResponse.BodyHandlers.ofByteArray()).body());
+            return unwrap(http.send(request, HttpResponse.BodyHandlers.ofByteArray()).body());
         } catch (IOException e) {
             throw new TelegramException(0, "sendVideo failed: " + e.getMessage());
         } catch (InterruptedException e) {

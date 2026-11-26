@@ -43,6 +43,12 @@ public interface ApplicationService {
 
     ApplicationDTO moderate(UUID id, ApplicationStatusUpdateRequestDTO request);
 
+    /**
+     * Решение менеджера из бота модерации: тот же переход, что и {@link #moderate}, но без входа на сайт —
+     * кто решил, записано в журнале заявок бота. 409 — ролик уже не ждёт модерации.
+     */
+    void moderateByManager(UUID id, ApplicationStatusUpdateRequestDTO request);
+
     /** Отозвать свой отклик или отказаться от работы; после решения заказчика отзывать уже поздно. */
     void delete(UUID id);
 
