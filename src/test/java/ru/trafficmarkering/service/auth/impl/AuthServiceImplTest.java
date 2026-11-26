@@ -289,7 +289,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void meAddsReferralTabForPartnerBeforeProfile() {
+    void meAddsReferralTabForPartnerFirst() {
         User partner = verifiedUser(Role.CUSTOMER);
         when(currentUserService.require()).thenReturn(partner);
         when(partnerService.isPartner(partner)).thenReturn(true);
@@ -297,8 +297,8 @@ class AuthServiceImplTest {
         CurrentUserDTO me = authService.me();
 
         assertThat(me.tabs()).extracting(CabinetTabDTO::key)
-                .containsExactly("OVERVIEW", "CAMPAIGNS", "WALLET", "REFERRAL", "PROFILE");
-        assertThat(me.tabs().get(3).path()).isEqualTo("/app/referral");
+                .containsExactly("REFERRAL", "OVERVIEW", "CAMPAIGNS", "WALLET", "PROFILE");
+        assertThat(me.tabs().get(0).path()).isEqualTo("/app/referral");
     }
 
     @Test
