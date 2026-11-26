@@ -37,7 +37,7 @@ class CurrentUserServiceImpl implements CurrentUserService {
     @Override
     public User require(Role role) {
         User user = require();
-        if (user.getRole() != role && user.getRole() != Role.ADMIN) {
+        if (!user.getRole().implies(role)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Раздел доступен только для роли " + role.name());
         }

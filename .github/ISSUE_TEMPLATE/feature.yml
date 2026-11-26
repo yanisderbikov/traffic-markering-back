@@ -1,0 +1,46 @@
+name: Feature / Task
+description: Product or engineering task for Trafik Platform
+title: ""
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What problem are we solving and why?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What exactly should be implemented?
+      placeholder: |
+        - Item 1
+        - Item 2
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+  - type: dropdown
+    id: repos
+    attributes:
+      label: Affected repository
+      options:
+        - backend
+        - frontend
+        - backend + frontend
+        - product / research
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Links, API details, edge cases, screenshots, etc.

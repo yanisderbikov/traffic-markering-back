@@ -13,6 +13,11 @@ RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 
+# Видео-студия: FFmpeg (с libass для субтитров) и шрифт DejaVu для ASS
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar

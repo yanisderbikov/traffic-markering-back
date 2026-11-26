@@ -9,8 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -44,16 +42,31 @@ public class WebSecurityConfig {
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     // ── Доска объявлений и карточки: видны всем, даже неавторизованным ──
                     .requestMatchers("/api/public/**").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/request-code", "/api/auth/verify",
+                            "/api/auth/telegram/start", "/api/auth/telegram/poll",
+                            "/api/auth/telegram/webapp").permitAll()
                     // ── Межсервисные ручки: общий секрет SERVICE_JWT_TOKEN ──
                     .requestMatchers("/api/actuator/**").hasRole("SERVICE")
                     .requestMatchers("/api/tech/**").hasAnyRole("SERVICE", "ADMIN")
+                    .requestMatchers("/api/social/callback/**").permitAll()
+                    .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    .requestMatchers("/api/finance/**").hasRole("FINANCE_MANAGER")
+                    .requestMatchers("/api/files/transfer-proof/**").hasAnyRole("FINANCE_MANAGER", "CUSTOMER")
+                    .requestMatchers("/api/files/placement-proof/**").hasRole("CREATOR")
+                    .requestMatchers("/api/wallet/**").hasRole("CUSTOMER")
+                    .requestMatchers("/api/earnings/**").hasRole("CREATOR")
+                    .requestMatchers("/api/partner/**").hasRole("CUSTOMER")
                     // ── Пользовательские роли ──
                     .requestMatchers("/api/campaigns/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/files/**").hasAnyRole("CUSTOMER", "ADMIN")
                     .requestMatchers("/api/applications/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
                     .requestMatchers("/api/profile/**").hasAnyRole("CREATOR", "CUSTOMER", "ADMIN")
-                    .requestMatchers("/api/auth/me").authenticated()
+                    .requestMatchers("/api/social/**").hasAnyRole("CREATOR", "ADMIN")
+                    .requestMatchers("/api/auth/me", "/api/auth/telegram/attach", "/api/auth/email").authenticated()
+                    // ── Видео-студия: любой вошедший пользователь; вебхук Telegram проверяет свой секрет сам ──
+                    .requestMatchers("/api/studio/**").authenticated()
+                    .requestMatchers(HttpMethod.POST, "/api/telegram/webhook").permitAll()
                     .anyRequest().permitAll()
             )
             // Точка входа заведена ради актуатора: ему нужен 401 с JSON-телом, а не пустой 403.
@@ -74,11 +87,6 @@ public class WebSecurityConfig {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"error\":\"invalid auth token\"}");
         };
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean

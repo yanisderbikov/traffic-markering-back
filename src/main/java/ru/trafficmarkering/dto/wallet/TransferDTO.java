@@ -1,0 +1,53 @@
+package ru.trafficmarkering.dto.wallet;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import ru.trafficmarkering.model.User;
+import ru.trafficmarkering.model.wallet.Transfer;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.function.Function;
+
+@Schema(description = "Перевод вне платформы по операции: адрес TRON, номер транзакции, скриншоты, кто и когда")
+public record TransferDTO(
+        @Schema(description = "Адрес кошелька TRON, куда ушли USDT; null для пополнения") String tronAddress,
+        @Schema(description = "Курс USDT/RUB, зафиксированный при создании заявки; null у заявок, созданных до фиксации курса") BigDecimal usdtRate,
+        @Schema(description = "Комиссия платформы, в копейках: у пополнения платится сверху, у выводов удерживается из суммы") Long commissionKopecks,
+        @Schema(description = "Сколько в рублях уходит переводом USDT: у пополнения сумма с комиссией, у выводов — за вычетом комиссии") Long transferKopecks,
+        @Schema(description = "Номер (хеш) транзакции в сети TRON") String txId,
+        @Schema(description = "Комментарий финансиста") String financeComment,
+        @Schema(description = "Почему операция отклонена; null — не отклонена") String rejectReason,
+        @Schema(description = "Скриншоты перевода: ключ и временная ссылка") List<ProofDTO> proofs,
+        @Schema(description = "Финансист, который провёл или отклонил") String processedByName,
+        @Schema(description = "Владелец кошелька: криатор для выплаты, заказчик для пополнения и вывода") Long ownerId,
+        String ownerName,
+        String ownerEmail,
+        String sentAt,
+        String confirmedAt,
+        String closedAt,
+        @Schema(description = "До какого момента заявку на пополнение нужно оплатить, ISO-8601; null — срока нет") String expiresAt
+) {
+    public record ProofDTO(String key, String url) {
+    }
+
+    public static TransferDTO from(Transfer transfer, User owner, Function<String, String> proofUrl) {
+        var processedBy = transfer.getProcessedBy();
+        return new TransferDTO(
+                transfer.getTronAddress(),
+                transfer.getUsdtRate(),
+                transfer.commission(),
+                transfer.transferKopecks(),
+                transfer.getTxId(),
+                transfer.getFinanceComment(),
+                transfer.getRejectReason(),
+                transfer.getProofKeys().stream().map(key -> new ProofDTO(key, proofUrl.apply(key))).toList(),
+                processedBy != null ? processedBy.getName() : null,
+                owner != null ? owner.getId() : null,
+                owner != null ? owner.getName() : null,
+                owner != null ? owner.getUsername() : null,
+                transfer.getSentAt() != null ? transfer.getSentAt().toString() : null,
+                transfer.getConfirmedAt() != null ? transfer.getConfirmedAt().toString() : null,
+                transfer.getClosedAt() != null ? transfer.getClosedAt().toString() : null,
+                transfer.getExpiresAt() != null ? transfer.getExpiresAt().toString() : null);
+    }
+}

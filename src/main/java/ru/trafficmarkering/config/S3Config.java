@@ -7,6 +7,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
@@ -26,6 +27,13 @@ public class S3Config {
     @Value("${s3.secret-key}")
     private String secretKey;
 
+    /**
+     * Адреса вида endpoint/bucket/key. Хранилище Railway (Tigris) отвечает на CORS-запрос браузера
+     * только для такого адреса — с bucket.endpoint загрузка с сайта падала с «Network Error».
+     */
+    @Value("${s3.path-style:true}")
+    private boolean pathStyle;
+
     @Bean
     public S3Client s3Client() {
         return S3Client.builder()
@@ -33,6 +41,7 @@ public class S3Config {
                 .endpointOverride(URI.create(endpoint))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(pathStyle).build())
                 .build();
     }
 
@@ -43,6 +52,7 @@ public class S3Config {
                 .endpointOverride(URI.create(endpoint))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(pathStyle).build())
                 .build();
     }
 }

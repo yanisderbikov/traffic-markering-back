@@ -29,9 +29,21 @@ import java.util.stream.Collectors;
 public class FileController {
 
     public static final String CAMPAIGN_PHOTO_PREFIX = "campaign-photos";
+    public static final String CAMPAIGN_MATERIAL_PREFIX = "campaign-materials";
+    public static final String TRANSFER_PROOF_PREFIX = "transfer-proofs";
+    public static final String PLACEMENT_PROOF_PREFIX = "placement-proofs";
 
     private static final Set<String> ALLOWED_IMAGE_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
+    private static final Set<String> ALLOWED_PROOF_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf");
+    /** Скриншот профиля или запись экрана с закреплённым комментарием */
+    private static final Set<String> ALLOWED_PLACEMENT_PROOF_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+            "video/mp4", "video/quicktime", "video/webm");
+    private static final Set<String> SCRIPTABLE_MATERIAL_TYPES = Set.of(
+            "text/html", "application/xhtml+xml", "image/svg+xml",
+            "text/javascript", "application/javascript", "application/x-javascript");
 
     private final FileStorage fileStorage;
 
@@ -48,6 +60,55 @@ public class FileController {
         }
         FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
                 request.getFilename(), request.getContentType(), CAMPAIGN_PHOTO_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку подтверждения перевода",
+            description = "Presigned PUT-ссылка на скриншот или PDF перевода USDT. Заказчик прикладывает его к своей "
+                    + "заявке на пополнение, менеджер финансов — к выводу заказчику или выплате криатору",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/transfer-proof/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignTransferProof(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (!ALLOWED_PROOF_TYPES.contains(request.getContentType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Можно загрузить изображение (JPEG, PNG, WebP, GIF) или PDF");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), TRANSFER_PROOF_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку доказательства размещения",
+            description = "Presigned PUT-ссылка для криатора: скриншот профиля с рекламной ссылкой или запись экрана "
+                    + "с закреплённым комментарием и промокодом. Полученный key передаётся при подаче работы "
+                    + "«ссылка и промокод» или при исправлении надбавки",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/placement-proof/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignPlacementProof(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (!ALLOWED_PLACEMENT_PROOF_TYPES.contains(request.getContentType().toLowerCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Можно загрузить скриншот (JPEG, PNG, WebP, HEIC) или запись экрана (MP4, MOV, WebM)");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), PLACEMENT_PROOF_PREFIX);
+        return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
+    }
+
+    @Operation(summary = "Ссылка на загрузку материала объявления",
+            description = "Presigned PUT-ссылка на файл для криатора: бриф, баннер, референсы. "
+                    + "Полученный key передаётся в materials при сохранении объявления вместе с именем, типом и размером файла",
+            security = @SecurityRequirement(name = "Bearer"))
+    @PostMapping("/campaign-material/presign")
+    public ResponseEntity<PresignUploadResponseDTO> presignCampaignMaterial(
+            @Valid @RequestBody PresignUploadRequestDTO request) {
+        if (SCRIPTABLE_MATERIAL_TYPES.contains(request.getContentType().toLowerCase())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Страницы, скрипты и SVG в материалы не принимаются — заархивируйте их");
+        }
+        FileStorage.PresignedUpload presigned = fileStorage.presignUpload(
+                request.getFilename(), request.getContentType(), CAMPAIGN_MATERIAL_PREFIX);
         return ResponseEntity.ok(new PresignUploadResponseDTO(presigned.uploadUrl(), presigned.key()));
     }
 
