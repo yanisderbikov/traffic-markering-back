@@ -105,6 +105,8 @@ class PlacementServiceImpl implements PlacementService {
         requireAcceptingWork(campaign);
         requireNotBlocked(creator);
 
+        // Тематика ролика задаёт базовую ставку: выбор можно менять, пока работа не подана
+        ContentTopics.choose(application, campaign, request.getContentTopic());
         String previousKey = application.getVideoKey();
         videoChecks.attach(application, campaign, creator, request.getVideoUrl().trim());
         if (!Objects.equals(previousKey, application.getVideoKey())) {
@@ -137,6 +139,10 @@ class PlacementServiceImpl implements PlacementService {
         if (application.getVideoUrl() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Сначала рассчитайте работу по ссылке на ролик");
+        }
+        if (campaign.hasContentRates() && campaign.contentRate(application.getContentTopic()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Выберите тематику ролика и рассчитайте работу ещё раз");
         }
         ApplicationViewSnapshot snapshot = requireFreshQuote(application, request);
         boolean withLink = application.link().state().selected();

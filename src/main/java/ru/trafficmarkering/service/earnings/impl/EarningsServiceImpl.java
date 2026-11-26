@@ -269,8 +269,8 @@ class EarningsServiceImpl implements EarningsService {
         if (!campaign.paysViews(views)) {
             return 0L;
         }
-        long rate = campaign.getRatePerThousandKopecks() != null ? campaign.getRatePerThousandKopecks() : 0L;
-        long maturedAccrual = Math.min(application.accrued(), PayoutCalculator.accrual(views, rate, Long.MAX_VALUE));
+        long maturedAccrual = Math.min(application.accrued(),
+                PayoutCalculator.accrual(views, application.rateFor(campaign), Long.MAX_VALUE));
         return maturedAccrual - credited;
     }
 

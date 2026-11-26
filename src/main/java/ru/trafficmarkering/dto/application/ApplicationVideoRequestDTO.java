@@ -23,4 +23,9 @@ public class ApplicationVideoRequestDTO {
 
     @Schema(description = "Комментарий заказчику: что сняли и почему так")
     private String comment;
+
+    @Size(max = 64, message = "Тематика не длиннее 64 символов")
+    @Schema(description = "Тематика ролика из contentRates объявления; обязательна, если заказчик задал ставки по тематикам",
+            example = "CS и Dota 2")
+    private String contentTopic;
 }

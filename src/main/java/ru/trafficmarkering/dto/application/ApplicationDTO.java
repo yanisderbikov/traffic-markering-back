@@ -23,7 +23,8 @@ public record ApplicationDTO(
         @Schema(description = "Короткий номер объявления для ссылки на него") String campaignPublicId,
         String campaignTitle,
         @Schema(description = "Когда объявление перестаёт принимать отклики и ролики, ISO-8601; null — бессрочно") String campaignEndsAt,
-        @Schema(description = "Ставка объявления за 1000 просмотров, в копейках") Long ratePerThousandKopecks,
+        @Schema(description = "Ставка ролика за 1000 просмотров, в копейках: по выбранной тематике или общая ставка объявления") Long ratePerThousandKopecks,
+        @Schema(description = "Тематика ролика, выбранная при подаче; null — объявление без ставок по тематикам") String contentTopic,
         @Schema(description = "Порог вывода объявления: с какой накопленной по нему суммы криатор может выводить, в копейках") Long minPayoutKopecks,
         @Schema(description = "Регион просмотров объявления: CIS, WORLD") String campaignViewRegion,
         @Schema(description = "Человекочитаемый регион", example = "СНГ") String campaignViewRegionDescription,
@@ -79,7 +80,8 @@ public record ApplicationDTO(
                 campaign != null ? campaign.getPublicId() : null,
                 campaign != null ? campaign.getTitle() : null,
                 campaign != null && campaign.getEndsAt() != null ? campaign.getEndsAt().toString() : null,
-                campaign != null ? campaign.getRatePerThousandKopecks() : null,
+                campaign != null || application.getBaseRateKopecks() != null ? application.rateFor(campaign) : null,
+                application.getContentTopic(),
                 campaign != null ? campaign.getMinPayoutKopecks() : null,
                 campaign != null ? viewRegion.name() : null,
                 campaign != null ? viewRegion.getDescription() : null,
@@ -116,7 +118,7 @@ public record ApplicationDTO(
     /** Копия для кабинета криатора: вердикт остаётся, баллы и правила скрываются. */
     public ApplicationDTO forCreator() {
         return new ApplicationDTO(id, publicId, campaignId, campaignPublicId, campaignTitle, campaignEndsAt,
-                ratePerThousandKopecks, minPayoutKopecks,
+                ratePerThousandKopecks, contentTopic, minPayoutKopecks,
                 campaignViewRegion, campaignViewRegionDescription, creatorId, creatorName, creatorTelegram, platform,
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,
@@ -127,7 +129,7 @@ public record ApplicationDTO(
     /** Копия с условиями «ссылка и промокод»: их собирает сервис — для доказательств нужны ссылки хранилища. */
     public ApplicationDTO withPlacement(ApplicationPlacementDTO value) {
         return new ApplicationDTO(id, publicId, campaignId, campaignPublicId, campaignTitle, campaignEndsAt,
-                ratePerThousandKopecks, minPayoutKopecks,
+                ratePerThousandKopecks, contentTopic, minPayoutKopecks,
                 campaignViewRegion, campaignViewRegionDescription, creatorId, creatorName, creatorTelegram, platform,
                 platformDescription, videoUrl, comment, status, statusDescription, views, payableViews,
                 viewsGeographyKnown, accruedKopecks, viewsSyncedAt, creditedKopecks, videoPublishedAt, fraudStatus,

@@ -22,7 +22,8 @@ public record CampaignDTO(
         @Schema(description = "Человекочитаемая тематика", example = "Технологии и гаджеты") String topicDescription,
         @Schema(description = "Средняя ставка за 1000 просмотров по тематике, в копейках; null — неизвестна")
         Long topicAverageRatePerThousandKopecks,
-        @Schema(description = "Ставка за 1000 просмотров, в копейках") Long ratePerThousandKopecks,
+        @Schema(description = "Ставка за 1000 просмотров, в копейках; при ставках по тематикам — наибольшая из них") Long ratePerThousandKopecks,
+        @Schema(description = "Ставки по тематикам роликов; пусто — одна ставка на все ролики") List<CampaignContentRateDTO> contentRates,
         @Schema(description = "Выделенный бюджет, в копейках") Long budgetKopecks,
         @Schema(description = "Уже начислено криаторам, в копейках") Long spentKopecks,
         @Schema(description = "Остаток бюджета, в копейках") Long remainingKopecks,
@@ -84,6 +85,7 @@ public record CampaignDTO(
                 campaign.getTopic() != null ? campaign.getTopic().getName() : null,
                 campaign.getTopic() != null ? campaign.getTopic().getAverageRatePerThousandKopecks() : null,
                 campaign.getRatePerThousandKopecks(),
+                campaign.getContentRates().stream().map(CampaignContentRateDTO::from).toList(),
                 campaign.getBudgetKopecks(),
                 campaign.getSpentKopecks(),
                 campaign.remainingKopecks(),
@@ -124,7 +126,7 @@ public record CampaignDTO(
     /** Для публичной страницы: ссылку и промокод криатор получает, когда берёт оффер в работу. */
     public CampaignDTO withoutPromoMaterials() {
         return new CampaignDTO(id, publicId, title, description, photoUrl, photoKey, topic, topicDescription,
-                topicAverageRatePerThousandKopecks, ratePerThousandKopecks, budgetKopecks, spentKopecks,
+                topicAverageRatePerThousandKopecks, ratePerThousandKopecks, contentRates, budgetKopecks, spentKopecks,
                 remainingKopecks, minPayoutKopecks, status, statusDescription, platforms, viewRegion,
                 viewRegionDescription, minVideoSeconds, minPaidViews, maxVideosPerCreator, startsAt, endsAt,
                 acceptingApplications, materials, paymentModel, paymentModelDescription, null, null, promoBenefit,

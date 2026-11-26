@@ -40,7 +40,6 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
     @Transactional
     public void recalculate(Campaign campaign) {
         long budget = campaign.getBudgetKopecks() != null ? campaign.getBudgetKopecks() : 0L;
-        long rate = campaign.getRatePerThousandKopecks() != null ? campaign.getRatePerThousandKopecks() : 0L;
         long spent = 0L;
 
         List<Application> applications = getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId());
@@ -63,7 +62,7 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
                         trust.getOrDefault(application.getCreator().getId(), TrustLevel.NEW));
                 // isAccruable учитывает и статус отклика, и вердикт антифрода: за накрутку не платим
                 if (application.isAccruable() && campaign.paysViews(views)) {
-                    accrued = PayoutCalculator.accrual(views, rate, budget - spent);
+                    accrued = PayoutCalculator.accrual(views, application.rateFor(campaign), budget - spent);
                     spent += accrued;
                 }
             }

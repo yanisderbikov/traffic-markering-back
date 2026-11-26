@@ -45,6 +45,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.HashSet;
+import ru.trafficmarkering.model.campaign.CampaignContentRate;
+import ru.trafficmarkering.dto.campaign.CampaignContentRateDTO;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -226,6 +229,7 @@ class CampaignServiceImpl implements CampaignService {
         campaign.setPhotoKey(validPhotoKey(request.getPhotoKey()));
         campaign.setTopic(topicOrNull(request.getTopic()));
         campaign.setRatePerThousandKopecks(request.getRatePerThousandKopecks());
+        applyContentRates(campaign, request.getContentRates());
         campaign.setBudgetKopecks(request.getBudgetKopecks());
         campaign.setMinPayoutKopecks(request.getMinPayoutKopecks());
         campaign.getPlatforms().clear();
@@ -239,6 +243,29 @@ class CampaignServiceImpl implements CampaignService {
         campaign.getMaterials().clear();
         campaign.getMaterials().addAll(toMaterials(request.getMaterials()));
         applyPromoTerms(campaign, request);
+    }
+
+    /**
+     * Ставки по тематикам роликов. У взявших оффер ставка зафиксирована при подаче, поэтому тематики можно
+     * править и у работающего объявления. Общая ставка становится наибольшей — её видно на доске как «до».
+     */
+    private void applyContentRates(Campaign campaign, List<CampaignContentRateDTO> requested) {
+        campaign.getContentRates().clear();
+        if (requested == null || requested.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new HashSet<>();
+        for (CampaignContentRateDTO rate : requested) {
+            String name = rate.name().strip().replaceAll("\\s+", " ");
+            if (!seen.add(CampaignTopic.normalize(name))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Тематика указана дважды: " + name);
+            }
+            campaign.getContentRates().add(new CampaignContentRate(name, rate.ratePerThousandKopecks()));
+        }
+        campaign.setRatePerThousandKopecks(campaign.getContentRates().stream()
+                .mapToLong(CampaignContentRate::getRatePerThousandKopecks)
+                .max()
+                .orElseThrow());
     }
 
     /**

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import ru.trafficmarkering.model.campaign.CampaignContentRate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -46,6 +47,13 @@ public class CampaignCreateUpdateRequestDTO {
     @Positive(message = "Ставка должна быть больше нуля")
     @Schema(description = "Ставка за 1000 просмотров, в копейках; обязательна для запуска", example = "35000")
     private Long ratePerThousandKopecks;
+
+    @Valid
+    @Size(max = CampaignContentRate.MAX_COUNT, message = "Не больше 20 тематик со своими ставками")
+    @Schema(description = "Ставки по тематикам роликов: криатор при подаче выбирает тематику, ролик считается по её ставке. "
+            + "Пусто или null — одна ставка ratePerThousandKopecks на все ролики; если задано, ratePerThousandKopecks "
+            + "становится наибольшей из ставок")
+    private List<CampaignContentRateDTO> contentRates;
 
     @PositiveOrZero(message = "Бюджет не может быть отрицательным")
     @Schema(description = "Выделенный бюджет, в копейках; обязателен для запуска", example = "5000000")

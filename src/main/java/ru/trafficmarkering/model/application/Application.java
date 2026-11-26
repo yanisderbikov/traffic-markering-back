@@ -145,6 +145,10 @@ public class Application {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    /** Тематика ролика, которую криатор выбрал при подаче; ставка по ней лежит в baseRateKopecks */
+    @Column(name = "content_topic", length = 64)
+    private String contentTopic;
+
     // ---- «Ссылка и промокод» (Campaign.paymentModel = SNAPSHOT) ----
 
     /** Базовая ставка за 1000 просмотров на момент, когда криатор взял оффер, в копейках */
@@ -282,6 +286,18 @@ public class Application {
 
     public long billingViewsValue() {
         return billingViews != null ? billingViews : 0L;
+    }
+
+    /**
+     * Ставка за 1000 просмотров обычного отклика: зафиксированная по тематике ролика при подаче,
+     * а без тематики — текущая ставка объявления.
+     */
+    public long rateFor(Campaign campaign) {
+        if (baseRateKopecks != null) {
+            return baseRateKopecks;
+        }
+        Long rate = campaign != null ? campaign.getRatePerThousandKopecks() : null;
+        return rate != null ? rate : 0L;
     }
 
     /** Ставки отклика, зафиксированные при взятии оффера. */

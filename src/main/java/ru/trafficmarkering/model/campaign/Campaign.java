@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -166,6 +167,18 @@ public class Campaign {
     @OrderColumn(name = "position", nullable = false)
     private List<CampaignMaterial> materials = new ArrayList<>();
 
+    /**
+     * Ставки по тематикам роликов; пусто — у всех роликов одна ставка ratePerThousandKopecks.
+     * Когда тематики заданы, ratePerThousandKopecks держит наибольшую из их ставок — «до» на доске.
+     */
+    @Builder.Default
+    @ToString.Exclude
+    @ElementCollection
+    @Fetch(FetchMode.SUBSELECT)
+    @CollectionTable(name = "campaign_content_rate", joinColumns = @JoinColumn(name = "campaign_id"))
+    @OrderColumn(name = "position", nullable = false)
+    private List<CampaignContentRate> contentRates = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -192,6 +205,21 @@ public class Campaign {
                 .filter(entry -> !entry.getValue())
                 .map(Map.Entry::getKey)
                 .toList();
+    }
+
+    public boolean hasContentRates() {
+        return contentRates != null && !contentRates.isEmpty();
+    }
+
+    /** Тематика ролика по названию: регистр, «ё» и лишние пробелы не различаем. */
+    public Optional<CampaignContentRate> contentRate(String name) {
+        if (name == null || !hasContentRates()) {
+            return Optional.empty();
+        }
+        String key = CampaignTopic.normalize(name);
+        return contentRates.stream()
+                .filter(rate -> CampaignTopic.normalize(rate.getName()).equals(key))
+                .findFirst();
     }
 
     public String displayTitle() {

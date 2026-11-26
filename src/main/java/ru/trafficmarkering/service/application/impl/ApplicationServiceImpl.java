@@ -126,7 +126,7 @@ class ApplicationServiceImpl implements ApplicationService {
                     Boolean.TRUE.equals(request.getWithPromo()));
         }
         if (rawVideoUrl != null) {
-            submitVideo(application, campaign, creator, rawVideoUrl);
+            submitVideo(application, campaign, creator, rawVideoUrl, request.getContentTopic());
         }
 
         Application saved = saverApplication.save(application);
@@ -154,7 +154,7 @@ class ApplicationServiceImpl implements ApplicationService {
         requireAcceptingApplications(campaign);
         requireNotBlocked(creator);
 
-        submitVideo(application, campaign, creator, request.getVideoUrl().trim());
+        submitVideo(application, campaign, creator, request.getVideoUrl().trim(), request.getContentTopic());
         String comment = trimToNull(request.getComment());
         if (comment != null) {
             application.setComment(comment);
@@ -338,7 +338,10 @@ class ApplicationServiceImpl implements ApplicationService {
     }
 
     /** Ролик к обычному отклику: все проверки в {@link VideoChecks}, после них отклик ждёт решения заказчика. */
-    private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl) {
+    private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl,
+                             String contentTopic) {
+        // Тематику проверяем до ролика: ошибку выбора криатор увидит сразу, без похода на площадку
+        ContentTopics.choose(application, campaign, contentTopic);
         videoChecks.attach(application, campaign, creator, rawVideoUrl);
         application.setStatus(ApplicationStatus.PENDING);
     }

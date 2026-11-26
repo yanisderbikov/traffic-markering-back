@@ -128,7 +128,7 @@ class PlacementServiceImplTest {
         ApplicationViewSnapshot snapshot = capture(10_480L, Instant.now());
         linkCheckReturns(PlacementCheck.FOUND);
 
-        SnapshotQuoteDTO quote = service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO));
+        SnapshotQuoteDTO quote = service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null));
 
         assertEquals(snapshot.getId(), quote.snapshotId());
         assertEquals(10_400L, quote.billableViews());
@@ -151,7 +151,7 @@ class PlacementServiceImplTest {
         });
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO)));
+                () -> service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null)));
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         assertThat(error.getReason()).contains("только новые");
@@ -322,7 +322,7 @@ class PlacementServiceImplTest {
     private ApplicationViewSnapshot quoted(long views, PlacementCheck linkCheck) {
         ApplicationViewSnapshot snapshot = capture(views, Instant.now());
         linkCheckReturns(linkCheck);
-        service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO));
+        service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null));
         when(getterViewSnapshot.getByApplicationId(work.getId())).thenReturn(List.of(snapshot));
         return snapshot;
     }
