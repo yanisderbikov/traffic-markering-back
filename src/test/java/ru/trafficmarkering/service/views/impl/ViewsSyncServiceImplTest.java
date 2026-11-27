@@ -2,7 +2,7 @@ package ru.trafficmarkering.service.views.impl;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.model.Role;
 import ru.trafficmarkering.model.User;
 import ru.trafficmarkering.model.application.Application;
@@ -14,7 +14,6 @@ import ru.trafficmarkering.model.campaign.Campaign;
 import ru.trafficmarkering.repository.GetterApplication;
 import ru.trafficmarkering.repository.SaverApplication;
 import ru.trafficmarkering.repository.SaverViewSnapshot;
-import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
 import ru.trafficmarkering.service.social.SocialIntegration;
 import ru.trafficmarkering.service.views.ViewCount;
@@ -26,10 +25,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,15 +40,13 @@ class ViewsSyncServiceImplTest {
     private final SaverApplication saverApplication = mock(SaverApplication.class);
     private final SaverViewSnapshot saverViewSnapshot = mock(SaverViewSnapshot.class);
     private final FraudCheckService fraudCheckService = mock(FraudCheckService.class);
-    private final CampaignAccrualService campaignAccrualService = mock(CampaignAccrualService.class);
     private final ViewCountProvider provider = mock(ViewCountProvider.class);
 
     private final ViewsSyncServiceImpl service = new ViewsSyncServiceImpl(getterApplication,
             new ViewCountProviders(List.of(provider), new SocialIntegration(false)),
-            new ViewsRecorder(getterApplication, saverApplication, saverViewSnapshot, fraudCheckService),
-            campaignAccrualService);
+            new ViewsRecorder(getterApplication, saverApplication, saverViewSnapshot, fraudCheckService));
 
-    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(7L).name("Креатор").role(Role.CREATOR).build();
 
     @BeforeEach
     void setUp() {
@@ -60,61 +57,56 @@ class ViewsSyncServiceImplTest {
     }
 
     @Test
-    void syncWritesViewsIntoLockedRowAndKeepsItsMoneyAndStatus() {
+    void captureWritesViewsIntoLockedRowAndKeepsItsMoneyAndStatus() {
         Campaign campaign = campaign();
-        Application stale = application(campaign, "https://youtu.be/a", ApplicationStatus.APPROVED, 0L);
+        Application stale = application(campaign, "https://youtu.be/a", ApplicationStatus.PENDING, 0L);
         Application locked = application(campaign, "https://youtu.be/a", ApplicationStatus.REJECTED, 500_00L);
         locked.setId(stale.getId());
-        when(getterApplication.getApproved()).thenReturn(List.of(stale));
+        when(getterApplication.getById(stale.getId())).thenReturn(Optional.of(stale));
         when(getterApplication.getByIdForUpdate(stale.getId())).thenReturn(Optional.of(locked));
+        when(saverViewSnapshot.save(any(ApplicationViewSnapshot.class))).thenAnswer(inv -> inv.getArgument(0));
         when(provider.fetchViews(anyLong(), anyCollection()))
                 .thenReturn(Map.of("https://youtu.be/a", ViewCount.total(250L)));
 
-        assertThat(service.syncApproved()).isEqualTo(1);
+        ApplicationViewSnapshot snapshot = service.captureNow(stale.getId()).snapshot();
 
+        assertThat(snapshot.getViews()).isEqualTo(250L);
+        assertThat(snapshot.getSource()).isEqualTo(ViewSource.YOUTUBE_API);
         assertThat(locked.getViews()).isEqualTo(250L);
         assertThat(locked.getCreditedKopecks()).isEqualTo(500_00L);
         assertThat(locked.getStatus()).isEqualTo(ApplicationStatus.REJECTED);
         assertThat(stale.getViews()).isEqualTo(100L);
         verify(saverApplication).save(locked);
         verify(saverApplication, never()).save(stale);
-        verify(saverViewSnapshot).save(any(ApplicationViewSnapshot.class));
-        verify(campaignAccrualService).recalculate(campaign.getId());
     }
 
     @Test
-    void syncSkipsApplicationDeletedBeforeLock() {
-        Application gone = application(campaign(), "https://youtu.be/a", ApplicationStatus.APPROVED, 0L);
-        when(getterApplication.getApproved()).thenReturn(List.of(gone));
+    void captureFailsWhenPlatformGivesNoViews() {
+        Application application = application(campaign(), "https://youtu.be/a", ApplicationStatus.PENDING, 0L);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+        when(provider.fetchViews(anyLong(), anyCollection())).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> service.captureNow(application.getId()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("не отдала просмотры");
+
+        verify(saverViewSnapshot, never()).save(any());
+        verify(saverApplication, never()).save(any());
+    }
+
+    @Test
+    void captureFailsWhenApplicationDeletedBeforeLock() {
+        Application gone = application(campaign(), "https://youtu.be/a", ApplicationStatus.PENDING, 0L);
+        when(getterApplication.getById(gone.getId())).thenReturn(Optional.of(gone));
         when(getterApplication.getByIdForUpdate(gone.getId())).thenReturn(Optional.empty());
         when(provider.fetchViews(anyLong(), anyCollection()))
                 .thenReturn(Map.of("https://youtu.be/a", ViewCount.total(250L)));
 
-        assertThat(service.syncApproved()).isZero();
+        assertThatThrownBy(() -> service.captureNow(gone.getId()))
+                .isInstanceOf(ResponseStatusException.class);
 
         verify(saverViewSnapshot, never()).save(any());
         verify(saverApplication, never()).save(any());
-        verify(campaignAccrualService, never()).recalculate(any(UUID.class));
-    }
-
-    @Test
-    void syncRecalculatesRemainingCampaignsWhenOneConflicts() {
-        Campaign busy = campaign();
-        Campaign calm = campaign();
-        Application first = application(busy, "https://youtu.be/a", ApplicationStatus.APPROVED, 0L);
-        Application second = application(calm, "https://youtu.be/b", ApplicationStatus.APPROVED, 0L);
-        when(getterApplication.getApproved()).thenReturn(List.of(first, second));
-        when(getterApplication.getByIdForUpdate(first.getId())).thenReturn(Optional.of(first));
-        when(getterApplication.getByIdForUpdate(second.getId())).thenReturn(Optional.of(second));
-        when(provider.fetchViews(anyLong(), anyCollection())).thenReturn(Map.of(
-                "https://youtu.be/a", ViewCount.total(250L),
-                "https://youtu.be/b", ViewCount.total(300L)));
-        doThrow(new ObjectOptimisticLockingFailureException(Campaign.class, busy.getId()))
-                .when(campaignAccrualService).recalculate(busy.getId());
-
-        assertThat(service.syncApproved()).isEqualTo(2);
-
-        verify(campaignAccrualService).recalculate(calm.getId());
     }
 
     private Campaign campaign() {

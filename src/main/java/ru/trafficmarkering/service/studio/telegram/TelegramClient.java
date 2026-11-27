@@ -3,6 +3,7 @@ package ru.trafficmarkering.service.studio.telegram;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.trafficmarkering.config.StudioProperties;
 
@@ -49,8 +50,14 @@ public class TelegramClient {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
+    @Autowired
     public TelegramClient(StudioProperties properties, ObjectMapper json) {
-        this.config = properties.getTelegram();
+        this(properties.getTelegram(), json);
+    }
+
+    /** Клиент другого бота с тем же API (бот модерации) */
+    public TelegramClient(StudioProperties.Telegram config, ObjectMapper json) {
+        this.config = config;
         this.json = json;
     }
 
@@ -124,7 +131,7 @@ public class TelegramClient {
         if (replyTo != null) {
             params.put("reply_parameters", Map.of("message_id", replyTo, "allow_sending_without_reply", true));
         }
-        return call("sendMessage", params);
+        return callWithEmoji("sendMessage", params);
     }
 
     /** Правка без запасного нового сообщения: для прогресса, где лишние сообщения — спам */
@@ -135,7 +142,7 @@ public class TelegramClient {
         params.put("text", html);
         params.put("parse_mode", "HTML");
         try {
-            call("editMessageText", params);
+            callWithEmoji("editMessageText", params);
             return true;
         } catch (RuntimeException e) {
             return false;
@@ -153,12 +160,103 @@ public class TelegramClient {
             params.put("reply_markup", replyMarkup);
         }
         try {
-            call("editMessageText", params);
+            callWithEmoji("editMessageText", params);
         } catch (TelegramException e) {
             // «message is not modified» — не ошибка; остальное шлём новым сообщением
             if (!e.getMessage().contains("not modified")) {
                 sendMessage(chatId, html, replyMarkup, null);
             }
+        }
+    }
+
+    /**
+     * Текст и кнопки с иконками пака. Если Telegram отверг кастомные эмодзи (400) — то же сообщение
+     * уходит с обычными, чтобы пользователь его не потерял.
+     */
+    private JsonNode callWithEmoji(String method, Map<String, Object> params) {
+        Map<String, Object> fancy = withEmoji(params);
+        if (fancy.equals(params)) {
+            return call(method, params);
+        }
+        try {
+            return call(method, fancy);
+        } catch (TelegramException e) {
+            if (e.getCode() != 400 || e.getMessage().contains("not modified")) {
+                throw e;
+            }
+            log.warn("Telegram: {} с кастомными эмодзи отклонён ({}), шлю с обычными", method, e.getMessage());
+            return call(method, params);
+        }
+    }
+
+    private Map<String, Object> withEmoji(Map<String, Object> params) {
+        if (!config.isCustomEmoji()) {
+            return params;
+        }
+        Map<String, Object> result = new LinkedHashMap<>(params);
+        if (params.get("text") instanceof String text) {
+            result.put("text", TelegramEmoji.html(text));
+        }
+        if (params.get("caption") instanceof String caption) {
+            result.put("caption", TelegramEmoji.html(caption));
+        }
+        if (params.containsKey("reply_markup")) {
+            result.put("reply_markup", TelegramEmoji.markup(params.get("reply_markup")));
+        }
+        return result;
+    }
+
+    /** Видео, уже лежащее в Telegram, по file_id — без повторной загрузки */
+    public JsonNode sendVideoById(long chatId, String fileId, String caption, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("video", fileId);
+        params.put("supports_streaming", true);
+        params.put("caption", caption);
+        params.put("parse_mode", "HTML");
+        if (replyMarkup != null) {
+            params.put("reply_markup", replyMarkup);
+        }
+        return callWithEmoji("sendVideo", params);
+    }
+
+    /** Правит подпись под видео; false — Telegram отказал (сообщение удалено и т. п.) */
+    public boolean editCaption(long chatId, long messageId, String caption, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("message_id", messageId);
+        params.put("caption", caption);
+        params.put("parse_mode", "HTML");
+        params.put("reply_markup", replyMarkup != null ? replyMarkup : Map.of("inline_keyboard", List.of()));
+        try {
+            callWithEmoji("editMessageCaption", params);
+            return true;
+        } catch (TelegramException e) {
+            return e.getMessage() != null && e.getMessage().contains("not modified");
+        }
+    }
+
+    /** Меняет только кнопки под сообщением */
+    public void editMarkup(long chatId, long messageId, Object replyMarkup) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("chat_id", chatId);
+        params.put("message_id", messageId);
+        params.put("reply_markup", replyMarkup != null ? replyMarkup : Map.of("inline_keyboard", List.of()));
+        try {
+            callWithEmoji("editMessageReplyMarkup", params);
+        } catch (TelegramException e) {
+            log.debug("editMessageReplyMarkup: {}", e.getMessage());
+        }
+    }
+
+    /** Удаляет сообщение; Telegram разрешает это боту в личке в течение 48 часов */
+    public boolean deleteMessage(long chatId, long messageId) {
+        try {
+            call("deleteMessage", Map.of("chat_id", chatId, "message_id", messageId));
+            return true;
+        } catch (TelegramException e) {
+            log.debug("deleteMessage: {}", e.getMessage());
+            return false;
         }
     }
 
@@ -217,19 +315,20 @@ public class TelegramClient {
         }
     }
 
-    /** sendVideo с загрузкой файла (multipart) */
-    public void sendVideo(long chatId, Path file, String filename, String caption, Object replyMarkup, Long replyTo) {
+    /** sendVideo с загрузкой файла (multipart); возвращает отправленное сообщение */
+    public JsonNode sendVideo(long chatId, Path file, String filename, String caption, Object replyMarkup, Long replyTo) {
         String boundary = "----offer" + UUID.randomUUID().toString().replace("-", "");
         try {
             ByteArrayOutputStream head = new ByteArrayOutputStream();
             writeField(head, boundary, "chat_id", String.valueOf(chatId));
             writeField(head, boundary, "supports_streaming", "true");
             if (caption != null) {
-                writeField(head, boundary, "caption", caption);
+                writeField(head, boundary, "caption", config.isCustomEmoji() ? TelegramEmoji.html(caption) : caption);
                 writeField(head, boundary, "parse_mode", "HTML");
             }
             if (replyMarkup != null) {
-                writeField(head, boundary, "reply_markup", json.writeValueAsString(replyMarkup));
+                writeField(head, boundary, "reply_markup", json.writeValueAsString(
+                        config.isCustomEmoji() ? TelegramEmoji.markup(replyMarkup) : replyMarkup));
             }
             if (replyTo != null) {
                 writeField(head, boundary, "reply_parameters",
@@ -247,7 +346,7 @@ public class TelegramClient {
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                     .POST(body)
                     .build();
-            unwrap(http.send(request, HttpResponse.BodyHandlers.ofByteArray()).body());
+            return unwrap(http.send(request, HttpResponse.BodyHandlers.ofByteArray()).body());
         } catch (IOException e) {
             throw new TelegramException(0, "sendVideo failed: " + e.getMessage());
         } catch (InterruptedException e) {

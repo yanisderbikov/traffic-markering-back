@@ -19,7 +19,7 @@ public record SnapshotQuoteDTO(
         @Schema(description = "Просмотры из региона объявления") Long payableViews,
         @Schema(description = "Известна ли география (для «весь мир» всегда true)") boolean geographyKnown,
         @Schema(description = "Оплачиваемые просмотры: после потолка новичка, округлены вниз до сотен") Long billableViews,
-        @Schema(description = "Просмотры урезаны потолком для новых криаторов") boolean cappedForNewCreator,
+        @Schema(description = "Просмотры урезаны потолком для новых креаторов") boolean cappedForNewCreator,
         @Schema(description = "Порог оплаты объявления; null — без порога") Long minPaidViews,
         @Schema(description = "Ролик не дотянул до порога оплаты: сумма 0") boolean belowMinPaidViews,
 

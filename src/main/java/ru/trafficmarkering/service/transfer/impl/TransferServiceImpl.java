@@ -74,7 +74,7 @@ class TransferServiceImpl implements TransferService {
         String address = walletService.topUpTronAddress();
         if (address == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Адрес для пополнения ещё не настроен — напишите менеджеру финансов");
+                    "Адрес для пополнения ещё не настроен — напишите менеджеру финансов @getoffermanager");
         }
         BigDecimal usdtRate = usdtRateService.current().askPrice();
         Wallet wallet = ledger.walletOf(customer);

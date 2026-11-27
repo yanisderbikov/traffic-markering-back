@@ -55,7 +55,7 @@ class AuthServiceImpl implements AuthService {
         Role role = request.getRole();
         if (role == null || !Role.selfRegistrable().contains(role)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Роль должна быть CUSTOMER (заказчик) или CREATOR (криатор)");
+                    "Роль должна быть CUSTOMER (заказчик) или CREATOR (креатор)");
         }
         String email = User.normalizeEmail(request.getEmail());
         String name = request.getName().trim();

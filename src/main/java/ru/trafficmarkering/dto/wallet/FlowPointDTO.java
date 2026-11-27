@@ -23,7 +23,7 @@ public record FlowPointDTO(
     }
 
     public static FlowPointDTO creatorWallet(User owner) {
-        return wallet("CREATOR_WALLET", "Кошелёк криатора", owner);
+        return wallet("CREATOR_WALLET", "Кошелёк креатора", owner);
     }
 
     public static FlowPointDTO campaign(Campaign campaign) {

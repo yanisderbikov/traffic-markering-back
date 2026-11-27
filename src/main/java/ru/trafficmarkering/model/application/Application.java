@@ -1,5 +1,7 @@
 package ru.trafficmarkering.model.application;
 
+import ru.trafficmarkering.model.moderation.Moderator;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,7 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Отклик криатора на объявление: одна площадка, один ролик.
+ * Отклик креатора на объявление: одна площадка, один ролик.
  * accruedKopecks считает платформа (CampaignAccrualService), руками его не правят:
  * иначе сумма начислений разъедется с campaign.spentKopecks.
  */
@@ -82,7 +84,7 @@ public class Application {
     @Column(nullable = false)
     private Long views = 0L;
 
-    /** Начислено криатору за эти просмотры, в копейках */
+    /** Начислено креатору за эти просмотры, в копейках */
     @Builder.Default
     @Column(name = "accrued_kopecks", nullable = false)
     private Long accruedKopecks = 0L;
@@ -142,12 +144,22 @@ public class Application {
     @JoinColumn(name = "moderated_by")
     private User moderatedBy;
 
+    /** Менеджер из Telegram-бота модерации, решивший ролик; null — решали на сайте или ещё не решали */
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "moderated_by_moderator")
+    private Moderator moderatedByModerator;
+
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    /** Тематика ролика, которую креатор выбрал при подаче; ставка по ней лежит в baseRateKopecks */
+    @Column(name = "content_topic", length = 64)
+    private String contentTopic;
+
     // ---- «Ссылка и промокод» (Campaign.paymentModel = SNAPSHOT) ----
 
-    /** Базовая ставка за 1000 просмотров на момент, когда криатор взял оффер, в копейках */
+    /** Базовая ставка за 1000 просмотров на момент, когда креатор взял оффер, в копейках */
     @Column(name = "base_rate_kopecks")
     private Long baseRateKopecks;
 
@@ -172,7 +184,7 @@ public class Application {
     @Column(name = "submitted_at")
     private Instant submittedAt;
 
-    /** До какого момента криатор держит ссылку и закреп; после него подтверждённые надбавки засчитываются */
+    /** До какого момента креатор держит ссылку и закреп; после него подтверждённые надбавки засчитываются */
     @Column(name = "placement_retain_until")
     private Instant placementRetainUntil;
 
@@ -282,6 +294,18 @@ public class Application {
 
     public long billingViewsValue() {
         return billingViews != null ? billingViews : 0L;
+    }
+
+    /**
+     * Ставка за 1000 просмотров обычного отклика: зафиксированная по тематике ролика при подаче,
+     * а без тематики — текущая ставка объявления.
+     */
+    public long rateFor(Campaign campaign) {
+        if (baseRateKopecks != null) {
+            return baseRateKopecks;
+        }
+        Long rate = campaign != null ? campaign.getRatePerThousandKopecks() : null;
+        return rate != null ? rate : 0L;
     }
 
     /** Ставки отклика, зафиксированные при взятии оффера. */

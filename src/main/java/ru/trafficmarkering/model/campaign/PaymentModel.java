@@ -10,7 +10,7 @@ package ru.trafficmarkering.model.campaign;
  * </ul>
  */
 public enum PaymentModel {
-    CONTINUOUS("По мере роста просмотров"),
+    CONTINUOUS("За просмотры на момент подачи"),
     SNAPSHOT("Ссылка и промокод: по просмотрам на момент подачи");
 
     private final String description;

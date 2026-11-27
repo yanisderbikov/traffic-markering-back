@@ -35,14 +35,14 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/finance")
 @RequiredArgsConstructor
-@Tag(name = "Finance", description = "Кабинет менеджера финансов: кошельки заказчиков, проверка пополнений, выводы и выплаты криаторам")
+@Tag(name = "Finance", description = "Кабинет менеджера финансов: кошельки заказчиков, проверка пополнений, выводы и выплаты креаторам")
 public class FinanceController {
 
     private final WalletService walletService;
     private final TransferService transferService;
 
     @Operation(summary = "Кошельки заказчиков",
-            description = "Все заказчики с кошельком: свободный остаток, сумма бюджетов объявлений и начислено криаторам",
+            description = "Все заказчики с кошельком: свободный остаток, сумма бюджетов объявлений и начислено креаторам",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/customers")
     public ResponseEntity<List<WalletDTO>> financeCustomers() {
@@ -58,7 +58,7 @@ public class FinanceController {
     }
 
     @Operation(summary = "Все операции по всем кошелькам",
-            description = "Одна таблица: пополнения, резервы, начисления криаторам и выводы; у каждой строки "
+            description = "Одна таблица: пополнения, резервы, начисления креаторам и выводы; у каждой строки "
                     + "откуда → куда, сумма и статус. Фильтры необязательны; новые сверху",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/operations")
@@ -116,7 +116,7 @@ public class FinanceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(transferService.withdraw(userId, request));
     }
 
-    @Operation(summary = "Заявки криаторов на выплату",
+    @Operation(summary = "Заявки креаторов на выплату",
             description = "Короткие строки: кто, сколько, статус; открытые (PENDING, SENT) сверху",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/payouts")
@@ -126,7 +126,7 @@ public class FinanceController {
 
     @Operation(summary = "Отметить выплату отправленной",
             description = "Только из PENDING. Номер транзакции и скриншоты обязательны; "
-                    + "заявка переходит в SENT и ждёт подтверждения криатора",
+                    + "заявка переходит в SENT и ждёт подтверждения креатора",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/payouts/{publicId}/sent")
     public ResponseEntity<OperationDetailDTO> markPayoutSent(@PathVariable("publicId") String publicId,

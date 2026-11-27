@@ -31,7 +31,7 @@ import java.util.Optional;
 
 /**
  * Просмотры YouTube Shorts. Data API отдаёт общий счётчик, лайки, комментарии и дату
- * публикации по ключу приложения; Analytics API по OAuth-токену криатора — географию,
+ * публикации по ключу приложения; Analytics API по OAuth-токену креатора — географию,
  * досмотры (engagedViews) и источники трафика: на них держится антифрод.
  */
 @Component
@@ -135,13 +135,13 @@ class YoutubeViewCountProvider implements ViewCountProvider {
         Optional<SocialAccount> account =
                 getterSocialAccount.getActiveByUserIdAndPlatform(creatorId, Platform.YOUTUBE_SHORTS);
         if (account.isEmpty() || !account.get().reportsViewGeography()) {
-            log.debug("У криатора {} нет привязки YouTube с доступом к аналитике, география просмотров неизвестна",
+            log.debug("У креатора {} нет привязки YouTube с доступом к аналитике, география просмотров неизвестна",
                     creatorId);
             return Optional.empty();
         }
         Optional<String> token = socialTokenService.accessToken(creatorId, Platform.YOUTUBE_SHORTS);
         if (token.isEmpty()) {
-            log.debug("У криатора {} нет живого токена YouTube, география просмотров неизвестна", creatorId);
+            log.debug("У креатора {} нет живого токена YouTube, география просмотров неизвестна", creatorId);
         }
         return token;
     }

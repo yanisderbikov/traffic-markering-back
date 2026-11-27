@@ -206,7 +206,7 @@ class EarningsServiceImpl implements EarningsService {
                 if (delta <= 0) {
                     continue;
                 }
-                // Антифрод: подозрительный ролик ждёт решения, ограниченный криатор — ручной проверки каждого
+                // Антифрод: подозрительный ролик ждёт решения, ограниченный креатор — ручной проверки каждого
                 if (application.fraudStatus().blocksCredit()
                         || (trust.requiresManualVerification() && application.fraudStatus() != FraudStatus.VERIFIED)) {
                     frozen++;
@@ -234,7 +234,7 @@ class EarningsServiceImpl implements EarningsService {
             }
             creatorTrustService.refresh(creator.getId());
         }
-        log.info("Начисления в кошельки криаторов: откликов {}, криаторов {}, ждут порога или окна {}, "
+        log.info("Начисления в кошельки креаторов: откликов {}, креаторов {}, ждут порога или окна {}, "
                 + "заморожено антифродом {}", credited, byCreator.size(), held, frozen);
         return credited;
     }
@@ -269,8 +269,8 @@ class EarningsServiceImpl implements EarningsService {
         if (!campaign.paysViews(views)) {
             return 0L;
         }
-        long rate = campaign.getRatePerThousandKopecks() != null ? campaign.getRatePerThousandKopecks() : 0L;
-        long maturedAccrual = Math.min(application.accrued(), PayoutCalculator.accrual(views, rate, Long.MAX_VALUE));
+        long maturedAccrual = Math.min(application.accrued(),
+                PayoutCalculator.accrual(views, application.rateFor(campaign), Long.MAX_VALUE));
         return maturedAccrual - credited;
     }
 

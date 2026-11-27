@@ -11,11 +11,11 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Сохранение профиля криатора")
+@Schema(description = "Сохранение профиля креатора")
 public class CreatorProfileRequestDTO {
 
     @Size(max = 255)
-    @Schema(description = "Как показывать криатора заказчику; пусто — имя из учётки", example = "аня снимает")
+    @Schema(description = "Как показывать креатора заказчику; пусто — имя из учётки", example = "аня снимает")
     private String displayName;
 
     @Schema(description = "О себе: формат роликов, аудитория, чем берёшь")

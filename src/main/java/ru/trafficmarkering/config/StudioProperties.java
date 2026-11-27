@@ -22,7 +22,7 @@ public class StudioProperties {
     private int maxActive = 2;
     private long renderTimeoutSeconds = 300;
     private long sourceMaxBytes = 80L * 1024 * 1024;
-    private long bannerMaxBytes = 20L * 1024 * 1024;
+    private long bannerMaxBytes = 50L * 1024 * 1024;
     private long backgroundMaxBytes = 30L * 1024 * 1024;
     /** Готовый ролик хранится, часов */
     private int resultTtlHours = 48;
@@ -51,6 +51,10 @@ public class StudioProperties {
         private long incomingMaxBytes = 20_000_000;
         /** Облако: отправить файлом в чат — до 50 МБ */
         private long outgoingMaxBytes = 50_000_000;
+        /** Иконки из пака tgiosicons вместо обычных эмодзи; видны, если у владельца бота Telegram Premium */
+        private boolean customEmoji = true;
+        /** Пак, из которого при старте подгружаются иконки для всех эмодзи; пусто — только ручная разметка */
+        private String emojiPack = "tgiosicons";
 
         public boolean enabled() {
             return botToken != null && !botToken.isBlank();

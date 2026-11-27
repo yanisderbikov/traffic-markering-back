@@ -8,7 +8,7 @@ import ru.trafficmarkering.dto.fraud.TrustUpdateRequestDTO;
 import java.util.List;
 import java.util.UUID;
 
-/** Кабинет антифрода: очередь подозрительных роликов и репутация криаторов. */
+/** Кабинет антифрода: очередь подозрительных роликов и репутация креаторов. */
 public interface FraudAdminService {
 
     /**

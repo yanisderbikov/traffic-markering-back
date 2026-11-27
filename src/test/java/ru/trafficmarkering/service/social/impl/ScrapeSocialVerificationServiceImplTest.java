@@ -44,7 +44,7 @@ class ScrapeSocialVerificationServiceImplTest {
     private final SaverSocialAccount saverSocialAccount = mock(SaverSocialAccount.class);
     private final VerificationCodes codes = new VerificationCodes("test-secret-test-secret-test-secret");
 
-    private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(2L).name("Креатор").role(Role.CREATOR).build();
     private final String code = codes.codeFor(2L, Platform.TIKTOK, "tt-1");
 
     private ScrapeSocialVerificationServiceImpl service(boolean scrape) {

@@ -15,7 +15,7 @@ public record WalletDTO(
         @Schema(description = "Компания заказчика; null — профиль не заполнен") String customerCompany,
         @Schema(description = "Свободные средства, в копейках") Long balanceKopecks,
         @Schema(description = "Сумма бюджетов всех объявлений заказчика, в копейках") Long allocatedKopecks,
-        @Schema(description = "Уже начислено криаторам по всем объявлениям, в копейках") Long spentKopecks,
+        @Schema(description = "Уже начислено креаторам по всем объявлениям, в копейках") Long spentKopecks,
         @Schema(description = "Адрес TRON платформы для пополнения USDT (TRC-20); null — не настроен") String topUpTronAddress,
         @Schema(description = "Комиссия платформы, %: при пополнении платится сверху суммы, при выводе удерживается", example = "10") BigDecimal commissionPercent,
         String updatedAt

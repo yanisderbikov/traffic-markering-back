@@ -46,11 +46,11 @@ class CampaignAccrualServiceImplTest {
             new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign,
                     creatorTrustService, fraudProperties, getterCampaign);
 
-    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(7L).name("Креатор").role(Role.CREATOR).build();
 
     @BeforeEach
     void setUp() {
-        // По умолчанию криатор проверенный: потолок новичка проверяется отдельными тестами
+        // По умолчанию креатор проверенный: потолок новичка проверяется отдельными тестами
         when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
     }
 
@@ -68,6 +68,25 @@ class CampaignAccrualServiceImplTest {
         assertEquals(0L, fraud.getAccruedKopecks().longValue());
         assertEquals(700_00L, honest.getAccruedKopecks().longValue());
         assertEquals(700_00L, campaign.getSpentKopecks().longValue());
+    }
+
+    @Test
+    void recalculate_paysEachVideoByItsContentTopicRate() {
+        // Ставка тематики зафиксирована при подаче: смена общей ставки объявления её не трогает
+        Campaign campaign = campaign(115_00, 100_000_00);
+        Application games = application(ApplicationStatus.APPROVED, 10_000, 0);
+        games.setContentTopic("CS и Dota 2");
+        games.setBaseRateKopecks(115_00L);
+        Application humor = application(ApplicationStatus.APPROVED, 10_000, 0);
+        humor.setContentTopic("Юмор");
+        humor.setBaseRateKopecks(15_00L);
+        when(getterApplication.getByCampaignIdOrderByCreatedAt(campaign.getId())).thenReturn(List.of(games, humor));
+
+        campaign.setRatePerThousandKopecks(200_00L);
+        service.recalculate(campaign);
+
+        assertEquals(1_150_00L, games.getAccruedKopecks().longValue());
+        assertEquals(150_00L, humor.getAccruedKopecks().longValue());
     }
 
     @Test

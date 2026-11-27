@@ -105,6 +105,8 @@ class PlacementServiceImpl implements PlacementService {
         requireAcceptingWork(campaign);
         requireNotBlocked(creator);
 
+        // Тематика ролика задаёт базовую ставку: выбор можно менять, пока работа не подана
+        ContentTopics.choose(application, campaign, request.getContentTopic());
         String previousKey = application.getVideoKey();
         videoChecks.attach(application, campaign, creator, request.getVideoUrl().trim());
         if (!Objects.equals(previousKey, application.getVideoKey())) {
@@ -137,6 +139,10 @@ class PlacementServiceImpl implements PlacementService {
         if (application.getVideoUrl() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Сначала рассчитайте работу по ссылке на ролик");
+        }
+        if (campaign.hasContentRates() && campaign.contentRate(application.getContentTopic()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Выберите тематику ролика и рассчитайте работу ещё раз");
         }
         ApplicationViewSnapshot snapshot = requireFreshQuote(application, request);
         boolean withLink = application.link().state().selected();
@@ -214,7 +220,7 @@ class PlacementServiceImpl implements PlacementService {
         }
         requireSubmittedAndAlive(application);
         Placement placement = requireRevisable(application, kind);
-        placement.decide(PlacementState.NOT_SELECTED, "Криатор продолжил без этой надбавки", creator.getId(),
+        placement.decide(PlacementState.NOT_SELECTED, "Креатор продолжил без этой надбавки", creator.getId(),
                 Instant.now());
         saverApplication.save(application);
         campaignAccrualService.recalculate(application.getCampaign());
@@ -239,7 +245,7 @@ class PlacementServiceImpl implements PlacementService {
         Placement placement = application.placement(kind);
         switch (placement.state()) {
             case NOT_SELECTED -> throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Криатор не выбирал эту надбавку");
+                    "Креатор не выбирал эту надбавку");
             case EARNED -> throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Надбавка уже засчитана — решение окончательное");
             default -> {
@@ -247,10 +253,10 @@ class PlacementServiceImpl implements PlacementService {
         }
         String reason = Placements.trimToNull(request.getReason());
         if (decision == PlacementState.REJECTED && reason == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отказа: её увидит криатор");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отказа: её увидит креатор");
         }
         Instant now = Instant.now();
-        // Подтверждение после конца срока размещения сразу окончательно: держать ссылку дальше криатор не обязан
+        // Подтверждение после конца срока размещения сразу окончательно: держать ссылку дальше креатор не обязан
         boolean retentionOver = application.getPlacementRetainUntil() != null
                 && !now.isBefore(application.getPlacementRetainUntil());
         PlacementState next = decision == PlacementState.VERIFIED && retentionOver ? PlacementState.EARNED : decision;
@@ -399,7 +405,7 @@ class PlacementServiceImpl implements PlacementService {
         link.resubmit(proofKey, null);
     }
 
-    /** Подтверждается ровно тот расчёт, что видел криатор, и пока он свежий. */
+    /** Подтверждается ровно тот расчёт, что видел креатор, и пока он свежий. */
     private ApplicationViewSnapshot requireFreshQuote(Application application, SnapshotSubmitRequestDTO request) {
         List<ApplicationViewSnapshot> snapshots = getterViewSnapshot.getByApplicationId(application.getId());
         ApplicationViewSnapshot latest = snapshots.isEmpty() ? null : snapshots.get(0);

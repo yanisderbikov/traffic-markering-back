@@ -6,7 +6,7 @@ import ru.trafficmarkering.model.fraud.TrustLevel;
 import ru.trafficmarkering.model.profile.CreatorProfile;
 import ru.trafficmarkering.service.fraud.CreatorTrustService.TrustStats;
 
-@Schema(description = "Криатор с репутацией и историей проверок")
+@Schema(description = "Креатор с репутацией и историей проверок")
 public record CreatorTrustDTO(
         Long userId,
         String name,

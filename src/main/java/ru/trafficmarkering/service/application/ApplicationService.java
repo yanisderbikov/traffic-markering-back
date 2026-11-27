@@ -7,6 +7,8 @@ import ru.trafficmarkering.dto.application.ApplicationVideoRequestDTO;
 import ru.trafficmarkering.dto.application.ViewSnapshotDTO;
 import ru.trafficmarkering.dto.application.ViewsUpdateRequestDTO;
 
+import ru.trafficmarkering.model.moderation.Moderator;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -22,7 +24,7 @@ public interface ApplicationService {
     /** Приложить ролик к взятому в работу офферу: отклик уходит заказчику на рассмотрение. */
     ApplicationDTO attachVideo(UUID id, ApplicationVideoRequestDTO request);
 
-    /** Отклики текущего криатора, новые сверху. */
+    /** Отклики текущего креатора, новые сверху. */
     List<ApplicationDTO> getMyApplications();
 
     /**
@@ -42,6 +44,12 @@ public interface ApplicationService {
     List<ApplicationDTO> getModerationQueue();
 
     ApplicationDTO moderate(UUID id, ApplicationStatusUpdateRequestDTO request);
+
+    /**
+     * Решение менеджера из бота модерации: тот же переход, что и {@link #moderate}, но без входа на сайт —
+     * на ролике записывается менеджер, который нажал кнопку. 409 — ролик уже не ждёт модерации.
+     */
+    void moderateByManager(UUID id, ApplicationStatusUpdateRequestDTO request, Moderator moderator);
 
     /** Отозвать свой отклик или отказаться от работы; после решения заказчика отзывать уже поздно. */
     void delete(UUID id);

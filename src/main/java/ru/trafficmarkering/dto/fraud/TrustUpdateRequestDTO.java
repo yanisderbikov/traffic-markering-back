@@ -12,7 +12,7 @@ import ru.trafficmarkering.model.fraud.TrustLevel;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Ручная смена репутации криатора")
+@Schema(description = "Ручная смена репутации креатора")
 public class TrustUpdateRequestDTO {
 
     @Schema(description = "NEW, TRUSTED, RESTRICTED, BLOCKED; null — снять ручную отметку и вернуть автоматике")

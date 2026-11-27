@@ -65,7 +65,7 @@ public class FileController {
 
     @Operation(summary = "Ссылка на загрузку подтверждения перевода",
             description = "Presigned PUT-ссылка на скриншот или PDF перевода USDT. Заказчик прикладывает его к своей "
-                    + "заявке на пополнение, менеджер финансов — к выводу заказчику или выплате криатору",
+                    + "заявке на пополнение, менеджер финансов — к выводу заказчику или выплате креатору",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/transfer-proof/presign")
     public ResponseEntity<PresignUploadResponseDTO> presignTransferProof(
@@ -80,7 +80,7 @@ public class FileController {
     }
 
     @Operation(summary = "Ссылка на загрузку доказательства размещения",
-            description = "Presigned PUT-ссылка для криатора: скриншот профиля с рекламной ссылкой или запись экрана "
+            description = "Presigned PUT-ссылка для креатора: скриншот профиля с рекламной ссылкой или запись экрана "
                     + "с закреплённым комментарием и промокодом. Полученный key передаётся при подаче работы "
                     + "«ссылка и промокод» или при исправлении надбавки",
             security = @SecurityRequirement(name = "Bearer"))
@@ -97,7 +97,7 @@ public class FileController {
     }
 
     @Operation(summary = "Ссылка на загрузку материала объявления",
-            description = "Presigned PUT-ссылка на файл для криатора: бриф, баннер, референсы. "
+            description = "Presigned PUT-ссылка на файл для креатора: бриф, баннер, референсы. "
                     + "Полученный key передаётся в materials при сохранении объявления вместе с именем, типом и размером файла",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/campaign-material/presign")

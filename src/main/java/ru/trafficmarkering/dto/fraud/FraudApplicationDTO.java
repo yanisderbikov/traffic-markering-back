@@ -11,7 +11,7 @@ import ru.trafficmarkering.model.profile.CreatorProfile;
 public record FraudApplicationDTO(
         ApplicationDTO application,
         String creatorEmail,
-        @Schema(description = "Подписчики аккаунта криатора на площадке ролика; null — неизвестно") Long creatorFollowers,
+        @Schema(description = "Подписчики аккаунта креатора на площадке ролика; null — неизвестно") Long creatorFollowers,
         @Schema(description = "Последний замер с метриками; null — замеров ещё не было") ViewSnapshotDTO latestSnapshot,
         @Schema(description = "Начислено, но ещё не зачислено в кошелёк, в копейках") Long uncreditedKopecks,
         String fraudCheckedAt,

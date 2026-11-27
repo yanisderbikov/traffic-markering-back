@@ -54,8 +54,8 @@ public class PublicBoardController {
         return ResponseEntity.ok(campaignBenchmarkService.getSegment(publicId));
     }
 
-    @Operation(summary = "Профиль криатора",
-            description = "Витрина криатора: отображаемое имя, «о себе» и соцсети — заказчик смотрит, кому отдаёт заказ")
+    @Operation(summary = "Профиль креатора",
+            description = "Витрина креатора: отображаемое имя, «о себе» и соцсети — заказчик смотрит, кому отдаёт заказ")
     @GetMapping("/creators/{userId}")
     public ResponseEntity<CreatorProfileDTO> publicCreator(@PathVariable("userId") Long userId) {
         return ResponseEntity.ok(creatorProfileService.getPublicByUserId(userId));

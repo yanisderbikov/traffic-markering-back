@@ -21,7 +21,7 @@ public interface CurrentUserService {
 
     /**
      * Текущий пользователь с проверкой роли. ADMIN проходит любую проверку:
-     * ему открыты и кабинет заказчика, и кабинет криатора.
+     * ему открыты и кабинет заказчика, и кабинет креатора.
      *
      * @throws org.springframework.web.server.ResponseStatusException 401 — не авторизован, 403 — не та роль
      */

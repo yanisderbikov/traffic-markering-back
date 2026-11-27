@@ -14,7 +14,7 @@ import ru.trafficmarkering.model.campaign.MaterialKind;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Материал для криатора: загруженный файл или ссылка")
+@Schema(description = "Материал для креатора: загруженный файл или ссылка")
 public class CampaignMaterialRequestDTO {
 
     @NotNull(message = "Укажите вид материала: FILE или LINK")

@@ -79,7 +79,7 @@ class ScrapeVideoOwnershipImplTest {
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
     }
 
-    /** Свой ScrapeCreators отвечает 400 на ссылку, которую не может прочитать: это ошибка криатора, а не сбой. */
+    /** Свой ScrapeCreators отвечает 400 на ссылку, которую не может прочитать: это ошибка креатора, а не сбой. */
     @Test
     void unreadableLinkIsRejected() {
         when(api.video(Platform.INSTAGRAM, URL)).thenThrow(new ScrapeCreatorsException(400, "not a link to a post"));

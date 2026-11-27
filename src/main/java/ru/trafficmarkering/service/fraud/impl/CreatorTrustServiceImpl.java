@@ -82,7 +82,7 @@ class CreatorTrustServiceImpl implements CreatorTrustService {
         TrustStats stats = stats(getterApplication.getByCreatorId(creatorId));
         TrustLevel computed = levelFor(stats);
         if (computed != profile.trustLevel()) {
-            log.info("Репутация криатора {}: {} → {} (накруток {}, чистых оплаченных {})",
+            log.info("Репутация креатора {}: {} → {} (накруток {}, чистых оплаченных {})",
                     creatorId, profile.trustLevel(), computed, stats.strikes(), stats.cleanPaid());
             profile.setTrustLevel(computed);
             profile.setTrustUpdatedAt(Instant.now());

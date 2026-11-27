@@ -87,13 +87,35 @@ class StudioBotTest {
     @Test
     void unlinkedUserIsOfferedLoginOrRegistration() throws Exception {
         when(profiles.findByTelegramId(555L)).thenReturn(Optional.empty());
-        when(authService.openFromBot(any())).thenReturn(new TelegramAuthService.BotStep(
+        when(authService.openFromBot(any(), isNull())).thenReturn(new TelegramAuthService.BotStep(
                 TelegramAuthService.Step.CHOOSE_ACCOUNT, "abc", null, null, null, null));
         bot.handle(message("\"text\":\"/jobs\""));
         ArgumentCaptor<Object> markup = ArgumentCaptor.forClass(Object.class);
         verify(client).sendMessage(eq(555L), contains("не привязан"), markup.capture(), isNull());
         assertThat(markup.getValue().toString()).contains("au:abc:have", "au:abc:cr", "au:abc:cu")
                 .doesNotContain("au:abc:no");
+    }
+
+    @Test
+    void creatorStartLinkGreetsCreator() throws Exception {
+        when(profiles.findByTelegramId(555L)).thenReturn(Optional.empty());
+        when(authService.openFromBot(any(), eq(ru.trafficmarkering.model.Role.CREATOR))).thenReturn(new TelegramAuthService.BotStep(
+                TelegramAuthService.Step.CHOOSE_ACCOUNT, "abc", null, ru.trafficmarkering.model.Role.CREATOR, null, null));
+        bot.handle(message("\"text\":\"/start creator\""));
+        ArgumentCaptor<Object> markup = ArgumentCaptor.forClass(Object.class);
+        verify(client).sendMessage(eq(555L), contains("Привет, креатор"), markup.capture(), isNull());
+        assertThat(markup.getValue().toString()).contains("au:abc:cr", "au:abc:have").doesNotContain("au:abc:cu");
+    }
+
+    @Test
+    void customerStartLinkGreetsCustomer() throws Exception {
+        when(profiles.findByTelegramId(555L)).thenReturn(Optional.empty());
+        when(authService.openFromBot(any(), eq(ru.trafficmarkering.model.Role.CUSTOMER))).thenReturn(new TelegramAuthService.BotStep(
+                TelegramAuthService.Step.CHOOSE_ACCOUNT, "abc", null, ru.trafficmarkering.model.Role.CUSTOMER, null, null));
+        bot.handle(message("\"text\":\"/start customer\""));
+        ArgumentCaptor<Object> markup = ArgumentCaptor.forClass(Object.class);
+        verify(client).sendMessage(eq(555L), contains("для рекламодателей"), markup.capture(), isNull());
+        assertThat(markup.getValue().toString()).contains("au:abc:cu").doesNotContain("au:abc:cr");
     }
 
     @Test

@@ -15,7 +15,7 @@ final class Placements {
 
     /**
      * Вариант участия по зафиксированным в отклике ставкам: надбавку можно взять, только если объявление
-     * её предлагало, когда криатор брал оффер.
+     * её предлагало, когда креатор брал оффер.
      */
     static void choose(Application application, Campaign campaign, boolean withLink, boolean withPromo) {
         if (withLink && !(application.rateParts().link() > 0 && campaign.getPromoUrl() != null)) {
@@ -43,7 +43,7 @@ final class Placements {
         return key;
     }
 
-    /** Ссылка от криатора на комментарий или профиль: только http(s), чтобы её можно было открыть. */
+    /** Ссылка от креатора на комментарий или профиль: только http(s), чтобы её можно было открыть. */
     static String proofUrl(String value) {
         String url = trimToNull(value);
         if (url == null) {

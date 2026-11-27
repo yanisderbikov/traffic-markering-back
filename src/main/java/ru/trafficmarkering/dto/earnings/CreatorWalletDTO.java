@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 
-@Schema(description = "Кошелёк криатора: сколько доступно к выводу и что уже было")
+@Schema(description = "Кошелёк креатора: сколько доступно к выводу и что уже было")
 public record CreatorWalletDTO(
         Long userId,
         @Schema(description = "Доступно к выводу, в копейках") Long balanceKopecks,

@@ -195,7 +195,12 @@ public class StudioService {
             throw new StudioException("Загрузите видео MP4, MOV, WebM или MKV либо картинку PNG, JPG или WebP.");
         }
         if (!admin(user) && request.size() > limit) {
-            throw new StudioException("Файл больше " + (limit / 1024 / 1024) + " МиБ.");
+            String what = switch (purpose) {
+                case "BANNER" -> "Баннер";
+                case "BACKGROUND" -> "Фон";
+                default -> "Исходник";
+            };
+            throw new StudioException(what + " больше " + (limit / 1024 / 1024) + " МиБ. Сожмите файл или выберите другой.");
         }
         FileStorage.PresignedUpload upload = fileStorage.presignUpload(request.filename(), type,
                 StudioStorage.UPLOADS + "/" + user.getId());

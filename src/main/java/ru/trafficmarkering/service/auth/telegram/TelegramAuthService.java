@@ -247,15 +247,20 @@ public class TelegramAuthService {
                 .orElseGet(() -> new BotStep(Step.CHOOSE_ACCOUNT, auth.getId(), null, auth.getRole(), null, null));
     }
 
-    /** /login, /start без кода или кнопка «Войти на сайт» */
+    /**
+     * /login, /start без кода или кнопка «Войти на сайт».
+     * role — из ссылки t.me/bot?start=creator|customer: новому человеку сразу предлагается учётка этой роли.
+     */
     @Transactional
-    public BotStep openFromBot(TgUser tg) {
+    public BotStep openFromBot(TgUser tg, Role role) {
         Optional<User> user = identity.userOf(tg.id());
+        Role preset = role != null && Role.selfRegistrable().contains(role) ? role : null;
         TelegramAuth auth = TelegramAuth.builder()
                 .id(newId())
                 .secretHash(hash(secret()))
                 .origin(TelegramAuthOrigin.BOT)
                 .status(TelegramAuthStatus.PENDING)
+                .role(preset)
                 .createdAt(Instant.now())
                 .expiresAt(Instant.now().plus(TTL))
                 .build();
@@ -264,11 +269,11 @@ public class TelegramAuthService {
             return finish(auth, user.get());
         }
         auths.save(auth);
-        return new BotStep(Step.CHOOSE_ACCOUNT, auth.getId(), null, null, null, null);
+        return new BotStep(Step.CHOOSE_ACCOUNT, auth.getId(), null, preset, null, null);
     }
 
     /**
-     * Кнопка в боте: ok — войти, no — отмена, cr/cu — новая учётка криатора/рекламодателя,
+     * Кнопка в боте: ok — войти, no — отмена, cr/cu — новая учётка креатора/рекламодателя,
      * have — у меня есть учётка, войду по почте.
      */
     @Transactional

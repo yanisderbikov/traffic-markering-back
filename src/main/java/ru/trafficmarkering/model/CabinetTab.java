@@ -1,6 +1,7 @@
 package ru.trafficmarkering.model;
 
 public enum CabinetTab {
+    REFERRAL("/app/referral", "Рефералка", "Рефералка", "gift", false),
     OVERVIEW("/app", "Обзор", "Обзор", "chart", true),
     DASHBOARD("/app/admin/dashboard", "Аналитика", "Аналитика", "chart", false),
     BOARD("/app/board", "Офферы", "Офферы", "grid", false),
@@ -18,7 +19,6 @@ public enum CabinetTab {
     USERS("/app/admin/users", "Пользователи", "Люди", "users", false),
     BROADCASTS("/app/admin/broadcasts", "Рассылки", "Рассылки", "bell", false),
     STUDIO("/app/studio", "Видео-студия", "Студия", "play", false),
-    REFERRAL("/app/referral", "Рефералка", "Рефералка", "gift", false),
     PROFILE("/app/profile", "Профиль", "Профиль", "user", true);
 
     private final String path;

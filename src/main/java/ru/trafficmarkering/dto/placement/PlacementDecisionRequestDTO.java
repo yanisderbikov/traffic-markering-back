@@ -19,6 +19,6 @@ public class PlacementDecisionRequestDTO {
     @Schema(description = "VERIFIED — подтвердить, REJECTED — не подтверждать (нужна причина)", required = true)
     private PlacementState decision;
 
-    @Schema(description = "Причина отказа; её увидит криатор")
+    @Schema(description = "Причина отказа; её увидит креатор")
     private String reason;
 }

@@ -70,12 +70,16 @@ class ApplicationServiceImplTest {
     private final ru.trafficmarkering.service.notify.ApplicationNotifications notifications =
             mock(ru.trafficmarkering.service.notify.ApplicationNotifications.class);
 
+    private final ru.trafficmarkering.service.views.ViewsSyncService viewsSyncService =
+            mock(ru.trafficmarkering.service.views.ViewsSyncService.class);
+
     private final ApplicationServiceImpl service = new ApplicationServiceImpl(
             getterApplication, saverApplication, applicationDeleter, getterCampaign, getterCreatorProfile,
             currentUserService, campaignAccrualService, getterViewSnapshot,
             saverViewSnapshot, creatorTrustService, fraudCheckService,
             new VideoChecks(getterApplication, getterSocialAccount, shortLinkResolver, socialVideoOwnership),
-            notifications, new PlacementDtos(mock(ru.trafficmarkering.service.storage.FileStorage.class)));
+            notifications, new PlacementDtos(mock(ru.trafficmarkering.service.storage.FileStorage.class)),
+            viewsSyncService);
 
     {
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.NEW);
@@ -96,7 +100,7 @@ class ApplicationServiceImplTest {
     }
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
-    private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(2L).name("Креатор").role(Role.CREATOR).build();
     private final User manager = User.builder().id(3L).name("Менеджер").role(Role.ADMIN).build();
 
     @Test
@@ -254,6 +258,26 @@ class ApplicationServiceImplTest {
         assertEquals(YOUTUBE_URL, result.videoUrl());
         assertEquals("Готово", result.comment());
         verify(saverApplication).save(application);
+        // просмотры фиксируются один раз — при подаче
+        verify(viewsSyncService).captureNow(application.getId());
+    }
+
+    @Test
+    void attachVideo_failsWhenViewsCannotBeCaptured() {
+        Campaign campaign = activeCampaign(EnumSet.of(Platform.YOUTUBE_SHORTS));
+        Application application = inProgress(campaign);
+        when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
+        when(getterApplication.getById(application.getId())).thenReturn(Optional.of(application));
+        when(getterSocialAccount.getActiveByUserIdAndPlatform(creator.getId(), Platform.YOUTUBE_SHORTS))
+                .thenReturn(Optional.of(new SocialAccount()));
+        when(getterApplication.getActiveByVideoKey(anyString())).thenReturn(Optional.empty());
+        when(viewsSyncService.captureNow(application.getId()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Площадка не отдала просмотры ролика"));
+
+        assertThrows(ResponseStatusException.class, () -> service.attachVideo(application.getId(),
+                ApplicationVideoRequestDTO.builder().videoUrl(YOUTUBE_URL).build()));
+
+        verify(notifications, never()).submitted(any());
     }
 
     @Test

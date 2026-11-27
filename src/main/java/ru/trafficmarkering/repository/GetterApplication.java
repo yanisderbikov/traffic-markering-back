@@ -23,7 +23,7 @@ public interface GetterApplication {
 
     Optional<Application> getByIdForUpdate(UUID id);
 
-    /** Отклики криатора, новые сверху. */
+    /** Отклики креатора, новые сверху. */
     List<Application> getByCreatorId(Long creatorId);
 
     /** Сколько откликов у объявления: по нему заказчику запрещают удалять объявление. */

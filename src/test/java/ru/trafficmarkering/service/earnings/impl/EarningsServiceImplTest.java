@@ -109,7 +109,7 @@ class EarningsServiceImplTest {
         when(getterWallet.getByIdForUpdate(10L)).thenReturn(Optional.of(wallet));
         when(currentUserService.require(Role.CREATOR)).thenReturn(creator);
         when(fileStorage.presignedUrl(any())).thenAnswer(inv -> "https://s3/" + inv.getArgument(0));
-        // Базовые тесты — без окна удержания и с проверенным криатором; антифрод проверяется отдельно
+        // Базовые тесты — без окна удержания и с проверенным креатором; антифрод проверяется отдельно
         when(creatorTrustService.levelOf(any())).thenReturn(TrustLevel.TRUSTED);
         when(usdtRateService.current()).thenReturn(new UsdtRateDTO(
                 new BigDecimal("86.76"), new BigDecimal("86.73"), Instant.now().toString(), "Rapira"));
@@ -135,7 +135,7 @@ class EarningsServiceImplTest {
         assertThat(detail.transfer().usdtRate()).isEqualByComparingTo("86.76");
         assertThat(detail.transfer().commissionKopecks()).isEqualTo(500_00L);
         assertThat(detail.transfer().transferKopecks()).isEqualTo(4_500_00L);
-        assertThat(detail.transaction().source().label()).isEqualTo("Кошелёк криатора · Аня");
+        assertThat(detail.transaction().source().label()).isEqualTo("Кошелёк креатора · Аня");
         assertThat(detail.transaction().destination().label()).isEqualTo("TRON · " + TRON);
         ArgumentCaptor<Transfer> saved = ArgumentCaptor.forClass(Transfer.class);
         verify(saverTransfer).save(saved.capture());

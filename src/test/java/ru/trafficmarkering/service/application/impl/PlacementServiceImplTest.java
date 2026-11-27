@@ -76,7 +76,7 @@ class PlacementServiceImplTest {
             viewsSyncService, campaignAccrualService, notifications, placementFinalizer);
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
-    private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(2L).name("Креатор").role(Role.CREATOR).build();
     private final User stranger = User.builder().id(9L).name("Чужой").role(Role.CUSTOMER).build();
 
     private Campaign campaign;
@@ -128,7 +128,7 @@ class PlacementServiceImplTest {
         ApplicationViewSnapshot snapshot = capture(10_480L, Instant.now());
         linkCheckReturns(PlacementCheck.FOUND);
 
-        SnapshotQuoteDTO quote = service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO));
+        SnapshotQuoteDTO quote = service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null));
 
         assertEquals(snapshot.getId(), quote.snapshotId());
         assertEquals(10_400L, quote.billableViews());
@@ -151,7 +151,7 @@ class PlacementServiceImplTest {
         });
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO)));
+                () -> service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null)));
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         assertThat(error.getReason()).contains("только новые");
@@ -322,7 +322,7 @@ class PlacementServiceImplTest {
     private ApplicationViewSnapshot quoted(long views, PlacementCheck linkCheck) {
         ApplicationViewSnapshot snapshot = capture(views, Instant.now());
         linkCheckReturns(linkCheck);
-        service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO));
+        service.quote(work.getId(), new SnapshotQuoteRequestDTO(VIDEO, null));
         when(getterViewSnapshot.getByApplicationId(work.getId())).thenReturn(List.of(snapshot));
         return snapshot;
     }

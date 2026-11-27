@@ -17,14 +17,14 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tech/earnings")
 @RequiredArgsConstructor
-@Tag(name = "TechEarnings", description = "Ручной запуск ночного начисления в кошельки криаторов")
+@Tag(name = "TechEarnings", description = "Ручной запуск ночного начисления в кошельки креаторов")
 public class TechEarningsController {
 
     private final EarningsService earningsService;
 
     @Operation(summary = "Начислить накопленное сейчас",
             description = "То же, что делает ночной шедулер: по каждому отклику разница между начисленным "
-                    + "и уже зачисленным уходит в кошелёк криатора. Ответ — сколько откликов зачислено",
+                    + "и уже зачисленным уходит в кошелёк креатора. Ответ — сколько откликов зачислено",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/credit")
     public ResponseEntity<Map<String, Integer>> creditEarnings() {

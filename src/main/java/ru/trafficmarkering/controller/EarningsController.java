@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/earnings")
 @RequiredArgsConstructor
-@Tag(name = "Earnings", description = "Кошелёк криатора: начисления за просмотры и заявки на вывод USDT")
+@Tag(name = "Earnings", description = "Кошелёк креатора: начисления за просмотры и заявки на вывод USDT")
 public class EarningsController {
 
     private final EarningsService earningsService;
@@ -68,7 +68,7 @@ public class EarningsController {
     }
 
     @Operation(summary = "Подтвердить получение",
-            description = "Только для заявки в статусе SENT: криатор увидел USDT на своём кошельке",
+            description = "Только для заявки в статусе SENT: креатор увидел USDT на своём кошельке",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/payouts/{publicId}/confirm")
     public ResponseEntity<OperationDetailDTO> confirmPayout(@PathVariable("publicId") String publicId) {

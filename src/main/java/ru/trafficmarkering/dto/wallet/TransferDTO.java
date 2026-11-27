@@ -19,7 +19,7 @@ public record TransferDTO(
         @Schema(description = "Почему операция отклонена; null — не отклонена") String rejectReason,
         @Schema(description = "Скриншоты перевода: ключ и временная ссылка") List<ProofDTO> proofs,
         @Schema(description = "Финансист, который провёл или отклонил") String processedByName,
-        @Schema(description = "Владелец кошелька: криатор для выплаты, заказчик для пополнения и вывода") Long ownerId,
+        @Schema(description = "Владелец кошелька: креатор для выплаты, заказчик для пополнения и вывода") Long ownerId,
         String ownerName,
         String ownerEmail,
         String sentAt,

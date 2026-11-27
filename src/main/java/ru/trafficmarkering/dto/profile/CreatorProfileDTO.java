@@ -6,10 +6,10 @@ import ru.trafficmarkering.model.profile.CreatorProfile;
 
 import java.util.UUID;
 
-@Schema(description = "Профиль криатора")
+@Schema(description = "Профиль креатора")
 public record CreatorProfileDTO(
         UUID id,
-        @Schema(description = "ID пользователя-криатора") Long userId,
+        @Schema(description = "ID пользователя-креатора") Long userId,
         @Schema(description = "Имя из учётной записи") String name,
         @Schema(description = "Отображаемое имя; может быть null") String displayName,
         String bio,

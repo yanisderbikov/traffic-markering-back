@@ -140,7 +140,7 @@ public class CampaignController {
     }
 
     @Operation(summary = "Удалить объявление",
-            description = "Только пока по объявлению нет откликов, иначе 409: удаление стёрло бы историю начислений криаторам",
+            description = "Только пока по объявлению нет откликов, иначе 409: удаление стёрло бы историю начислений креаторам",
             security = @SecurityRequirement(name = "Bearer"))
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCampaign(@PathVariable("id") UUID id) {
@@ -149,7 +149,7 @@ public class CampaignController {
     }
 
     @Operation(summary = "Отклики по объявлению",
-            description = "Криаторы, ссылки на ролики, просмотры и начисленные суммы; старые сверху",
+            description = "Креаторы, ссылки на ролики, просмотры и начисленные суммы; старые сверху",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/{id}/applications")
     public ResponseEntity<List<ApplicationDTO>> campaignApplications(@PathVariable("id") UUID id) {

@@ -22,11 +22,12 @@ public record CampaignDTO(
         @Schema(description = "Человекочитаемая тематика", example = "Технологии и гаджеты") String topicDescription,
         @Schema(description = "Средняя ставка за 1000 просмотров по тематике, в копейках; null — неизвестна")
         Long topicAverageRatePerThousandKopecks,
-        @Schema(description = "Ставка за 1000 просмотров, в копейках") Long ratePerThousandKopecks,
+        @Schema(description = "Ставка за 1000 просмотров, в копейках; при ставках по тематикам — наибольшая из них") Long ratePerThousandKopecks,
+        @Schema(description = "Ставки по тематикам роликов; пусто — одна ставка на все ролики") List<CampaignContentRateDTO> contentRates,
         @Schema(description = "Выделенный бюджет, в копейках") Long budgetKopecks,
-        @Schema(description = "Уже начислено криаторам, в копейках") Long spentKopecks,
+        @Schema(description = "Уже начислено креаторам, в копейках") Long spentKopecks,
         @Schema(description = "Остаток бюджета, в копейках") Long remainingKopecks,
-        @Schema(description = "С какой накопленной по объявлению суммы криатор может выводить заработанное, в копейках") Long minPayoutKopecks,
+        @Schema(description = "С какой накопленной по объявлению суммы креатор может выводить заработанное, в копейках") Long minPayoutKopecks,
         @Schema(description = "Статус: DRAFT, ACTIVE, PAUSED, COMPLETED") String status,
         @Schema(description = "Человекочитаемый статус", example = "Активно") String statusDescription,
         @Schema(description = "Площадки, с которых принимаются ролики: INSTAGRAM, TIKTOK, YOUTUBE_SHORTS") List<String> platforms,
@@ -34,12 +35,12 @@ public record CampaignDTO(
         @Schema(description = "Человекочитаемый регион просмотров", example = "СНГ") String viewRegionDescription,
         @Schema(description = "Минимальная длина ролика в секундах; null — без ограничения") Integer minVideoSeconds,
         @Schema(description = "Сколько просмотров должен набрать ролик, чтобы его оплатили; null — оплачиваются все") Long minPaidViews,
-        @Schema(description = "Сколько роликов может подать один криатор; null — без ограничения") Integer maxVideosPerCreator,
+        @Schema(description = "Сколько роликов может подать один креатор; null — без ограничения") Integer maxVideosPerCreator,
         @Schema(description = "С какого момента принимаются отклики, ISO-8601; null — сразу") String startsAt,
         @Schema(description = "До какого момента принимаются отклики, ISO-8601; null — бессрочно") String endsAt,
         @Schema(description = "Принимает ли объявление отклики прямо сейчас: статус ACTIVE и период действия не истёк") boolean acceptingApplications,
-        @Schema(description = "Материалы для криатора в порядке показа") List<CampaignMaterialDTO> materials,
-        @Schema(description = "Как платит объявление: CONTINUOUS — по мере роста просмотров, SNAPSHOT — «ссылка и промокод»") String paymentModel,
+        @Schema(description = "Материалы для креатора в порядке показа") List<CampaignMaterialDTO> materials,
+        @Schema(description = "Как платит объявление: CONTINUOUS — за просмотры на момент подачи ролика, SNAPSHOT — «ссылка и промокод»") String paymentModel,
         @Schema(description = "Человекочитаемый способ оплаты") String paymentModelDescription,
         @Schema(description = "Общая рекламная ссылка; на публичной странице скрыта до взятия оффера") String promoUrl,
         @Schema(description = "Общий промокод; на публичной странице скрыт до взятия оффера") String promoCode,
@@ -84,6 +85,7 @@ public record CampaignDTO(
                 campaign.getTopic() != null ? campaign.getTopic().getName() : null,
                 campaign.getTopic() != null ? campaign.getTopic().getAverageRatePerThousandKopecks() : null,
                 campaign.getRatePerThousandKopecks(),
+                campaign.getContentRates().stream().map(CampaignContentRateDTO::from).toList(),
                 campaign.getBudgetKopecks(),
                 campaign.getSpentKopecks(),
                 campaign.remainingKopecks(),
@@ -121,10 +123,10 @@ public record CampaignDTO(
                 campaign.getUpdatedAt() != null ? campaign.getUpdatedAt().toString() : null);
     }
 
-    /** Для публичной страницы: ссылку и промокод криатор получает, когда берёт оффер в работу. */
+    /** Для публичной страницы: ссылку и промокод креатор получает, когда берёт оффер в работу. */
     public CampaignDTO withoutPromoMaterials() {
         return new CampaignDTO(id, publicId, title, description, photoUrl, photoKey, topic, topicDescription,
-                topicAverageRatePerThousandKopecks, ratePerThousandKopecks, budgetKopecks, spentKopecks,
+                topicAverageRatePerThousandKopecks, ratePerThousandKopecks, contentRates, budgetKopecks, spentKopecks,
                 remainingKopecks, minPayoutKopecks, status, statusDescription, platforms, viewRegion,
                 viewRegionDescription, minVideoSeconds, minPaidViews, maxVideosPerCreator, startsAt, endsAt,
                 acceptingApplications, materials, paymentModel, paymentModelDescription, null, null, promoBenefit,

@@ -8,16 +8,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-/** Репутация криаторов: уровень доверия и его автоматический пересчёт. */
+/** Репутация креаторов: уровень доверия и его автоматический пересчёт. */
 public interface CreatorTrustService {
 
-    /** Сколько подтверждённых накруток, подозрительных и чистых оплаченных роликов у криатора. */
+    /** Сколько подтверждённых накруток, подозрительных и чистых оплаченных роликов у креатора. */
     record TrustStats(int strikes, int suspicious, int cleanPaid, int total) {
     }
 
     TrustLevel levelOf(Long creatorId);
 
-    /** Уровни сразу для пачки криаторов — чтобы пересчёт объявления не ходил в базу по каждому отклику. */
+    /** Уровни сразу для пачки креаторов — чтобы пересчёт объявления не ходил в базу по каждому отклику. */
     Map<Long, TrustLevel> levelsOf(Collection<Long> creatorIds);
 
     TrustStats stats(List<Application> applications);
@@ -31,7 +31,7 @@ public interface CreatorTrustService {
 
     /**
      * Ручное решение админа. {@code level == null} снимает ручную отметку и возвращает
-     * криатора автоматике.
+     * креатора автоматике.
      */
     TrustLevel setManual(Long creatorId, TrustLevel level, String note, User admin);
 }

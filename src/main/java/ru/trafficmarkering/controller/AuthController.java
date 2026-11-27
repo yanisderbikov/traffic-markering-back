@@ -53,7 +53,7 @@ public class AuthController {
     private final CurrentUserService currentUserService;
 
     @Operation(summary = "Регистрация",
-            description = "Роль — CUSTOMER (заказчик) или CREATOR (криатор). Заводится учётка с пустым профилем "
+            description = "Роль — CUSTOMER (заказчик) или CREATOR (креатор). Заводится учётка с пустым профилем "
                     + "нужного типа и на почту уходит код входа; токен выдаёт verify. "
                     + "409, если почта уже занята подтверждённой учёткой")
     @PostMapping("/register")

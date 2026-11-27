@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Ручки ScrapeCreators, которые нужны сервису, с разбором ответа в общие записи.
@@ -49,6 +50,35 @@ public class ScrapeCreatorsApi {
             case YOUTUBE_SHORTS -> youtubeVideo(videoUrl);
             default -> throw new IllegalArgumentException("ScrapeCreators не поддерживает площадку " + platform);
         };
+    }
+
+    /**
+     * Прямая ссылка на файл ролика (для бота модерации, когда yt-dlp не справился). TikTok — play_addr
+     * без водяного знака либо download_addr, Instagram — video_url; YouTube прямых ссылок не отдаёт.
+     * Стоит кредит, поэтому зовётся только запасным вариантом.
+     */
+    public Optional<String> videoFileUrl(Platform platform, String videoUrl) {
+        return switch (platform) {
+            case TIKTOK -> {
+                Map<String, Object> video = JsonNode.object(JsonNode.object(
+                        client.get("/v2/tiktok/video", Map.of("url", videoUrl)), "aweme_detail"), "video");
+                yield firstUrl(video, "play_addr", "download_addr", "play_addr_h264");
+            }
+            case INSTAGRAM -> Optional.ofNullable(JsonNode.text(JsonNode.object(JsonNode.object(
+                    client.get("/v1/instagram/post", Map.of("url", videoUrl)), "data"), "xdt_shortcode_media"), "video_url"));
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<String> firstUrl(Map<String, Object> video, String... keys) {
+        for (String key : keys) {
+            for (Object url : JsonNode.array(JsonNode.object(video, key), "url_list")) {
+                if (url instanceof String text && text.startsWith("http")) {
+                    return Optional.of(text);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private ScrapeProfile tiktokProfile(ProfileRef ref) {
@@ -236,7 +266,7 @@ public class ScrapeCreatorsApi {
         }
     }
 
-    /** «http://www.youtube.com/@ThePatMcAfeeShow» → ThePatMcAfeeShow; нет @ в ссылке — то, что ввёл криатор. */
+    /** «http://www.youtube.com/@ThePatMcAfeeShow» → ThePatMcAfeeShow; нет @ в ссылке — то, что ввёл креатор. */
     private static String youtubeHandle(String channelUrl, ProfileRef ref) {
         if (channelUrl != null) {
             int at = channelUrl.lastIndexOf("/@");
