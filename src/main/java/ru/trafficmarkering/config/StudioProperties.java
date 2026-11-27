@@ -22,7 +22,7 @@ public class StudioProperties {
     private int maxActive = 2;
     private long renderTimeoutSeconds = 300;
     private long sourceMaxBytes = 80L * 1024 * 1024;
-    private long bannerMaxBytes = 20L * 1024 * 1024;
+    private long bannerMaxBytes = 50L * 1024 * 1024;
     private long backgroundMaxBytes = 30L * 1024 * 1024;
     /** Готовый ролик хранится, часов */
     private int resultTtlHours = 48;
