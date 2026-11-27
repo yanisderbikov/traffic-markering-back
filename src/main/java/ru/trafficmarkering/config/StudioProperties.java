@@ -53,6 +53,8 @@ public class StudioProperties {
         private long outgoingMaxBytes = 50_000_000;
         /** Иконки из пака tgiosicons вместо обычных эмодзи; видны, если у владельца бота Telegram Premium */
         private boolean customEmoji = true;
+        /** Пак, из которого при старте подгружаются иконки для всех эмодзи; пусто — только ручная разметка */
+        private String emojiPack = "tgiosicons";
 
         public boolean enabled() {
             return botToken != null && !botToken.isBlank();

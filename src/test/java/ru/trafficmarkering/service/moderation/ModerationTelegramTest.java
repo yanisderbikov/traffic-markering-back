@@ -14,7 +14,7 @@ class ModerationTelegramTest {
         moderation.getTelegram().setWebhookBaseUrl(own);
         StudioProperties studioProperties = new StudioProperties();
         studioProperties.getTelegram().setWebhookBaseUrl(studio);
-        return new ModerationTelegram(moderation, studioProperties, new ObjectMapper(), back).webhookUrl();
+        return new ModerationTelegram(moderation, studioProperties, new ObjectMapper(), back, null).webhookUrl();
     }
 
     @Test

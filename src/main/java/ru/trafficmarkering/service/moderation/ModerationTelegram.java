@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import ru.trafficmarkering.config.ModerationProperties;
 import ru.trafficmarkering.config.StudioProperties;
 import ru.trafficmarkering.service.studio.telegram.TelegramClient;
+import ru.trafficmarkering.service.studio.telegram.TelegramEmojiPack;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -33,10 +34,12 @@ public class ModerationTelegram {
     private final TelegramClient client;
     private final String backUrl;
     private final String studioWebhookBaseUrl;
+    private final TelegramEmojiPack emojiPack;
     private volatile String username;
 
     public ModerationTelegram(ModerationProperties properties, StudioProperties studio, ObjectMapper json,
-                              @Value("${url.back}") String backUrl) {
+                              @Value("${url.back}") String backUrl, TelegramEmojiPack emojiPack) {
+        this.emojiPack = emojiPack;
         this.properties = properties;
         this.studioWebhookBaseUrl = studio.getTelegram().getWebhookBaseUrl();
         this.client = new TelegramClient(properties.getTelegram(), json);
@@ -127,6 +130,10 @@ public class ModerationTelegram {
                     Map.of("command", "help", "description", "Как это работает"))));
             JsonNode me = client.call("getMe", Map.of());
             username = me.path("username").asText(username);
+            if (properties.getTelegram().isCustomEmoji() && emojiPack != null) {
+                // бот студии мог быть выключен — тогда пак иконок грузит этот бот
+                emojiPack.loadWith(client);
+            }
             log.info("Модерация: вебхук Telegram @{} → {}", username, url);
         } catch (RuntimeException e) {
             log.error("Модерация: не удалось зарегистрировать вебхук Telegram: {}", e.getMessage());
