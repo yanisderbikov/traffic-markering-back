@@ -256,11 +256,17 @@ class CampaignServiceImpl implements CampaignService {
         }
         Set<String> seen = new HashSet<>();
         for (CampaignContentRateDTO rate : requested) {
-            String name = rate.name().strip().replaceAll("\\s+", " ");
+            // Тематика из справочника называется так, как в справочнике; основная тематика объявления — первая из них
+            CampaignTopic topic = topicOrNull(rate.topicCode());
+            String name = topic != null ? topic.getName() : rate.name().strip().replaceAll("\\s+", " ");
             if (!seen.add(CampaignTopic.normalize(name))) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Тематика указана дважды: " + name);
             }
-            campaign.getContentRates().add(new CampaignContentRate(name, rate.ratePerThousandKopecks()));
+            if (topic != null && campaign.getTopic() == null) {
+                campaign.setTopic(topic);
+            }
+            campaign.getContentRates().add(new CampaignContentRate(name, rate.ratePerThousandKopecks(),
+                    topic != null ? topic.getCode() : null));
         }
         campaign.setRatePerThousandKopecks(campaign.getContentRates().stream()
                 .mapToLong(CampaignContentRate::getRatePerThousandKopecks)

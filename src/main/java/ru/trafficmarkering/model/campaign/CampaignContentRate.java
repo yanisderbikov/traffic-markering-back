@@ -11,8 +11,8 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Тематика ролика со своей ставкой: заказчик называет её сам («CS и Dota 2», «Юмор»),
- * креатор при подаче выбирает, к какой относится его ролик.
+ * Тематика ролика со своей ставкой: заказчик выбирает несколько тематик из справочника и ставит
+ * ставку за каждую, креатор при подаче выбирает, к какой относится его ролик.
  */
 @Embeddable
 @Getter
@@ -33,4 +33,12 @@ public class CampaignContentRate {
     /** Ставка за 1000 просмотров, в копейках */
     @Column(name = "rate_per_thousand_kopecks", nullable = false)
     private Long ratePerThousandKopecks;
+
+    /** Код тематики из справочника; null — название задано от руки, так было до выбора из справочника */
+    @Column(name = "topic_code", length = 32)
+    private String topicCode;
+
+    public CampaignContentRate(String name, Long ratePerThousandKopecks) {
+        this(name, ratePerThousandKopecks, null);
+    }
 }

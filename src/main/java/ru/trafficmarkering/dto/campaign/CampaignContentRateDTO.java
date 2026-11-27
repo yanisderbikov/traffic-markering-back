@@ -17,9 +17,14 @@ public record CampaignContentRateDTO(
         @NotNull(message = "Укажите ставку для тематики")
         @Positive(message = "Ставка тематики должна быть больше нуля")
         @Schema(description = "Ставка за 1000 просмотров, в копейках", example = "11500")
-        Long ratePerThousandKopecks
+        Long ratePerThousandKopecks,
+
+        @Size(max = 32, message = "Код тематики не длиннее 32 символов")
+        @Schema(description = "Код тематики из /api/campaigns/topics; если задан, название берётся из справочника. "
+                + "null — тематика названа от руки", example = "GAMING")
+        String topicCode
 ) {
     public static CampaignContentRateDTO from(CampaignContentRate rate) {
-        return new CampaignContentRateDTO(rate.getName(), rate.getRatePerThousandKopecks());
+        return new CampaignContentRateDTO(rate.getName(), rate.getRatePerThousandKopecks(), rate.getTopicCode());
     }
 }

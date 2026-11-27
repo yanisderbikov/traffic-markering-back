@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.trafficmarkering.config.CampaignProperties;
 import ru.trafficmarkering.dto.campaign.CampaignCreateUpdateRequestDTO;
+import ru.trafficmarkering.dto.campaign.CampaignContentRateDTO;
 import ru.trafficmarkering.dto.campaign.CampaignDTO;
 import ru.trafficmarkering.dto.campaign.CampaignStatusUpdateRequestDTO;
 import ru.trafficmarkering.model.Role;
@@ -290,5 +291,27 @@ class CampaignServiceImplTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         verify(saverCampaign, never()).save(any());
+    }
+
+    @Test
+    void updateStoresSeveralTopicsWithOwnRates() {
+        Campaign draft = campaign(CampaignStatus.DRAFT, "Черновик", Instant.now());
+        CampaignTopic gaming = CampaignTopic.builder().code("GAMING").name("Игры").build();
+        CampaignTopic tech = CampaignTopic.builder().code("TECH").name("Технологии и гаджеты").build();
+        when(getterCampaignTopic.getByCode("GAMING")).thenReturn(Optional.of(gaming));
+        when(getterCampaignTopic.getByCode("TECH")).thenReturn(Optional.of(tech));
+
+        CampaignDTO updated = service.update(draft.getId(), CampaignCreateUpdateRequestDTO.builder()
+                .title("Черновик")
+                .contentRates(List.of(
+                        new CampaignContentRateDTO("игры", 100_00L, "GAMING"),
+                        new CampaignContentRateDTO("Технологии и гаджеты", 250_00L, "TECH")))
+                .build());
+
+        assertThat(updated.contentRates()).containsExactly(
+                new CampaignContentRateDTO("Игры", 100_00L, "GAMING"),
+                new CampaignContentRateDTO("Технологии и гаджеты", 250_00L, "TECH"));
+        assertThat(updated.topic()).isEqualTo("GAMING");
+        assertThat(updated.ratePerThousandKopecks()).isEqualTo(250_00L);
     }
 }

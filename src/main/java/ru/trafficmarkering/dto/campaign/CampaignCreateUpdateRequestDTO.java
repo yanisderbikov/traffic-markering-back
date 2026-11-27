@@ -41,7 +41,8 @@ public class CampaignCreateUpdateRequestDTO {
     @Schema(description = "Ключ загруженной фотографии из /api/files/campaign-photo/presign; обязателен для запуска")
     private String photoKey;
 
-    @Schema(description = "Код тематики из /api/campaigns/topics; обязательна для запуска", example = "TECH")
+    @Schema(description = "Код основной тематики из /api/campaigns/topics; обязательна для запуска. "
+            + "Если тематик несколько, это первая из contentRates", example = "TECH")
     private String topic;
 
     @Positive(message = "Ставка должна быть больше нуля")
@@ -50,7 +51,7 @@ public class CampaignCreateUpdateRequestDTO {
 
     @Valid
     @Size(max = CampaignContentRate.MAX_COUNT, message = "Не больше 20 тематик со своими ставками")
-    @Schema(description = "Ставки по тематикам роликов: креатор при подаче выбирает тематику, ролик считается по её ставке. "
+    @Schema(description = "Несколько тематик со своими ставками: креатор при подаче выбирает тематику, ролик считается по её ставке. "
             + "Пусто или null — одна ставка ratePerThousandKopecks на все ролики; если задано, ratePerThousandKopecks "
             + "становится наибольшей из ставок")
     private List<CampaignContentRateDTO> contentRates;
