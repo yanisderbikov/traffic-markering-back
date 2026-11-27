@@ -18,6 +18,11 @@ class ModerationTelegramTest {
     }
 
     @Test
+    void premiumEmojiOnLikeStudioBot() {
+        org.junit.jupiter.api.Assertions.assertTrue(new ModerationProperties().getTelegram().isCustomEmoji());
+    }
+
+    @Test
     void ownBaseUrlWins() {
         assertEquals("https://own.example/api/telegram/moderation/webhook",
                 webhook("https://own.example/", "https://studio.example", "https://back.example"));

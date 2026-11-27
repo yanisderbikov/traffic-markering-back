@@ -23,15 +23,11 @@ public class ModerationProperties {
     private int downloadTimeoutSeconds = 120;
     private String workDir = System.getProperty("java.io.tmpdir") + "/offer-moderation";
 
-    /** Настройки бота: токен свой, отдельный от бота студии */
-    private StudioProperties.Telegram telegram = defaultTelegram();
-
-    private static StudioProperties.Telegram defaultTelegram() {
-        StudioProperties.Telegram telegram = new StudioProperties.Telegram();
-        // Иконки пака видны только при Premium у владельца бота; у бота модерации по умолчанию обычные эмодзи
-        telegram.setCustomEmoji(false);
-        return telegram;
-    }
+    /**
+     * Настройки бота: токен свой, отдельный от бота студии. Иконки пака tgiosicons включены, как у бота студии:
+     * видны при Premium у владельца бота, иначе Telegram показывает обычные эмодзи
+     */
+    private StudioProperties.Telegram telegram = new StudioProperties.Telegram();
 
     /** Облако Bot API отправляет файлы до 50 МБ, свой сервер — до 2 ГБ */
     public long uploadLimit() {
