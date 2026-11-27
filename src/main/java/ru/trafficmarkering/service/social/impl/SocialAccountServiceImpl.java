@@ -121,7 +121,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                         "Учётная запись не найдена, войдите заново"));
         if (!user.getRole().implies(Role.CREATOR)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Привязывать соцсети может только криатор");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Привязывать соцсети может только креатор");
         }
 
         SocialAccountData data = provider.exchangeCode(code, redirectUri(provider));
@@ -136,7 +136,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
 
         if (!account.getUser().getId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Этот аккаунт уже привязан к другому криатору");
+                    "Этот аккаунт уже привязан к другому креатору");
         }
 
         account.setUsername(data.username());
@@ -150,7 +150,7 @@ class SocialAccountServiceImpl implements SocialAccountService {
         account.setStatus(SocialAccountStatus.ACTIVE);
 
         SocialAccount saved = saverSocialAccount.save(account);
-        log.info("Криатор {} привязал аккаунт {} на площадке {}",
+        log.info("Креатор {} привязал аккаунт {} на площадке {}",
                 user.getId(), saved.getExternalId(), saved.getPlatform());
         return SocialAccountDTO.from(saved);
     }

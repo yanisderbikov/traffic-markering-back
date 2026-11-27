@@ -64,7 +64,7 @@ class ViewsSyncServiceImpl implements ViewsSyncService {
             try {
                 fetched = provider.get().fetchViews(group.getKey().creatorId(), urls);
             } catch (Exception e) {
-                log.warn("Не удалось получить просмотры {} для криатора {}: {}",
+                log.warn("Не удалось получить просмотры {} для креатора {}: {}",
                         group.getKey().platform(), group.getKey().creatorId(), e.getMessage());
                 continue;
             }

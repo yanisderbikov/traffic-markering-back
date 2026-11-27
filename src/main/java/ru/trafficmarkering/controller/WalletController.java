@@ -38,7 +38,7 @@ public class WalletController {
     private final TransferService transferService;
 
     @Operation(summary = "Мой кошелёк",
-            description = "Свободный остаток, сумма бюджетов объявлений и сколько уже начислено криаторам; суммы в копейках",
+            description = "Свободный остаток, сумма бюджетов объявлений и сколько уже начислено креаторам; суммы в копейках",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping
     public ResponseEntity<WalletDTO> myWallet() {

@@ -3,7 +3,7 @@ package ru.trafficmarkering.dto.campaign;
 import io.swagger.v3.oas.annotations.media.Schema;
 import ru.trafficmarkering.model.campaign.CampaignMaterial;
 
-@Schema(description = "Материал для криатора: файл со временной ссылкой на скачивание или внешняя ссылка")
+@Schema(description = "Материал для креатора: файл со временной ссылкой на скачивание или внешняя ссылка")
 public record CampaignMaterialDTO(
         @Schema(description = "FILE или LINK") String kind,
         @Schema(description = "Подпись: имя файла или название ссылки") String title,

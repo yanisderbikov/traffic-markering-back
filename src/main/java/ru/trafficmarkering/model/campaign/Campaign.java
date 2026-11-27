@@ -96,7 +96,7 @@ public class Campaign {
     @Column(name = "ends_at")
     private Instant endsAt;
 
-    /** Уже начислено криаторам, в копейках */
+    /** Уже начислено креаторам, в копейках */
     @Builder.Default
     @Column(name = "spent_kopecks", nullable = false)
     private Long spentKopecks = 0L;
@@ -122,11 +122,11 @@ public class Campaign {
     @Column(name = "payment_model", nullable = false, length = 32)
     private PaymentModel paymentModel = PaymentModel.CONTINUOUS;
 
-    /** Общая рекламная ссылка кампании: одна на всех криаторов, ставится в ссылки профиля */
+    /** Общая рекламная ссылка кампании: одна на всех креаторов, ставится в ссылки профиля */
     @Column(name = "promo_url", length = 1024)
     private String promoUrl;
 
-    /** Общий многоразовый промокод кампании: криатор пишет его в закреплённом комментарии */
+    /** Общий многоразовый промокод кампании: креатор пишет его в закреплённом комментарии */
     @Column(name = "promo_code", length = 64)
     private String promoCode;
 

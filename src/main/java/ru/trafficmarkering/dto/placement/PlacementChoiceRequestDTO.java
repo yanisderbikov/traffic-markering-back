@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Вариант участия «ссылка и промокод»: какие надбавки криатор берёт на себя")
+@Schema(description = "Вариант участия «ссылка и промокод»: какие надбавки креатор берёт на себя")
 public class PlacementChoiceRequestDTO {
 
     @Schema(description = "Поставлю рекламную ссылку в профиль")

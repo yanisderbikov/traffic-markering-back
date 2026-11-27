@@ -1,7 +1,7 @@
 package ru.trafficmarkering.model.application;
 
 /**
- * Судьба отклика криатора. Начисления идут только по APPROVED и COMPLETED:
+ * Судьба отклика креатора. Начисления идут только по APPROVED и COMPLETED:
  * IN_PROGRESS — оффер взят в работу, ролика ещё нет; PENDING ждёт модерации менеджером или заказчиком,
  * REJECTED отклонён на модерации.
  */

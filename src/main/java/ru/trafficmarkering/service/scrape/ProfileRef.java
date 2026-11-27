@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * Что ввёл криатор вместо OAuth: ник с @ или без, либо ссылку на профиль.
+ * Что ввёл креатор вместо OAuth: ник с @ или без, либо ссылку на профиль.
  * Для YouTube ещё бывает id канала (UC…) и старые ссылки /c/… и /user/… — их отдаём
  * в ScrapeCreators ссылкой целиком.
  */
@@ -42,7 +42,7 @@ public record ProfileRef(Kind kind, String value) {
         return handle(platform, handle);
     }
 
-    /** Ник для сообщений криатору: «@nick», а для id канала и ссылок — как есть. */
+    /** Ник для сообщений креатору: «@nick», а для id канала и ссылок — как есть. */
     public String label() {
         return kind == Kind.HANDLE ? "@" + value : value;
     }

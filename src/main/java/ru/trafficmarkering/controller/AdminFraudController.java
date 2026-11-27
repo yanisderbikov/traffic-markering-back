@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/fraud")
 @RequiredArgsConstructor
-@Tag(name = "AdminFraud", description = "Антифрод: подозрительные ролики и репутация криаторов")
+@Tag(name = "AdminFraud", description = "Антифрод: подозрительные ролики и репутация креаторов")
 public class AdminFraudController {
 
     private final FraudAdminService fraudAdminService;
@@ -54,8 +54,8 @@ public class AdminFraudController {
     }
 
     @Operation(summary = "Решение по отклику",
-            description = "VERIFIED размораживает зачисление, FRAUD обнуляет начисление и даёт криатору страйк, "
-                    + "AUTO возвращает отклик автоматике. Репутация криатора пересчитывается",
+            description = "VERIFIED размораживает зачисление, FRAUD обнуляет начисление и даёт креатору страйк, "
+                    + "AUTO возвращает отклик автоматике. Репутация креатора пересчитывается",
             security = @SecurityRequirement(name = "Bearer"))
     @PatchMapping("/applications/{id}/review")
     public ResponseEntity<FraudApplicationDTO> review(@PathVariable("id") UUID id,
@@ -75,13 +75,13 @@ public class AdminFraudController {
         return ResponseEntity.ok(Map.of("checked", fraudAdminService.recheckAll()));
     }
 
-    @Operation(summary = "Криаторы с репутацией", security = @SecurityRequirement(name = "Bearer"))
+    @Operation(summary = "Креаторы с репутацией", security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/creators")
     public ResponseEntity<List<CreatorTrustDTO>> creators() {
         return ResponseEntity.ok(fraudAdminService.creators());
     }
 
-    @Operation(summary = "Сменить репутацию криатора",
+    @Operation(summary = "Сменить репутацию креатора",
             description = "Уровень выставляется руками и автоматикой больше не пересчитывается; "
                     + "trustLevel=null снимает ручную отметку",
             security = @SecurityRequirement(name = "Bearer"))

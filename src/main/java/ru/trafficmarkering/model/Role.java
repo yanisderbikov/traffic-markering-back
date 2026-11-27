@@ -24,7 +24,7 @@ import static ru.trafficmarkering.model.CabinetTab.WALLET;
 
 public enum Role {
     CUSTOMER("Заказчик"),
-    CREATOR("Криатор"),
+    CREATOR("Креатор"),
     FINANCE_MANAGER("Менеджер финансов"),
     ADMIN("Администратор"),
     SUPER_ADMIN("Супер-админ"),

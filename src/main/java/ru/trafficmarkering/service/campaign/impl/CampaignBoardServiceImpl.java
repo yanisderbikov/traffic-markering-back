@@ -51,7 +51,7 @@ class CampaignBoardServiceImpl implements CampaignBoardService {
     @Transactional(readOnly = true)
     public CampaignDTO getByPublicId(String publicId) {
         // Статус не фильтруем: ссылку могли сохранить, пока объявление было активным,
-        // и криатору честнее увидеть карточку со статусом «на паузе», чем 404
+        // и креатору честнее увидеть карточку со статусом «на паузе», чем 404
         Campaign campaign = getterCampaign.getByPublicId(publicId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Объявление не найдено: " + publicId));

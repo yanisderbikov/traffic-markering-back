@@ -42,7 +42,7 @@ public class AdminModerationController {
 
     @Operation(summary = "Решение модерации",
             description = "APPROVED — ролик принят, по нему начинают капать деньги; REJECTED — отказ с обязательной "
-                    + "причиной, её видит криатор. Решить можно только отклик в статусе PENDING, иначе 409",
+                    + "причиной, её видит креатор. Решить можно только отклик в статусе PENDING, иначе 409",
             security = @SecurityRequirement(name = "Bearer"))
     @PatchMapping("/applications/{id}")
     public ResponseEntity<ApplicationDTO> moderate(@PathVariable("id") UUID id,

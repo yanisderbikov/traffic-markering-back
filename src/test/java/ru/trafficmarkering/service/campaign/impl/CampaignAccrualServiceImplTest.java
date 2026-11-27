@@ -46,11 +46,11 @@ class CampaignAccrualServiceImplTest {
             new CampaignAccrualServiceImpl(getterApplication, saverApplication, saverCampaign,
                     creatorTrustService, fraudProperties, getterCampaign);
 
-    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(7L).name("Креатор").role(Role.CREATOR).build();
 
     @BeforeEach
     void setUp() {
-        // По умолчанию криатор проверенный: потолок новичка проверяется отдельными тестами
+        // По умолчанию креатор проверенный: потолок новичка проверяется отдельными тестами
         when(creatorTrustService.levelsOf(any())).thenReturn(Map.of(creator.getId(), TrustLevel.TRUSTED));
     }
 

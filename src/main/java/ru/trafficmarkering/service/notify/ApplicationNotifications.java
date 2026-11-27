@@ -25,7 +25,7 @@ public class ApplicationNotifications {
                 body, "Посмотреть отклик", "/app/campaigns/" + campaign.getId());
     }
 
-    /** Надбавку не подтвердили: криатор может исправить размещение или продолжить без неё */
+    /** Надбавку не подтвердили: креатор может исправить размещение или продолжить без неё */
     public void placementRejected(Application application, PlacementKind kind) {
         String reason = application.placement(kind).getNote();
         notifier.notify(application.getCreator(), "Надбавка не подтверждена",

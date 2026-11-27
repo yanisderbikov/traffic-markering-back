@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 public class SnapshotSubmitRequestDTO {
 
     @NotNull(message = "Нет расчёта: сначала рассчитайте работу")
-    @Schema(description = "snapshotId из расчёта, который криатор видел и подтверждает", required = true)
+    @Schema(description = "snapshotId из расчёта, который креатор видел и подтверждает", required = true)
     private Long snapshotId;
 
     @Schema(description = "Вариант из расчёта: ссылка в профиле; должен совпасть с текущим выбором")

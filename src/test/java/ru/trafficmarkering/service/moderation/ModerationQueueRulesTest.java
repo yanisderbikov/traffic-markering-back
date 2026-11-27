@@ -78,7 +78,7 @@ class ModerationQueueRulesTest {
     @Test
     void captionFitsTelegramLimit() {
         ModerationCard.Data data = new ModerationCard.Data("A1B2C3D4", "Кампания ".repeat(20), "Требование ".repeat(300),
-                "Криатор", "TikTok", "https://www.tiktok.com/@user/video/1234567890123456789", "Юмор", 15_000L,
+                "Креатор", "TikTok", "https://www.tiktok.com/@user/video/1234567890123456789", "Юмор", 15_000L,
                 FraudStatus.SUSPICIOUS, 40);
         String text = ModerationCard.text(data, Instant.parse("2026-11-26T11:35:00Z"), ZoneOffset.ofHours(3), true);
         String visible = text.replaceAll("<[^>]+>", "").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">");
@@ -89,7 +89,7 @@ class ModerationQueueRulesTest {
 
     @Test
     void closedCardDropsDeadlineAndShowsVerdict() {
-        ModerationCard.Data data = new ModerationCard.Data("A1B2C3D4", "Кампания", null, "Криатор", "TikTok",
+        ModerationCard.Data data = new ModerationCard.Data("A1B2C3D4", "Кампания", null, "Креатор", "TikTok",
                 "https://www.tiktok.com/@user/video/1", null, null, FraudStatus.CLEAN, 0);
         String text = ModerationCard.text(data, Instant.now(), ZoneOffset.UTC, true);
         String closed = ModerationCard.closed(text, ModerationCard.verdict(ApplicationStatus.REJECTED, "Нет <интеграции>"));

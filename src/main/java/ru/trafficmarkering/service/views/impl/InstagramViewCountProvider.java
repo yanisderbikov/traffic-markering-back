@@ -59,7 +59,7 @@ class InstagramViewCountProvider implements ViewCountProvider {
     public Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls) {
         Optional<String> token = socialTokenService.accessToken(creatorId, Platform.INSTAGRAM);
         if (token.isEmpty()) {
-            log.debug("У криатора {} нет живого токена Instagram, пропускаем {} роликов",
+            log.debug("У креатора {} нет живого токена Instagram, пропускаем {} роликов",
                     creatorId, videoUrls.size());
             return Map.of();
         }

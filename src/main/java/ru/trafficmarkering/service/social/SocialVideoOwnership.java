@@ -7,8 +7,8 @@ public interface SocialVideoOwnership {
 
     /**
      * Под флагом ScrapeCreators проверяет, что ролик выложен с одного из привязанных аккаунтов
-     * криатора; иначе отказ. В режиме OAuth ничего не делает — там всё остаётся как было:
-     * TikTok и Instagram по токену криатора чужие ролики не отдают.
+     * креатора; иначе отказ. В режиме OAuth ничего не делает — там всё остаётся как было:
+     * TikTok и Instagram по токену креатора чужие ролики не отдают.
      */
     void requireOwnedBy(User creator, Platform platform, String videoUrl);
 }

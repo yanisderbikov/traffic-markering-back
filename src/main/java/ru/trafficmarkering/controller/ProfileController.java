@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/profile")
 @RequiredArgsConstructor
-@Tag(name = "Profile", description = "Профили криатора и заказчика")
+@Tag(name = "Profile", description = "Профили креатора и заказчика")
 public class ProfileController {
 
     private final CreatorProfileService creatorProfileService;
@@ -66,15 +66,15 @@ public class ProfileController {
         return ResponseEntity.ok(avatarService.remove());
     }
 
-    @Operation(summary = "Мой профиль криатора",
-            description = "Профиль текущего криатора; если его почему-то нет — заводится пустой, а не 404",
+    @Operation(summary = "Мой профиль креатора",
+            description = "Профиль текущего креатора; если его почему-то нет — заводится пустой, а не 404",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/creator")
     public ResponseEntity<CreatorProfileDTO> getCreatorProfile() {
         return ResponseEntity.ok(creatorProfileService.get());
     }
 
-    @Operation(summary = "Сохранить профиль криатора",
+    @Operation(summary = "Сохранить профиль креатора",
             description = "Полное обновление полей; пустые строки сохраняются как «не заполнено». "
                     + "Ссылки на площадки видит заказчик при разборе откликов",
             security = @SecurityRequirement(name = "Bearer"))

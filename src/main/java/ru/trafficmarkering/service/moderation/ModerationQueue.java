@@ -168,7 +168,7 @@ public class ModerationQueue {
                     ? Optional.empty() : applications.getById(assignment.getApplicationId());
             if (application.isEmpty() || application.get().getStatus() != ApplicationStatus.PENDING) {
                 assignment.close(Status.CANCELLED, now);
-                String note = application.isEmpty() ? "🗑 Криатор отозвал ролик — заявка снята."
+                String note = application.isEmpty() ? "🗑 Креатор отозвал ролик — заявка снята."
                         : "ℹ️ Ролик уже решили на сайте — заявка снята.";
                 return new Review(Status.CANCELLED, assignment.getChatId(), assignment.getMessageId(),
                         assignment.getWithVideo(), note, false,

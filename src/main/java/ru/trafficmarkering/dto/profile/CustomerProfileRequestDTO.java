@@ -22,7 +22,7 @@ public class CustomerProfileRequestDTO {
     private String about;
 
     @Size(max = 255)
-    @Schema(description = "Telegram для связи с криаторами", example = "@demo_brand")
+    @Schema(description = "Telegram для связи с креаторами", example = "@demo_brand")
     private String telegram;
 
     @Size(max = 255)

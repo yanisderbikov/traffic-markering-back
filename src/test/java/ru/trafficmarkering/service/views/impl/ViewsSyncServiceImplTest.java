@@ -49,7 +49,7 @@ class ViewsSyncServiceImplTest {
             new ViewsRecorder(getterApplication, saverApplication, saverViewSnapshot, fraudCheckService),
             campaignAccrualService);
 
-    private final User creator = User.builder().id(7L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(7L).name("Креатор").role(Role.CREATOR).build();
 
     @BeforeEach
     void setUp() {

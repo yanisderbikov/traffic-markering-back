@@ -84,7 +84,7 @@ class CampaignAccrualServiceImpl implements CampaignAccrualService {
         getterCampaign.getById(campaignId).ifPresent(this::recalculate);
     }
 
-    /** Новичкам и ограниченным криаторам оплачиваемые просмотры одного ролика режутся потолком. */
+    /** Новичкам и ограниченным креаторам оплачиваемые просмотры одного ролика режутся потолком. */
     private long payableViews(Application application, Campaign campaign, TrustLevel level) {
         long views = application.payableViews(campaign.viewRegion()).views();
         if (level.capsPayableViews()) {

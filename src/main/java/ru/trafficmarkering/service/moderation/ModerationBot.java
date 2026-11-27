@@ -215,7 +215,7 @@ public class ModerationBot {
                     long id = Long.parseLong(parts[1]);
                     if (queue.ownsActive(id, telegramId)) {
                         client().editMarkup(chatId, messageId, ModerationCard.reasonsKeyboard(id));
-                        client().answerCallback(callbackId, "Выберите причину — её увидит криатор");
+                        client().answerCallback(callbackId, "Выберите причину — её увидит креатор");
                     } else {
                         client().answerCallback(callbackId, "Заявка уже закрыта");
                     }
@@ -234,7 +234,7 @@ public class ModerationBot {
                 case "rt" -> {
                     if (queue.awaitReason(Long.parseLong(parts[1]), telegramId, true)) {
                         client().answerCallback(callbackId, null);
-                        client().sendMessage(chatId, "✍️ Напишите причину отказа одним сообщением — её увидит криатор.",
+                        client().sendMessage(chatId, "✍️ Напишите причину отказа одним сообщением — её увидит креатор.",
                                 Map.of("force_reply", true, "input_field_placeholder", "Причина отказа"), messageId);
                     } else {
                         client().answerCallback(callbackId, "Заявка уже закрыта");
@@ -372,7 +372,7 @@ public class ModerationBot {
                 + "• На заявку — " + holdLabel() + ". Не успели — она уйдёт другому менеджеру.\n"
                 + "• Пропустили " + properties.getPauseAfterMissed() + " подряд — станете неактивны, заявки перестанут приходить. "
                 + "Включиться снова — /on.\n"
-                + "• «Отклонить» просит причину: выберите готовую или напишите свою — её увидит криатор.\n\n"
+                + "• «Отклонить» просит причину: выберите готовую или напишите свою — её увидит креатор.\n\n"
                 + "/on — активен, /off — неактивен (перерыв), /hours — часы приёма, /stats — статистика.";
     }
 

@@ -51,10 +51,10 @@ class CreatorProfileServiceImpl implements CreatorProfileService {
     public CreatorProfileDTO getPublicByUserId(Long userId) {
         User user = userId == null ? null : userRepository.findById(userId).orElse(null);
         if (user == null || user.getRole() != Role.CREATOR) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Криатор не найден");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Креатор не найден");
         }
         // Публичная ручка ничего не пишет в базу: если профиля почему-то нет,
-        // отдаём пустую карточку — имя криатора всё равно есть в учётной записи
+        // отдаём пустую карточку — имя креатора всё равно есть в учётной записи
         return getterCreatorProfile.getByUserId(userId)
                 .map(profile -> CreatorProfileDTO.from(profile, user))
                 .orElseGet(() -> CreatorProfileDTO.from(CreatorProfile.builder().user(user).build(), user));

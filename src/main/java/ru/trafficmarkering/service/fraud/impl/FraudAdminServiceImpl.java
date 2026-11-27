@@ -162,7 +162,7 @@ class FraudAdminServiceImpl implements FraudAdminService {
         User admin = currentUserService.require(Role.ADMIN);
         User creator = userRepository.findById(creatorId)
                 .filter(user -> user.getRole() == Role.CREATOR)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Криатор не найден: " + creatorId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Креатор не найден: " + creatorId));
         String note = request.getNote() == null || request.getNote().isBlank() ? null : request.getNote().trim();
         creatorTrustService.setManual(creatorId, request.getTrustLevel(), note, admin);
         return CreatorTrustDTO.from(creator, getterCreatorProfile.getByUserId(creatorId).orElse(null),

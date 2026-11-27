@@ -266,7 +266,7 @@ public class ScrapeCreatorsApi {
         }
     }
 
-    /** «http://www.youtube.com/@ThePatMcAfeeShow» → ThePatMcAfeeShow; нет @ в ссылке — то, что ввёл криатор. */
+    /** «http://www.youtube.com/@ThePatMcAfeeShow» → ThePatMcAfeeShow; нет @ в ссылке — то, что ввёл креатор. */
     private static String youtubeHandle(String channelUrl, ProfileRef ref) {
         if (channelUrl != null) {
             int at = channelUrl.lastIndexOf("/@");

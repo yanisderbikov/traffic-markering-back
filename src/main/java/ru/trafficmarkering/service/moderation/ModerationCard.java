@@ -27,12 +27,12 @@ final class ModerationCard {
     private static final int REQUIREMENTS_LIMIT = 380;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
-    /** Причины отказа одной кнопкой; криатор видит текст причины */
+    /** Причины отказа одной кнопкой; креатор видит текст причины */
     static final List<String> REASONS = List.of(
             "Нет рекламной интеграции",
             "Не соответствует требованиям кампании",
             "Ролик недоступен или удалён",
-            "Ролик выложен не с аккаунта криатора",
+            "Ролик выложен не с аккаунта креатора",
             "Низкое качество ролика",
             "Запрещённый контент");
 
@@ -57,7 +57,7 @@ final class ModerationCard {
         StringBuilder head = new StringBuilder();
         head.append("🎬 <b>Ролик на модерацию</b> · <code>").append(escape(data.publicId())).append("</code>\n");
         head.append("Кампания: <b>").append(escape(data.campaignTitle())).append("</b>\n");
-        head.append("Криатор: ").append(escape(data.creatorName()));
+        head.append("Креатор: ").append(escape(data.creatorName()));
         if (data.platform() != null) {
             head.append(" · ").append(escape(data.platform()));
         }

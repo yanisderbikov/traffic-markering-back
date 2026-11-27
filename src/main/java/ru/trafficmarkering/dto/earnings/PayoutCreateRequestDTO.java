@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Заявка криатора на вывод USDT (TRC-20)")
+@Schema(description = "Заявка креатора на вывод USDT (TRC-20)")
 public class PayoutCreateRequestDTO {
 
     @NotNull(message = "Сумма обязательна")

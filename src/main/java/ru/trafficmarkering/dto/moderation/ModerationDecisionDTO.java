@@ -8,7 +8,7 @@ import java.util.UUID;
 @Schema(description = "Решение менеджера по ролику в боте модерации")
 public record ModerationDecisionDTO(
         long id,
-        @Schema(description = "id отклика; null — криатор его потом удалил") UUID applicationId,
+        @Schema(description = "id отклика; null — креатор его потом удалил") UUID applicationId,
         String applicationPublicId,
         String campaignTitle,
         String creatorName,

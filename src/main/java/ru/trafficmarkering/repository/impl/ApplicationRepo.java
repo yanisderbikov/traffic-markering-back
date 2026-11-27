@@ -20,7 +20,7 @@ interface ApplicationRepo extends JpaRepository<Application, UUID> {
 
     /**
      * join fetch — потому что в любом списке откликов сразу нужны заголовок объявления
-     * и имя криатора, а обе связи ленивые: без него получаем запрос на каждую строку.
+     * и имя креатора, а обе связи ленивые: без него получаем запрос на каждую строку.
      */
     @Query("select a from Application a join fetch a.campaign join fetch a.creator "
             + "where a.campaign.id = :campaignId order by a.createdAt asc")

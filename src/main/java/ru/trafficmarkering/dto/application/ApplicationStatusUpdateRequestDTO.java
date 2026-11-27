@@ -22,6 +22,6 @@ public class ApplicationStatusUpdateRequestDTO {
     private ApplicationStatus status;
 
     @Size(max = 2000, message = "Причина отказа не длиннее 2000 символов")
-    @Schema(description = "Причина отказа: обязательна для REJECTED, её видит криатор", example = "Ролик не по брифу")
+    @Schema(description = "Причина отказа: обязательна для REJECTED, её видит креатор", example = "Ролик не по брифу")
     private String reason;
 }

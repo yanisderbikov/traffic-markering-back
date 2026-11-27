@@ -101,7 +101,7 @@ class VideoChecks {
                         "Этот ролик уже подан по объявлению «" + existing.getCampaign().getTitle() + "»");
             }
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Этот ролик уже подан на площадке другим криатором");
+                    "Этот ролик уже подан на площадке другим креатором");
         });
     }
 }

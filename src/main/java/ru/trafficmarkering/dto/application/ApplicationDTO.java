@@ -15,7 +15,7 @@ import ru.trafficmarkering.model.profile.CreatorProfile;
 
 import java.util.UUID;
 
-@Schema(description = "Отклик криатора: и в списке заказчика, и в списке криатора")
+@Schema(description = "Отклик креатора: и в списке заказчика, и в списке креатора")
 public record ApplicationDTO(
         UUID id,
         @Schema(description = "Короткий номер отклика") String publicId,
@@ -25,12 +25,12 @@ public record ApplicationDTO(
         @Schema(description = "Когда объявление перестаёт принимать отклики и ролики, ISO-8601; null — бессрочно") String campaignEndsAt,
         @Schema(description = "Ставка ролика за 1000 просмотров, в копейках: по выбранной тематике или общая ставка объявления") Long ratePerThousandKopecks,
         @Schema(description = "Тематика ролика, выбранная при подаче; null — объявление без ставок по тематикам") String contentTopic,
-        @Schema(description = "Порог вывода объявления: с какой накопленной по нему суммы криатор может выводить, в копейках") Long minPayoutKopecks,
+        @Schema(description = "Порог вывода объявления: с какой накопленной по нему суммы креатор может выводить, в копейках") Long minPayoutKopecks,
         @Schema(description = "Регион просмотров объявления: CIS, WORLD") String campaignViewRegion,
         @Schema(description = "Человекочитаемый регион", example = "СНГ") String campaignViewRegionDescription,
         Long creatorId,
         String creatorName,
-        @Schema(description = "Telegram криатора из профиля; null — не заполнен") String creatorTelegram,
+        @Schema(description = "Telegram креатора из профиля; null — не заполнен") String creatorTelegram,
         @Schema(description = "Площадка: TELEGRAM, INSTAGRAM, TIKTOK, YOUTUBE_SHORTS") String platform,
         @Schema(description = "Человекочитаемая площадка", example = "TikTok") String platformDescription,
         String videoUrl,
@@ -40,19 +40,19 @@ public record ApplicationDTO(
         @Schema(description = "Набранные просмотры") Long views,
         @Schema(description = "Просмотры, которые идут в расчёт выплаты: для «весь мир» — все, иначе только из региона; 0, если география неизвестна") Long payableViews,
         @Schema(description = "Известна ли география просмотров (для «весь мир» всегда true)") Boolean viewsGeographyKnown,
-        @Schema(description = "Начислено криатору, в копейках") Long accruedKopecks,
+        @Schema(description = "Начислено креатору, в копейках") Long accruedKopecks,
         @Schema(description = "Когда просмотры обновлялись в последний раз, ISO-8601") String viewsSyncedAt,
-        @Schema(description = "Уже зачислено в кошелёк криатора, в копейках") Long creditedKopecks,
+        @Schema(description = "Уже зачислено в кошелёк креатора, в копейках") Long creditedKopecks,
         @Schema(description = "Когда ролик опубликован на площадке, ISO-8601; null — неизвестно") String videoPublishedAt,
         @Schema(description = "Вердикт антифрода: CLEAN, SUSPICIOUS, FRAUD, VERIFIED") String fraudStatus,
         @Schema(description = "Человекочитаемый вердикт", example = "Чисто") String fraudStatusDescription,
-        @Schema(description = "Баллы скоринга 0–100; криатору не показываются") Integer fraudScore,
-        @Schema(description = "Сработавшие правила; криатору не показываются") List<FraudFlagDTO> fraudFlags,
-        @Schema(description = "Репутация криатора: NEW, TRUSTED, RESTRICTED, BLOCKED") String creatorTrustLevel,
+        @Schema(description = "Баллы скоринга 0–100; креатору не показываются") Integer fraudScore,
+        @Schema(description = "Сработавшие правила; креатору не показываются") List<FraudFlagDTO> fraudFlags,
+        @Schema(description = "Репутация креатора: NEW, TRUSTED, RESTRICTED, BLOCKED") String creatorTrustLevel,
         @Schema(description = "Человекочитаемая репутация", example = "Новичок") String creatorTrustLevelDescription,
         @Schema(description = "Когда отклик прошёл модерацию, ISO-8601; null — ещё не проверен") String moderatedAt,
         @Schema(description = "Кто решил ролик: менеджер из Telegram-бота («@ivan_moder (Иван)») или пользователь сайта; "
-                + "только для админов, криатору и заказчику — null") String moderatedByName,
+                + "только для админов, креатору и заказчику — null") String moderatedByName,
         @Schema(description = "Причина отказа; есть только у REJECTED") String rejectionReason,
         @Schema(description = "Как платит объявление: CONTINUOUS или SNAPSHOT («ссылка и промокод»)") String paymentModel,
         @Schema(description = "Работа «ссылка и промокод»: ставки, снимок, материалы и надбавки; null у обычных откликов")
@@ -61,12 +61,12 @@ public record ApplicationDTO(
         String updatedAt
 ) {
     /**
-     * Объявление и криатора передаём готовыми: обе связи в сущности ленивые, а имя
-     * криатора и заголовок объявления нужны в каждом списке. Telegram лежит в профиле —
+     * Объявление и креатора передаём готовыми: обе связи в сущности ленивые, а имя
+     * креатора и заголовок объявления нужны в каждом списке. Telegram лежит в профиле —
      * это отдельная таблица, поэтому он тоже приходит извне.
      * Instant отдаём строками — иначе Jackson сериализует их в epoch-секунды.
      *
-     * @param creatorProfile профиль криатора; null — профиль ещё не заполнен
+     * @param creatorProfile профиль креатора; null — профиль ещё не заполнен
      */
     public static ApplicationDTO from(Application application,
                                       Campaign campaign,
@@ -118,7 +118,7 @@ public record ApplicationDTO(
                 application.getUpdatedAt() != null ? application.getUpdatedAt().toString() : null);
     }
 
-    /** Копия для кабинета криатора: вердикт остаётся, баллы и правила скрываются. */
+    /** Копия для кабинета креатора: вердикт остаётся, баллы и правила скрываются. */
     public ApplicationDTO forCreator() {
         return new ApplicationDTO(id, publicId, campaignId, campaignPublicId, campaignTitle, campaignEndsAt,
                 ratePerThousandKopecks, contentTopic, minPayoutKopecks,
@@ -158,7 +158,7 @@ public record ApplicationDTO(
                 moderatedAt, moderatedByName, rejectionReason, paymentModel, value, createdAt, updatedAt);
     }
 
-    /** Короткая форма: объявление и криатор берутся из отклика (нужна открытая транзакция). */
+    /** Короткая форма: объявление и креатор берутся из отклика (нужна открытая транзакция). */
     public static ApplicationDTO from(Application application, CreatorProfile creatorProfile) {
         return from(application, application.getCampaign(), application.getCreator(), creatorProfile);
     }

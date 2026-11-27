@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Отклик криатора на объявление: одна площадка, один ролик.
+ * Отклик креатора на объявление: одна площадка, один ролик.
  * accruedKopecks считает платформа (CampaignAccrualService), руками его не правят:
  * иначе сумма начислений разъедется с campaign.spentKopecks.
  */
@@ -84,7 +84,7 @@ public class Application {
     @Column(nullable = false)
     private Long views = 0L;
 
-    /** Начислено криатору за эти просмотры, в копейках */
+    /** Начислено креатору за эти просмотры, в копейках */
     @Builder.Default
     @Column(name = "accrued_kopecks", nullable = false)
     private Long accruedKopecks = 0L;
@@ -153,13 +153,13 @@ public class Application {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
-    /** Тематика ролика, которую криатор выбрал при подаче; ставка по ней лежит в baseRateKopecks */
+    /** Тематика ролика, которую креатор выбрал при подаче; ставка по ней лежит в baseRateKopecks */
     @Column(name = "content_topic", length = 64)
     private String contentTopic;
 
     // ---- «Ссылка и промокод» (Campaign.paymentModel = SNAPSHOT) ----
 
-    /** Базовая ставка за 1000 просмотров на момент, когда криатор взял оффер, в копейках */
+    /** Базовая ставка за 1000 просмотров на момент, когда креатор взял оффер, в копейках */
     @Column(name = "base_rate_kopecks")
     private Long baseRateKopecks;
 
@@ -184,7 +184,7 @@ public class Application {
     @Column(name = "submitted_at")
     private Instant submittedAt;
 
-    /** До какого момента криатор держит ссылку и закреп; после него подтверждённые надбавки засчитываются */
+    /** До какого момента креатор держит ссылку и закреп; после него подтверждённые надбавки засчитываются */
     @Column(name = "placement_retain_until")
     private Instant placementRetainUntil;
 

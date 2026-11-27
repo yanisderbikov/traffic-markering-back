@@ -100,7 +100,7 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         linked.setLastSyncedAt(Instant.now());
 
         SocialAccount saved = saverSocialAccount.save(linked);
-        log.info("Криатор {} подтвердил кодом аккаунт {} ({}) на площадке {}",
+        log.info("Креатор {} подтвердил кодом аккаунт {} ({}) на площадке {}",
                 user.getId(), saved.getExternalId(), saved.getUsername(), platform);
         return SocialAccountDTO.from(saved);
     }
@@ -154,7 +154,7 @@ class ScrapeSocialVerificationServiceImpl implements SocialVerificationService {
         Optional<SocialAccount> existing = getterSocialAccount.getByPlatformAndExternalId(platform, profile.externalId());
         if (existing.isPresent() && !existing.get().getUser().getId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Этот аккаунт уже привязан к другому криатору");
+                    "Этот аккаунт уже привязан к другому креатору");
         }
         return existing;
     }

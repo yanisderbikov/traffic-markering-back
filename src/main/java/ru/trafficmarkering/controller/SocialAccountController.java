@@ -37,14 +37,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/social")
 @RequiredArgsConstructor
 @Log4j2
-@Tag(name = "SocialAccounts", description = "Привязка аккаунтов соцсетей к профилю криатора")
+@Tag(name = "SocialAccounts", description = "Привязка аккаунтов соцсетей к профилю креатора")
 public class SocialAccountController {
 
     private final SocialAccountService socialAccountService;
     private final SocialVerificationService socialVerificationService;
 
     @Operation(summary = "Способ привязки аккаунтов",
-            description = "OAUTH — кнопка ведёт на /{platform}/authorize; SCRAPE — криатор вводит ник, "
+            description = "OAUTH — кнопка ведёт на /{platform}/authorize; SCRAPE — креатор вводит ник, "
                     + "получает код через /{platform}/verification и подтверждает через /{platform}/verification/confirm",
             security = @SecurityRequirement(name = "Bearer"))
     @GetMapping("/mode")
@@ -54,7 +54,7 @@ public class SocialAccountController {
 
     @Operation(summary = "Найти профиль и получить проверочный код",
             description = "Только в режиме SCRAPE. Ничего не сохраняет: код один и тот же при каждом запросе "
-                    + "для пары «криатор — аккаунт». Платформа в пути: instagram, tiktok, youtube",
+                    + "для пары «креатор — аккаунт». Платформа в пути: instagram, tiktok, youtube",
             security = @SecurityRequirement(name = "Bearer"))
     @PostMapping("/{platform}/verification")
     public ResponseEntity<SocialVerificationDTO> startVerification(@PathVariable("platform") String platform,

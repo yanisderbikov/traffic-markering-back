@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Просмотры TikTok через Display API по токену криатора. Площадка отдаёт только счётчики
+ * Просмотры TikTok через Display API по токену креатора. Площадка отдаёт только счётчики
  * (просмотры, лайки, комментарии, репосты) и дату публикации: ни географии, ни удержания —
  * антифрод по TikTok держится на лайках, скорости прироста и окне удержания.
  */
@@ -59,7 +59,7 @@ class TiktokViewCountProvider implements ViewCountProvider {
     public Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls) {
         Optional<String> token = socialTokenService.accessToken(creatorId, Platform.TIKTOK);
         if (token.isEmpty()) {
-            log.debug("У криатора {} нет живого токена TikTok, пропускаем {} роликов",
+            log.debug("У креатора {} нет живого токена TikTok, пропускаем {} роликов",
                     creatorId, videoUrls.size());
             return Map.of();
         }

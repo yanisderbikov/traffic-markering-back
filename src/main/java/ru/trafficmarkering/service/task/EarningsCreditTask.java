@@ -25,7 +25,7 @@ public class EarningsCreditTask {
         try {
             earningsService.creditAccrued();
         } catch (Exception e) {
-            log.error("Ночное начисление в кошельки криаторов не сработало", e);
+            log.error("Ночное начисление в кошельки креаторов не сработало", e);
         }
     }
 }

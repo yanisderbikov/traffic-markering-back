@@ -21,7 +21,7 @@ import java.util.Map;
  * Просмотры через ScrapeCreators: по запросу на ролик, 1 кредит за каждый. Отдаёт счётчики
  * публичной страницы — без географии и удержания, поэтому офферы с регионом просмотров
  * такие ролики не оплачивают. Ролик считается, только если он выложен с аккаунта,
- * который криатор подтвердил кодом: иначе можно подать чужой популярный ролик.
+ * который креатор подтвердил кодом: иначе можно подать чужой популярный ролик.
  * Неудачный запрос ролик не обнуляет — остаются прошлые просмотры, как советует документация.
  */
 @Log4j2
@@ -57,7 +57,7 @@ class ScrapeViewCountProvider implements ViewCountProvider {
     public Map<String, ViewCount> fetchViews(Long creatorId, Collection<String> videoUrls) {
         List<SocialAccount> accounts = getterSocialAccount.getAllActiveByUserIdAndPlatform(creatorId, platform);
         if (accounts.isEmpty()) {
-            log.debug("У криатора {} нет подтверждённого аккаунта {}, пропускаем {} роликов",
+            log.debug("У креатора {} нет подтверждённого аккаунта {}, пропускаем {} роликов",
                     creatorId, platform, videoUrls.size());
             return Map.of();
         }
@@ -71,11 +71,11 @@ class ScrapeViewCountProvider implements ViewCountProvider {
                 if (e.fatal()) {
                     throw e;
                 }
-                log.warn("ScrapeCreators не отдал ролик {} криатора {}: {}", url, creatorId, e.getMessage());
+                log.warn("ScrapeCreators не отдал ролик {} креатора {}: {}", url, creatorId, e.getMessage());
                 continue;
             }
             if (accounts.stream().noneMatch(account -> video.publishedBy(account.getExternalId(), account.getUsername()))) {
-                log.warn("Ролик {} криатора {} выложен с аккаунта {}, который не привязан — просмотры не учитываем",
+                log.warn("Ролик {} креатора {} выложен с аккаунта {}, который не привязан — просмотры не учитываем",
                         url, creatorId, video.authorLabel());
                 continue;
             }

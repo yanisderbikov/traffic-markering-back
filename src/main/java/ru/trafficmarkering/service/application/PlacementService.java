@@ -17,7 +17,7 @@ import java.util.UUID;
  */
 public interface PlacementService {
 
-    /** Криатор меняет вариант, пока работа не подана. */
+    /** Креатор меняет вариант, пока работа не подана. */
     ApplicationDTO choose(UUID applicationId, PlacementChoiceRequestDTO request);
 
     /** Ролик к работе и свежий снимок просмотров: предварительный расчёт, который потом подтверждается подачей. */
@@ -29,7 +29,7 @@ public interface PlacementService {
     /** Новое доказательство по надбавке после отказа или вместо прежнего. */
     ApplicationDTO resubmitProof(UUID applicationId, PlacementKind kind, PlacementProofRequestDTO request);
 
-    /** Криатор отказывается от надбавки и продолжает по меньшей ставке. */
+    /** Креатор отказывается от надбавки и продолжает по меньшей ставке. */
     ApplicationDTO decline(UUID applicationId, PlacementKind kind);
 
     /** Модератор или заказчик подтверждает или отклоняет надбавку. */

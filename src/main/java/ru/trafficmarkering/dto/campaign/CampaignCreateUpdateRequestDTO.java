@@ -50,7 +50,7 @@ public class CampaignCreateUpdateRequestDTO {
 
     @Valid
     @Size(max = CampaignContentRate.MAX_COUNT, message = "Не больше 20 тематик со своими ставками")
-    @Schema(description = "Ставки по тематикам роликов: криатор при подаче выбирает тематику, ролик считается по её ставке. "
+    @Schema(description = "Ставки по тематикам роликов: креатор при подаче выбирает тематику, ролик считается по её ставке. "
             + "Пусто или null — одна ставка ratePerThousandKopecks на все ролики; если задано, ratePerThousandKopecks "
             + "становится наибольшей из ставок")
     private List<CampaignContentRateDTO> contentRates;
@@ -60,7 +60,7 @@ public class CampaignCreateUpdateRequestDTO {
     private Long budgetKopecks;
 
     @Positive(message = "Порог вывода должен быть больше нуля")
-    @Schema(description = "С какой накопленной по объявлению суммы криатор может выводить заработанное, в копейках; "
+    @Schema(description = "С какой накопленной по объявлению суммы креатор может выводить заработанное, в копейках; "
             + "обязателен для запуска", example = "300000")
     private Long minPayoutKopecks;
 
@@ -81,8 +81,8 @@ public class CampaignCreateUpdateRequestDTO {
             + "ниже порога начислений нет, null — оплачиваются все просмотры", example = "1000")
     private Long minPaidViews;
 
-    @Positive(message = "Лимит роликов от одного криатора должен быть больше нуля")
-    @Schema(description = "Сколько роликов может подать один криатор; null — без ограничения", example = "3")
+    @Positive(message = "Лимит роликов от одного креатора должен быть больше нуля")
+    @Schema(description = "Сколько роликов может подать один креатор; null — без ограничения", example = "3")
     private Integer maxVideosPerCreator;
 
     @Schema(description = "С какого момента объявление принимает отклики, ISO-8601; null — сразу",
@@ -98,7 +98,7 @@ public class CampaignCreateUpdateRequestDTO {
     private PaymentModel paymentModel;
 
     @Size(max = 1024, message = "Рекламная ссылка не длиннее 1024 символов")
-    @Schema(description = "SNAPSHOT: общая рекламная HTTPS-ссылка, которую криаторы ставят в ссылки профиля; "
+    @Schema(description = "SNAPSHOT: общая рекламная HTTPS-ссылка, которую креаторы ставят в ссылки профиля; "
             + "обязательна, если есть надбавка за ссылку", example = "https://example.com/app?utm_source=offer")
     private String promoUrl;
 
@@ -134,7 +134,7 @@ public class CampaignCreateUpdateRequestDTO {
 
     @Valid
     @Size(max = 10, message = "Не больше 10 материалов")
-    @Schema(description = "Материалы для криатора: файлы и ссылки, в порядке показа; null — без материалов")
+    @Schema(description = "Материалы для креатора: файлы и ссылки, в порядке показа; null — без материалов")
     private List<CampaignMaterialRequestDTO> materials;
 
     /** null — при создании берётся DRAFT, при обновлении статус не трогаем. */

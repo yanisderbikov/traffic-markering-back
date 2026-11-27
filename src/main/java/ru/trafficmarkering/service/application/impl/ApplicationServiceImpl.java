@@ -49,9 +49,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Отклики криаторов. Здесь же живут все проверки «кому что можно»: криатор распоряжается
+ * Отклики креаторов. Здесь же живут все проверки «кому что можно»: креатор распоряжается
  * своим откликом, заказчик — откликами на свои объявления.
- * Методы транзакционные: связи отклика (объявление, криатор) ленивые, а DTO собирается
+ * Методы транзакционные: связи отклика (объявление, креатор) ленивые, а DTO собирается
  * из них же — вне транзакции маппинг падал бы на LazyInitializationException.
  */
 @Service
@@ -119,7 +119,7 @@ class ApplicationServiceImpl implements ApplicationService {
                 .status(ApplicationStatus.IN_PROGRESS)
                 .build();
         if (campaign.paysBySnapshot()) {
-            // Ставки фиксируем сейчас: криатор берёт оффер на тех условиях, которые видел
+            // Ставки фиксируем сейчас: креатор берёт оффер на тех условиях, которые видел
             application.setBaseRateKopecks(campaign.getRatePerThousandKopecks());
             application.setLinkBonusKopecks(campaign.offersLink() ? campaign.linkBonus() : 0L);
             application.setPromoBonusKopecks(campaign.offersPromo() ? campaign.promoBonus() : 0L);
@@ -170,7 +170,7 @@ class ApplicationServiceImpl implements ApplicationService {
     @Transactional(readOnly = true)
     public List<ApplicationDTO> getMyApplications() {
         User creator = currentUserService.require(Role.CREATOR);
-        // Криатору показываем только вердикт: детали правил антифрода — подсказка, как их обходить
+        // Креатору показываем только вердикт: детали правил антифрода — подсказка, как их обходить
         return toDtoList(getterApplication.getByCreatorId(creator.getId())).stream()
                 .map(ApplicationDTO::forCreator)
                 .toList();
@@ -207,7 +207,7 @@ class ApplicationServiceImpl implements ApplicationService {
                     "Заказчик может только одобрить, отклонить или завершить отклик");
         }
         if (application.getStatus() == ApplicationStatus.IN_PROGRESS) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Криатор ещё не приложил ролик");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Креатор ещё не приложил ролик");
         }
 
         decide(application, request, customer);
@@ -259,7 +259,7 @@ class ApplicationServiceImpl implements ApplicationService {
         ApplicationStatus status = request.getStatus();
         String reason = trimToNull(request.getReason());
         if (status == ApplicationStatus.REJECTED && reason == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отказа: её увидит криатор");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину отказа: её увидит креатор");
         }
         if (application.getStatus() == ApplicationStatus.PENDING || status == ApplicationStatus.REJECTED) {
             application.setModeratedAt(Instant.now());
@@ -363,7 +363,7 @@ class ApplicationServiceImpl implements ApplicationService {
     /** Ролик к обычному отклику: все проверки в {@link VideoChecks}, после них отклик ждёт решения заказчика. */
     private void submitVideo(Application application, Campaign campaign, User creator, String rawVideoUrl,
                              String contentTopic) {
-        // Тематику проверяем до ролика: ошибку выбора криатор увидит сразу, без похода на площадку
+        // Тематику проверяем до ролика: ошибку выбора креатор увидит сразу, без похода на площадку
         ContentTopics.choose(application, campaign, contentTopic);
         videoChecks.attach(application, campaign, creator, rawVideoUrl);
         application.setStatus(ApplicationStatus.PENDING);
@@ -403,7 +403,7 @@ class ApplicationServiceImpl implements ApplicationService {
         long submitted = getterApplication.countActiveByCampaignIdAndCreatorId(campaign.getId(), creator.getId());
         if (submitted >= campaign.getMaxVideosPerCreator()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "По этому объявлению от одного криатора принимается не больше "
+                    "По этому объявлению от одного креатора принимается не больше "
                             + campaign.getMaxVideosPerCreator() + " " + videosWord(campaign.getMaxVideosPerCreator()));
         }
     }
@@ -428,7 +428,7 @@ class ApplicationServiceImpl implements ApplicationService {
     }
 
     /**
-     * Профили криаторов берём одной пачкой: в DTO из профиля нужен только телеграм,
+     * Профили креаторов берём одной пачкой: в DTO из профиля нужен только телеграм,
      * ради него делать запрос на каждую строку списка не за чем.
      */
     private List<ApplicationDTO> toDtoList(List<Application> applications) {

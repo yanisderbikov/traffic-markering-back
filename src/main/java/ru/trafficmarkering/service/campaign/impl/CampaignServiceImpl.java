@@ -326,7 +326,7 @@ class CampaignServiceImpl implements CampaignService {
         if (!Objects.equals(campaign.getPromoUrl(), trimToNull(request.getPromoUrl()))
                 || !Objects.equals(campaign.getPromoCode(), trimToNull(request.getPromoCode()))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Оффер уже взяли криаторы и разместили прежние ссылку и промокод — их не поменять. "
+                    "Оффер уже взяли креаторы и разместили прежние ссылку и промокод — их не поменять. "
                             + "Если они перестали работать, поставьте объявление на паузу и запустите новое");
         }
     }
@@ -463,7 +463,7 @@ class CampaignServiceImpl implements CampaignService {
         long budget = budgetKopecks != null ? budgetKopecks : 0L;
         if (budget < spent) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Бюджет нельзя опустить ниже уже начисленного криаторам: " + MoneyUtil.formatRubles(spent));
+                    "Бюджет нельзя опустить ниже уже начисленного креаторам: " + MoneyUtil.formatRubles(spent));
         }
     }
 

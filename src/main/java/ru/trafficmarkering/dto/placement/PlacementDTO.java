@@ -13,7 +13,7 @@ public record PlacementDTO(
         @Schema(description = "Человекочитаемое состояние", example = "Ждёт проверки") String stateDescription,
         @Schema(description = "Временная ссылка на скриншот или запись экрана; null — не приложено") String proofFileUrl,
         @Schema(description = "Ключ доказательства в хранилище") String proofKey,
-        @Schema(description = "Ссылка от криатора: на закреплённый комментарий или профиль") String proofUrl,
+        @Schema(description = "Ссылка от креатора: на закреплённый комментарий или профиль") String proofUrl,
         @Schema(description = "Автопроверка: FOUND, MISSING, UNKNOWN; null — не проводилась") String checkState,
         @Schema(description = "Человекочитаемый итог автопроверки") String checkStateDescription,
         @Schema(description = "Что увидела автопроверка") String checkDetail,

@@ -96,7 +96,7 @@ class ApplicationServiceImplTest {
     }
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
-    private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(2L).name("Креатор").role(Role.CREATOR).build();
     private final User manager = User.builder().id(3L).name("Менеджер").role(Role.ADMIN).build();
 
     @Test

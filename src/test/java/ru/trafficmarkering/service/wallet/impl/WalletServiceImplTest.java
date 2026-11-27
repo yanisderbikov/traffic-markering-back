@@ -292,7 +292,7 @@ class WalletServiceImplTest {
         assertThat(all.get(1).source().label()).isEqualTo("Кошелёк заказчика · Заказчик");
         assertThat(all.get(1).destination().label()).isEqualTo("Объявление «Ролик про кофе»");
         assertThat(all.get(0).source().kind()).isEqualTo("CAMPAIGN");
-        assertThat(all.get(0).destination().label()).isEqualTo("Кошелёк криатора · Аня");
+        assertThat(all.get(0).destination().label()).isEqualTo("Кошелёк креатора · Аня");
         assertThat(all.get(0).ownerName()).isEqualTo("Аня");
 
         assertThat(service.operations(1L, null, null)).extracting(OperationRowDTO::publicId)

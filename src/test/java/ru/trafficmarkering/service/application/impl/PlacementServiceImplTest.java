@@ -76,7 +76,7 @@ class PlacementServiceImplTest {
             viewsSyncService, campaignAccrualService, notifications, placementFinalizer);
 
     private final User customer = User.builder().id(1L).name("Заказчик").role(Role.CUSTOMER).build();
-    private final User creator = User.builder().id(2L).name("Криатор").role(Role.CREATOR).build();
+    private final User creator = User.builder().id(2L).name("Креатор").role(Role.CREATOR).build();
     private final User stranger = User.builder().id(9L).name("Чужой").role(Role.CUSTOMER).build();
 
     private Campaign campaign;

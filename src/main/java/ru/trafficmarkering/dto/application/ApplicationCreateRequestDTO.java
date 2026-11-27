@@ -14,7 +14,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "Отклик криатора на объявление")
+@Schema(description = "Отклик креатора на объявление")
 public class ApplicationCreateRequestDTO {
 
     @NotNull(message = "Объявление обязательно")

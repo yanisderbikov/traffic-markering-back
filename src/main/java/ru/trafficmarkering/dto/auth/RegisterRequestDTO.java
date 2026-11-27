@@ -32,7 +32,7 @@ public class RegisterRequestDTO {
     private String name;
 
     @NotNull(message = "Роль обязательна: CUSTOMER или CREATOR")
-    @Schema(description = "Роль: CUSTOMER (заказчик) или CREATOR (криатор)",
+    @Schema(description = "Роль: CUSTOMER (заказчик) или CREATOR (креатор)",
             requiredMode = Schema.RequiredMode.REQUIRED, example = "CREATOR")
     private Role role;
 

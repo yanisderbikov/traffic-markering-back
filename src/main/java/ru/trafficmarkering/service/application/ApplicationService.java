@@ -24,7 +24,7 @@ public interface ApplicationService {
     /** Приложить ролик к взятому в работу офферу: отклик уходит заказчику на рассмотрение. */
     ApplicationDTO attachVideo(UUID id, ApplicationVideoRequestDTO request);
 
-    /** Отклики текущего криатора, новые сверху. */
+    /** Отклики текущего креатора, новые сверху. */
     List<ApplicationDTO> getMyApplications();
 
     /**
