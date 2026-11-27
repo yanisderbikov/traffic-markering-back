@@ -35,6 +35,7 @@ import ru.trafficmarkering.service.auth.CurrentUserService;
 import ru.trafficmarkering.service.campaign.CampaignAccrualService;
 import ru.trafficmarkering.service.fraud.CreatorTrustService;
 import ru.trafficmarkering.service.fraud.FraudCheckService;
+import ru.trafficmarkering.service.views.ViewsSyncService;
 import ru.trafficmarkering.util.PublicIdGenerator;
 
 import java.time.Instant;
@@ -82,6 +83,7 @@ class ApplicationServiceImpl implements ApplicationService {
     private final VideoChecks videoChecks;
     private final ApplicationNotifications notifications;
     private final PlacementDtos placementDtos;
+    private final ViewsSyncService viewsSyncService;
 
     @Override
     @Transactional
@@ -132,6 +134,7 @@ class ApplicationServiceImpl implements ApplicationService {
 
         Application saved = saverApplication.save(application);
         if (rawVideoUrl != null) {
+            captureViews(saved);
             notifications.submitted(saved);
         }
         return toDto(saved);
@@ -162,6 +165,7 @@ class ApplicationServiceImpl implements ApplicationService {
         }
 
         saverApplication.save(application);
+        captureViews(application);
         notifications.submitted(application);
         return toDto(requireApplication(id));
     }
@@ -367,6 +371,14 @@ class ApplicationServiceImpl implements ApplicationService {
         ContentTopics.choose(application, campaign, contentTopic);
         videoChecks.attach(application, campaign, creator, rawVideoUrl);
         application.setStatus(ApplicationStatus.PENDING);
+    }
+
+    /**
+     * Просмотры снимаются один раз — при подаче ролика на проверку; дальше их никто не обновляет.
+     * Площадка не отдала просмотры — подача не проходит, креатор пробует ещё раз.
+     */
+    private void captureViews(Application application) {
+        viewsSyncService.captureNow(application.getId());
     }
 
     private void requireAcceptingApplications(Campaign campaign) {

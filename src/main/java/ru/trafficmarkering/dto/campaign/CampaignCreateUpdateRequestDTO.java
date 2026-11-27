@@ -93,7 +93,7 @@ public class CampaignCreateUpdateRequestDTO {
             example = "2026-10-20T20:59:59.999Z")
     private Instant endsAt;
 
-    @Schema(description = "Как платить за просмотры: CONTINUOUS — по мере роста (по умолчанию), "
+    @Schema(description = "Как платить за просмотры: CONTINUOUS — за просмотры на момент подачи ролика (по умолчанию), "
             + "SNAPSHOT — «ссылка и промокод»: по снимку при подаче, база ставки плюс надбавки", example = "SNAPSHOT")
     private PaymentModel paymentModel;
 

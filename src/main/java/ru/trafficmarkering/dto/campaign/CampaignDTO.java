@@ -40,7 +40,7 @@ public record CampaignDTO(
         @Schema(description = "До какого момента принимаются отклики, ISO-8601; null — бессрочно") String endsAt,
         @Schema(description = "Принимает ли объявление отклики прямо сейчас: статус ACTIVE и период действия не истёк") boolean acceptingApplications,
         @Schema(description = "Материалы для креатора в порядке показа") List<CampaignMaterialDTO> materials,
-        @Schema(description = "Как платит объявление: CONTINUOUS — по мере роста просмотров, SNAPSHOT — «ссылка и промокод»") String paymentModel,
+        @Schema(description = "Как платит объявление: CONTINUOUS — за просмотры на момент подачи ролика, SNAPSHOT — «ссылка и промокод»") String paymentModel,
         @Schema(description = "Человекочитаемый способ оплаты") String paymentModelDescription,
         @Schema(description = "Общая рекламная ссылка; на публичной странице скрыта до взятия оффера") String promoUrl,
         @Schema(description = "Общий промокод; на публичной странице скрыт до взятия оффера") String promoCode,
